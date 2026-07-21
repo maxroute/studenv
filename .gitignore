@@ -1,0 +1,71 @@
+# dependencies and caches
+node_modules/
+.npm-cache/
+.pnp
+.pnp.js
+
+# env and secrets
+.env
+.env.*
+!.env.example
+keyfile
+keyfile.pub
+ok
+ok.pub
+id_*
+*.pem
+*.key
+*.pub
+
+# next / build
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# logs and local process dumps
+*.log
+*.err.log
+tmp-*
+.next-dev*
+.codex-next-dev*
+
+# large binaries and installers (>100MB GitHub blocker)
+public/downloads/*.exe
+public/downloads/*.dmg
+public/downloads/*.zip
+
+# local previews, one-off scripts, and temporary planning files
+preview.html
+preview2.html
+previewofsomething.html
+larnin-brain.html
+second-brain-loader.html
+plan.html
+second-brain-plan-v2.docx
+docx_extracted/
+replace.js
+replace_timeline.js
+replace_vars.js
+replace_vars2.js
+search_css.js
+search_names.js
+verify.js
+*.cmd
+
+# uploaded user files (preserve directory via .gitkeep)
+public/uploads/**
+!public/uploads/.gitkeep
+
+# desktop / local tooling
+.agents/
+skills-lock.json
+.DS_Store
+Thumbs.db
+.vercel/
+.turbo/
+.idea/
+.vscode/
+*.local

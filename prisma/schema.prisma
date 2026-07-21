@@ -1,0 +1,595 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum Plan {
+  free
+  pro
+  team
+}
+
+enum ItemType {
+  article
+  pdf
+  video
+  note
+}
+
+enum ItemStatus {
+  unread
+  reading
+  done
+}
+
+enum StudyGroupMemberRole {
+  owner
+  member
+}
+
+model User {
+  id                  String       @id @default(cuid())
+  email               String       @unique
+  emailVerified       DateTime?
+  name                String?
+  username            String?      @unique
+  bio                 String?      @db.Text
+  avatarUrl           String?
+  passwordHash        String?
+  plan                Plan         @default(free)
+  loginAttempts       Int          @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  emailVerifyToken    String?      @unique
+  passwordResetToken  String?      @unique
+  passwordResetExpiry DateTime?
+  twoFactorSecret     String?
+  twoFactorEnabled    Boolean      @default(false)
+  refreshTokenHash    String?
+  accounts            Account[]
+  sessions            Session[]
+  items               Item[]
+  collections         Collection[]
+  tags                Tag[]
+  auditLogs           AuditLog[]
+  mediaAssets         MediaAsset[]
+  workspaces          Workspace[]
+  quizAttempts        QuizAttempt[]
+  focusSessions       FocusSession[]
+  ownedStudyGroups    StudyGroup[]      @relation("StudyGroupOwner")
+  studyGroupMembers   StudyGroupMember[]
+  studyGroupJoinRequests StudyGroupJoinRequest[]
+  studyGroupMessages  StudyGroupMessage[]
+  xp                  Int          @default(0)
+  level               Int          @default(1)
+  streakDays          Int          @default(0)
+  lastStudyDate       DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  tasks               Task[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Item {
+  id          String                @id @default(cuid())
+  userId      String
+  type        ItemType
+  title       String                @db.VarChar(500)
+  url         String?               @db.VarChar(2000)
+  excerpt     String?               @db.Text
+  notes       String?               @db.Text
+  status      ItemStatus            @default(unread)
+  starred     Boolean               @default(false)
+  sourceHost  String?
+  searchVector Unsupported("tsvector")? @map("search_vector")
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemTags        ItemTag[]
+  collectionItems CollectionItem[]
+  mediaAsset      MediaAsset?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, type])
+  @@index([userId, starred])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Collection {
+  id              String           @id @default(cuid())
+  userId          String
+  title           String           @db.VarChar(160)
+  description     String?          @db.Text
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectionItems CollectionItem[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model CollectionItem {
+  collectionId String
+  itemId       String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  item         Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, itemId])
+  @@index([itemId])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   @db.VarChar(100)
+  color     String   @default("#f5a623") @db.VarChar(7)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemTags   ItemTag[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ItemTag {
+  itemId String
+  tagId  String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@index([tagId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   String?  @db.Text
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Spatial Workspace Models
+
+enum MediaAssetKind {
+  pdf
+  video
+  image
+  audio
+  webpage
+  snapshot
+}
+
+enum MediaAssetOrigin {
+  upload
+  external_url
+  second_brain_item
+  generated
+}
+
+enum MediaAssetStatus {
+  processing
+  ready
+  failed
+}
+
+model MediaAsset {
+  id                String           @id @default(cuid())
+  ownerId           String
+  itemId            String?          @unique
+  kind              MediaAssetKind
+  origin            MediaAssetOrigin
+  title             String           @db.VarChar(500)
+  mimeType          String?
+  sourceUrl         String?          @db.VarChar(2000)
+  sourceHost        String?
+  currentRevisionId String?          @unique
+  status            MediaAssetStatus @default(processing)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user              User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  item              Item?            @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  revisions         AssetRevision[]
+  workspaces        Workspace[]      @relation("WorkspaceCover")
+  exportJobs        ExportJob[]
+  aiAnalysis        AiAnalysis?
+
+  @@index([ownerId])
+}
+
+model AssetRevision {
+  id                String           @id @default(cuid())
+  assetId           String
+  parentRevisionId  String?
+  revisionNumber    Int
+  storageKey        String           @unique
+  manifestKey       String?
+  checksum          String?
+  sizeBytes         Int?
+  pageCount         Int?
+  durationMs        Int?
+  createdBy         String
+  createdAt         DateTime         @default(now())
+
+  asset             MediaAsset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  pageManifests     AssetPageManifest[]
+  exportJobs        ExportJob[]      @relation("SourceRevision")
+  targetExportJobs  ExportJob[]      @relation("TargetRevision")
+
+  @@index([assetId])
+  @@index([assetId, revisionNumber])
+}
+
+model AssetPageManifest {
+  id               String   @id @default(cuid())
+  assetRevisionId  String
+  pageNumber       Int
+  width            Float
+  height           Float
+  rotation         Int      @default(0)
+  thumbnailKey     String?
+  previewKey       String?
+  textLayerKey     String?
+  searchText       String?  @db.Text
+
+  revision         AssetRevision @relation(fields: [assetRevisionId], references: [id], onDelete: Cascade)
+
+  @@index([assetRevisionId])
+  @@index([assetRevisionId, pageNumber])
+}
+
+model Workspace {
+  id                String   @id @default(cuid())
+  ownerId           String
+  title             String   @db.VarChar(500)
+  description       String?  @db.Text
+  coverAssetId      String?
+  baseCollectionId  String?
+  lastSnapshotId    String?  @unique
+  latestVersion     Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  coverAsset        MediaAsset?         @relation("WorkspaceCover", fields: [coverAssetId], references: [id], onDelete: SetNull)
+  snapshots         WorkspaceSnapshot[]
+  operations        WorkspaceOperation[]
+  exportJobs        ExportJob[]
+
+  @@index([ownerId])
+}
+
+model WorkspaceSnapshot {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  version         Int
+  sceneJson       String   @db.Text
+  cameraJson      String?  @db.Text
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, version])
+}
+
+model WorkspaceOperation {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  version         Int
+  actorId         String
+  clientId        String
+  opType          String
+  payloadJson     String   @db.Text
+  createdAt       DateTime @default(now())
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, version])
+}
+
+enum JobType {
+  pdf_ingest
+  thumbnail_gen
+  text_extraction
+  frame_capture
+}
+
+enum JobStatus {
+  queued
+  processing
+  done
+  failed
+}
+
+model BackgroundJob {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(queued)
+  payloadJson  String    @db.Text
+  resultJson   String?   @db.Text
+  errorMessage String?   @db.Text
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  startedAt    DateTime?
+  finishedAt   DateTime?
+
+  @@index([status])
+  @@index([type])
+}
+
+enum ExportJobType {
+  pdf_save_back
+  pdf_export
+  snapshot_export
+}
+
+enum ExportJobStatus {
+  queued
+  processing
+  done
+  failed
+}
+
+model ExportJob {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  sourceAssetId     String
+  sourceRevisionId  String
+  targetRevisionId  String?
+  jobType           ExportJobType
+  status            ExportJobStatus @default(queued)
+  inputJson         String          @db.Text
+  outputJson        String?         @db.Text
+  errorMessage      String?         @db.Text
+  createdBy         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  workspace         Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  asset             MediaAsset    @relation(fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  sourceRevision    AssetRevision @relation("SourceRevision", fields: [sourceRevisionId], references: [id], onDelete: Cascade)
+  targetRevision    AssetRevision? @relation("TargetRevision", fields: [targetRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([sourceAssetId])
+}
+
+// --- Study Environment Models ---
+
+model AiAnalysis {
+  id              String      @id @default(cuid())
+  assetId         String      @unique
+  transcript      String?     @db.Text
+  summary         String?     @db.Text
+  mindmapJson     String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  asset           MediaAsset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  flashcards      Flashcard[]
+  quizzes         QuizAttempt[]
+}
+
+model Flashcard {
+  id              String      @id @default(cuid())
+  aiAnalysisId    String
+  front           String      @db.Text
+  back            String      @db.Text
+  createdAt       DateTime    @default(now())
+
+  analysis        AiAnalysis  @relation(fields: [aiAnalysisId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id              String      @id @default(cuid())
+  aiAnalysisId    String
+  userId          String
+  score           Int
+  totalQuestions  Int
+  answersJson     String      @db.Text
+  createdAt       DateTime    @default(now())
+
+  analysis        AiAnalysis  @relation(fields: [aiAnalysisId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FocusSession {
+  id              String      @id @default(cuid())
+  userId          String
+  type            String      @default("focus")   // "focus", "shortBreak", "longBreak"
+  durationMs      Int
+  status          String      // "completed", "interrupted", "cancelled"
+  goal            String?     @db.Text
+  startedAt       DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String?
+  task            Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([userId, type, status])
+  @@index([taskId])
+}
+
+enum StudyGroupPrivacy {
+  public
+  private
+}
+
+enum StudyGroupJoinRequestStatus {
+  pending
+  rejected
+}
+
+model StudyGroup {
+  id            String             @id @default(cuid())
+  ownerId       String
+  title         String             @db.VarChar(160)
+  description   String?            @db.Text
+  inviteCode    String             @unique @db.VarChar(12)
+  privacy       StudyGroupPrivacy  @default(public)
+  memberLimit   Int?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  owner         User               @relation("StudyGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       StudyGroupMember[]
+  joinRequests  StudyGroupJoinRequest[]
+  messages      StudyGroupMessage[]
+
+  @@index([ownerId])
+  @@index([createdAt(sort: Desc)])
+}
+
+model StudyGroupMember {
+  groupId       String
+  userId        String
+  role          StudyGroupMemberRole @default(member)
+  joinedAt      DateTime             @default(now())
+
+  group         StudyGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model StudyGroupJoinRequest {
+  id            String                      @id @default(cuid())
+  groupId       String
+  userId        String
+  status        StudyGroupJoinRequestStatus @default(pending)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  group         StudyGroup                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user          User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId, status, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+model StudyGroupMessage {
+  id            String      @id @default(cuid())
+  groupId       String
+  authorId      String
+  content       String?     @db.Text
+  createdAt     DateTime    @default(now())
+
+  group         StudyGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  attachments   StudyGroupMessageAttachment[]
+
+  @@index([groupId, createdAt(sort: Desc)])
+  @@index([authorId])
+}
+
+model StudyGroupMessageAttachment {
+  id            String            @id @default(cuid())
+  messageId     String
+  storageKey    String
+  name          String
+  mimeType      String
+  sizeBytes     Int
+  sortOrder     Int               @default(0)
+  createdAt     DateTime          @default(now())
+
+  message       StudyGroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, sortOrder])
+}
+
+model Task {
+  id                  String         @id @default(cuid())
+  userId              String
+  title               String         @db.VarChar(500)
+  description         String?        @db.Text
+  priority            String         @default("medium") // "low", "medium", "high", "urgent"
+  status              String         @default("pending") // "pending", "in_progress", "completed", "cancelled", "missed"
+  category            String         @default("study") // "study", "assignment", "exam", "project", "revision", "reading", "personal", "custom"
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  completedAt         DateTime?
+  dueDate             DateTime?
+  dueTime             String?        @db.VarChar(10)
+  estimatedDuration   Int?           // in minutes
+  trackedDuration     Int            @default(0) // in milliseconds (completed focus sessions durationMs)
+  notificationEnabled Boolean        @default(true)
+  repeat              String         @default("none") // "none", "daily", "weekdays", "weekly", "monthly", "custom"
+  color               String?        @db.VarChar(20)
+  icon                String?        @db.VarChar(50)
+  order               Int            @default(0)
+  notes               String?        @db.Text
+
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusSessions       FocusSession[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@index([userId, order])
+}
