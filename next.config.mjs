@@ -5,6 +5,11 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     serverComponentsExternalPackages: ["nodemailer", "argon2"],
+    outputFileTracingIncludes: {
+      "/*": [
+        "./node_modules/argon2/prebuilds/linux-x64/argon2.glibc.node",
+      ],
+    },
     optimizePackageImports: ["lucide-react"],
   },
   async headers() {
