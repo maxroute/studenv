@@ -4,7 +4,7 @@ const nextConfig = {
   compress: false,
   poweredByHeader: false,
   experimental: {
-    serverComponentsExternalPackages: ["nodemailer"],
+    serverComponentsExternalPackages: ["nodemailer", "argon2"],
     optimizePackageImports: ["lucide-react"],
   },
   async headers() {
