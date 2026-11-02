@@ -1,4 +1,4 @@
-import argon2 from "argon2";
+// import argon2 from "argon2";
 import crypto from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 
@@ -16,6 +16,8 @@ function getSecret(value: string | undefined, key: string) {
 }
 
 export async function hashPassword(password: string) {
+  const argon2 = (await import("argon2")).default;
+
   return argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 65536,
@@ -24,8 +26,13 @@ export async function hashPassword(password: string) {
   });
 }
 
-export async function verifyPassword(password: string, passwordHash?: string | null) {
+export async function verifyPassword(
+  password: string,
+  passwordHash?: string | null
+) {
+  const argon2 = (await import("argon2")).default;
   const hash = passwordHash ?? DUMMY_HASH;
+
   return argon2.verify(hash, password);
 }
 

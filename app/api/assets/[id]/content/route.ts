@@ -44,7 +44,7 @@ export async function GET(
     if (latestRevision?.storageKey) {
       try {
         const buffer = await storageService.getFileBuffer(latestRevision.storageKey);
-        return new NextResponse(buffer, {
+        return new NextResponse(new Uint8Array(buffer), {
           headers: {
             "Content-Type": inferContentType(asset),
             "Cache-Control": "private, max-age=300",
