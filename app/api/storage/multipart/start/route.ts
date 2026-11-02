@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
 
         const fileName =
-            typeof body.fileName === "string" ? body.fileName.trim() : "";
+            typeof body.filename === "string" ? body.filename.trim() : "";
         const contentType =
             typeof body.contentType === "string"
                 ? body.contentType.trim().toLowerCase()

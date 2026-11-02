@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { 
-  Library, 
-  Search, 
-  FileText, 
-  Video, 
+import {
+  Library,
+  Search,
+  FileText,
+  Video,
   Image as ImageIcon,
   Music4,
   Globe,
-  X, 
+  X,
   GripVertical,
   Plus,
   Link2,
@@ -25,6 +25,7 @@ import {
   getAssetKindLabel,
   inferUploadAssetKind,
 } from "@/lib/utils/media-assets";
+import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 
 interface Asset {
   id: string;
@@ -36,28 +37,6 @@ interface Asset {
 
 type DrawerScope = "workspace" | "all";
 
-function sanitizeUploadFilename(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "-");
-}
-
-async function uploadWorkspaceAsset(file: File, signal?: AbortSignal) {
-  const filename = sanitizeUploadFilename(file.name || "asset.bin");
-  const key = `workspace/${Date.now()}-${typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2)}-${filename}`;
-  const response = await fetch(`/api/storage/local-upload?key=${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to upload file");
-  }
-
-  return `/uploads/${key}`;
-}
 
 export function AssetDrawer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -190,41 +169,34 @@ export function AssetDrawer() {
     setIsUploadingAsset(true);
     toast.loading(`Uploading ${assetLabel}...`, { id: "vault-upload" });
 
+
     try {
-      const src = await uploadWorkspaceAsset(file);
-      const mimeType = file.type || "application/octet-stream";
-      const registerResponse = await fetch("/api/assets/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: file.name.replace(/\.[^.]+$/, ""),
-          mimeType,
-          storageKey: src.replace("/uploads/", ""),
-          sizeBytes: file.size,
-        }),
-      });
+      const uploaded = await uploadWorkspaceAsset(file);
 
-      if (!registerResponse.ok) {
-        throw new Error(`Failed to register ${assetLabel.toLowerCase()}`);
-      }
+      registerWorkspaceAsset(uploaded.assetId);
 
-      const result = await registerResponse.json();
-      const assetData = result.data || result;
-      if (typeof assetData.assetId === "string" && assetData.assetId.trim().length > 0) {
-        registerWorkspaceAsset(assetData.assetId);
-      }
       await useWorkspaceStore.getState().saveNow();
       await fetchAssets();
-      toast.success(`${assetLabel} added to Vault Library`, { id: "vault-upload" });
+
+      toast.success(`${assetLabel} added to Vault Library`, {
+        id: "vault-upload",
+      });
     } catch (error) {
       console.error("Failed to upload asset", error);
-      toast.error(`Couldn't upload that ${assetLabel.toLowerCase()}`, { id: "vault-upload" });
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Couldn't upload that ${assetLabel.toLowerCase()}`,
+        { id: "vault-upload" }
+      );
     } finally {
       setIsUploadingAsset(false);
     }
+
   };
 
-  const filteredAssets = assets.filter(asset => 
+  const filteredAssets = assets.filter(asset =>
     asset.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const workspaceAssetIds = new Set(
@@ -445,22 +417,20 @@ export function AssetDrawer() {
             <div className="p-3 border-b">
               <div className="mb-3 grid grid-cols-2 gap-2">
                 <button
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                    scope === "workspace"
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "workspace"
                       ? "border-indigo-200 bg-indigo-50 text-indigo-700"
                       : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                  }`}
+                    }`}
                   type="button"
                   onClick={() => setScope("workspace")}
                 >
                   This Workspace
                 </button>
                 <button
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                    scope === "all"
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "all"
                       ? "border-indigo-200 bg-indigo-50 text-indigo-700"
                       : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                  }`}
+                    }`}
                   type="button"
                   onClick={() => setScope("all")}
                 >

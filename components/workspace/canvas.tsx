@@ -50,6 +50,9 @@ import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
 
+import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
+
+
 type CanvasPoint = { x: number; y: number };
 type HistoryEntry = StudioItem[];
 
@@ -114,29 +117,6 @@ function ZoomControls({ utils }: { utils: any }) {
       </button>
     </div>
   );
-}
-
-function sanitizeUploadFilename(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "-");
-}
-
-async function uploadWorkspaceAsset(file: File, signal?: AbortSignal) {
-  const filename = sanitizeUploadFilename(file.name || "asset.bin");
-  const key = `workspace/${Date.now()}-${typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2)}-${filename}`;
-  const response = await fetch(`/api/storage/local-upload?key=${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to upload media");
-  }
-
-  return `/uploads/${key}`;
 }
 
 function buildStrokePath(points: CanvasPoint[]) {
@@ -318,7 +298,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const itemEl = target.closest("[data-shape-id]");
-    
+
     if (itemEl) {
       e.preventDefault();
       const itemId = itemEl.getAttribute("data-shape-id")!;
@@ -430,28 +410,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
       const assetLabel = getAssetKindLabel(assetKind);
       toast.loading(`Uploading ${assetLabel}...`, { id: "upload" });
-      const src = await uploadWorkspaceAsset(file);
+      const uploaded = await uploadWorkspaceAsset(file);
+      const assetId = uploaded.assetId;
+      const revisionId = uploaded.revisionId;
 
-      const registerResponse = await fetch("/api/assets/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: file.name.replace(/\.[^.]+$/, ""),
-          mimeType,
-          storageKey: src.replace("/uploads/", ""),
-          sizeBytes: file.size,
-        }),
-      });
+      registerWorkspaceAsset(assetId);
 
-      if (!registerResponse.ok) throw new Error("Registration failed");
-
-      const result = await registerResponse.json();
-      const assetData = result.data || result;
-      const assetId = assetData.assetId || assetData.id;
-      const revisionId = assetData.revisionId || assetData.currentRevisionId || "";
-      if (typeof assetId === "string" && assetId.length > 0) {
-        registerWorkspaceAsset(assetId);
-      }
 
       if (assetKind === "pdf") {
         addItem(
@@ -476,7 +440,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           "image",
           {
             assetId,
-            src,
+            src: `/api/assets/${assetId}/content`,
             alt: file.name,
             w: 360,
             h: 240,
@@ -1074,12 +1038,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         items.map((item) =>
           item.type === "free-text" && item.id === targetId
             ? {
-                ...item,
-                props: {
-                  ...item.props,
-                  color,
-                },
-              }
+              ...item,
+              props: {
+                ...item.props,
+                color,
+              },
+            }
             : item,
         ) as StudioItem[],
       );
@@ -1098,12 +1062,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         items.map((item) =>
           item.type === "free-text" && item.id === targetId
             ? {
-                ...item,
-                props: {
-                  ...item.props,
-                  fontSize,
-                },
-              }
+              ...item,
+              props: {
+                ...item.props,
+                fontSize,
+              },
+            }
             : item,
         ) as StudioItem[],
       );
@@ -1216,7 +1180,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   setSelectedFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedImageId(null);
-                  
+
                   // Selection box start
                   useSelectionStore.getState().deselectAll();
                   const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -1436,7 +1400,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
                       const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
-                      
+
                       const targetIds = [item.id];
                       if (item.props && (item.props as any).groupId) {
                         const gId = (item.props as any).groupId;
@@ -1497,11 +1461,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? "ring-4 ring-indigo-500 rounded-lg"
                         : item.type === "drawing" && selectedDrawingId === item.id
                           ? "rounded-md ring-2 ring-slate-500/60"
-                        : isMigratedToSelectionOverlay(item.type)
-                          ? ""
-                        : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
-                          ? "rounded-md ring-2 ring-indigo-400/70"
-                          : ""
+                          : isMigratedToSelectionOverlay(item.type)
+                            ? ""
+                            : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
+                              ? "rounded-md ring-2 ring-indigo-400/70"
+                              : ""
                     }
                   >
                     {item.type === "pdf-fragment" && <PdfFragment item={item} />}
@@ -1552,7 +1516,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     )}
                   </StudioItemComponent>
                 ))}
-                
+
                 <SnapGuidesOverlay guides={snapGuides} />
 
                 {/* Bounding handles selection overlay */}
@@ -1646,13 +1610,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               <button
                 onClick={() => activateTextTool(false)}
                 onDoubleClick={() => activateTextTool(true)}
-                className={`relative p-2 rounded-md transition-colors ${
-                  isTextToolActive
+                className={`relative p-2 rounded-md transition-colors ${isTextToolActive
                     ? isTextToolLocked
                       ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
                       : "bg-indigo-50 text-indigo-600"
                     : "hover:bg-slate-50 text-slate-400"
-                }`}
+                  }`}
                 title="Text Tool (T) - Double-click to lock"
               >
                 <Type size={18} />

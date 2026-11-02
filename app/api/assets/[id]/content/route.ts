@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import * as assetService from "@/lib/services/asset.service";
@@ -43,13 +44,98 @@ export async function GET(
 
     if (latestRevision?.storageKey) {
       try {
-        const buffer = await storageService.getFileBuffer(latestRevision.storageKey);
-        return new NextResponse(new Uint8Array(buffer), {
-          headers: {
-            "Content-Type": inferContentType(asset),
-            "Cache-Control": "private, max-age=300",
-          },
+        const metadata = await storageService.getObjectMetadata(
+          latestRevision.storageKey,
+        );
+
+        const fileSize = metadata.ContentLength;
+
+        if (fileSize === undefined || fileSize === null) {
+          throw new Error("Could not determine stored file size.");
+        }
+
+        const rangeHeader = req.headers.get("range");
+        let start = 0;
+        let end = fileSize - 1;
+        let status = 200;
+
+        if (rangeHeader) {
+          const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+
+          if (!match || fileSize === 0) {
+            return new NextResponse(null, {
+              status: 416,
+              headers: {
+                "Content-Range": `bytes */${fileSize}`,
+              },
+            });
+          }
+
+          if (match[1] === "") {
+            const suffixLength = Number(match[2]);
+
+            if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+              return new NextResponse(null, {
+                status: 416,
+                headers: {
+                  "Content-Range": `bytes */${fileSize}`,
+                },
+              });
+            }
+
+            start = Math.max(fileSize - suffixLength, 0);
+          } else {
+            start = Number(match[1]);
+            end = match[2] === "" ? fileSize - 1 : Number(match[2]);
+          }
+
+          if (
+            !Number.isSafeInteger(start) ||
+            !Number.isSafeInteger(end) ||
+            start < 0 ||
+            start >= fileSize ||
+            end < start
+          ) {
+            return new NextResponse(null, {
+              status: 416,
+              headers: {
+                "Content-Range": `bytes */${fileSize}`,
+              },
+            });
+          }
+
+          end = Math.min(end, fileSize - 1);
+          status = 206;
+        }
+
+        const stream = await storageService.getFileStream(
+          latestRevision.storageKey,
+          rangeHeader ? { start, end } : undefined,
+        );
+
+        const headers = new Headers({
+          "Content-Type": metadata.ContentType || inferContentType(asset),
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "private, max-age=300",
+          "Content-Length": String(end - start + 1),
         });
+
+        if (status === 206) {
+          headers.set(
+            "Content-Range",
+            `bytes ${start}-${end}/${fileSize}`,
+          );
+        }
+
+        const webStream =
+          stream instanceof Readable
+            ? Readable.toWeb(stream)
+            : (stream as ReadableStream);
+
+        return new NextResponse(
+          webStream as unknown as BodyInit,
+          { status, headers },
+        );
       } catch (error) {
         console.warn(
           `Falling back to sourceUrl for asset ${asset.id} because stored revision content could not be loaded.`,
@@ -57,6 +143,7 @@ export async function GET(
         );
       }
     }
+
 
     if (asset.sourceUrl) {
       const resolvedSourceUrl = resolveAssetSourceUrl(asset.sourceUrl, req.url);
@@ -67,22 +154,42 @@ export async function GET(
         );
       }
 
-      const upstream = await fetch(resolvedSourceUrl);
-      if (!upstream.ok) {
+      const upstream = await fetch(resolvedSourceUrl, {
+        headers: req.headers.get("range")
+          ? { Range: req.headers.get("range")! }
+          : undefined,
+      });
+
+      if (!upstream.ok && upstream.status !== 416) {
         return NextResponse.json(
           { error: "Failed to fetch source media" },
           { status: upstream.status },
         );
       }
 
-      const arrayBuffer = await upstream.arrayBuffer();
-      return new NextResponse(arrayBuffer, {
-        headers: {
-          "Content-Type":
-            upstream.headers.get("content-type") || inferContentType(asset),
-          "Cache-Control": "private, max-age=300",
-        },
+      const headers = new Headers({
+        "Content-Type":
+          upstream.headers.get("content-type") || inferContentType(asset),
+        "Cache-Control": "private, max-age=300",
       });
+
+      for (const header of [
+        "content-length",
+        "content-range",
+        "accept-ranges",
+      ]) {
+        const value = upstream.headers.get(header);
+        if (value) headers.set(header, value);
+      }
+
+      return new NextResponse(
+        upstream.body as unknown as BodyInit,
+        {
+          status: upstream.status,
+          headers,
+        },
+      );
+
     }
 
     return NextResponse.json({ error: "No media content available" }, { status: 404 });

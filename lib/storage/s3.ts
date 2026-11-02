@@ -44,11 +44,9 @@ export async function listMultipartUploadParts(
   key: string,
   uploadId: string,
 ) {
-  if (!s3Client) {
-    throw new Error("S3 client not initialized");
-  }
+  const client = getS3Client();
 
-  const result = await s3Client.send(
+  const result = await client.send(
     new ListPartsCommand({
       Bucket: BUCKET_NAME,
       Key: key,
@@ -62,7 +60,6 @@ export async function listMultipartUploadParts(
     Size: part.Size,
   }));
 }
-
 
 function getS3Client(): S3Client {
   if (isLocalStorage) {
@@ -177,22 +174,40 @@ export async function getDownloadUrl(
 
 // Returns the object body as a stream.
 // Use this for large downloads instead of buffering the whole file.
-export async function getFileStream(key: string) {
+
+export async function getFileStream(
+  key: string,
+  range?: { start: number; end: number },
+) {
   assertStorageKey(key);
+
+  if (
+    range &&
+    (!Number.isSafeInteger(range.start) ||
+      !Number.isSafeInteger(range.end) ||
+      range.start < 0 ||
+      range.end < range.start)
+  ) {
+    throw new Error("Invalid file range.");
+  }
 
   if (isLocalStorage) {
     const filePath = getLocalFilePath(key);
-    return fs.open(filePath, "r").then(async (handle) => {
-      await handle.close();
-      const { createReadStream } = await import("fs");
-      return createReadStream(filePath);
-    });
+    const { createReadStream } = await import("fs");
+
+    return createReadStream(
+      filePath,
+      range ? { start: range.start, end: range.end } : undefined,
+    );
   }
 
   const response = await getS3Client().send(
     new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
+      ...(range
+        ? { Range: `bytes=${range.start}-${range.end}` }
+        : {}),
     }),
   );
 
@@ -202,6 +217,7 @@ export async function getFileStream(key: string) {
 
   return response.Body;
 }
+
 
 // Existing buffer download.
 // Keep for PDF processing and operations that genuinely need a Buffer.
