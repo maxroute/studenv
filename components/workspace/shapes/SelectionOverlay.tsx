@@ -197,7 +197,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
       const isStart = transformState.type === "endpoint-start";
       transformState.startBounds.forEach((startBounds, itemId) => {
         const item = items.find((i) => i.id === itemId);
-        if (!item || !item.props.startPoint || !item.props.endPoint) return;
+        if (!item || !('startPoint' in item.props) || !item.props.startPoint || !('endPoint' in item.props) || !item.props.endPoint) return;
 
         const fixedPt = isStart ? item.props.endPoint : item.props.startPoint;
         let dragPt = currentPointer;
@@ -264,7 +264,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
   return (
     <div ref={containerRef} className="absolute inset-0 pointer-events-none z-[1100]">
       {/* SVG Hover Outline */}
-      {hoveredItem && !selectedIds.includes(hoveredItem.id) && !hoveredItem.props.locked && isMigratedToSelectionOverlay(hoveredItem.type) && (
+      {hoveredItem && !selectedIds.includes(hoveredItem.id) && !('locked' in hoveredItem.props && hoveredItem.props.locked) && isMigratedToSelectionOverlay(hoveredItem.type) && (
         <div
           style={{
             position: "absolute",

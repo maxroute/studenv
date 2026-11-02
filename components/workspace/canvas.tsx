@@ -1379,7 +1379,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         : item.type === "drawing"
                           ? false
                           : isMigratedToSelectionOverlay(item.type)
-                            ? item.props.locked || !selectedIds.includes(item.id)
+                            ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
                             : undefined
                     }
                     enableResizing={
@@ -1403,7 +1403,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     showRotateButton={
                       (item.type === "drawing" && selectedDrawingId === item.id) ||
                       (item.type === "image" && selectedImageId === item.id) ||
-                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !item.props.locked)
+                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !('locked' in item.props && item.props.locked))
                     }
                     onRotateChange={(rotation) => {
                       updateItem(item.id, { rotation });

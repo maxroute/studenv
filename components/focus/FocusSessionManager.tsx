@@ -96,7 +96,7 @@ export function FocusSessionManager() {
   const completionProcessed = useRef(false);
 
   // Fetch tasks to cross-reference completed study time
-  const { data: tasks } = useSWR<Task[]>("/api/planner/tasks", async (url) => {
+  const { data: tasks } = useSWR<Task[]>("/api/planner/tasks", async (url: string) => {
     const res = await fetch(url);
     if (!res.ok) return [];
     const json = await res.json();
@@ -122,7 +122,7 @@ export function FocusSessionManager() {
     // Tick immediately to sync display on mount / recover expired sessions
     useFocusStore.getState().tick();
 
-    return () => () => window.clearInterval(interval);
+    return () => window.clearInterval(interval);
   }, []);
 
   // ── 3. Handle session completions ────────────────────────

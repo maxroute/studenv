@@ -1,11 +1,14 @@
+# NOTE: This workflow is disabled. The project does not currently include a
+# desktop build framework (Electron, Tauri, etc.). The react-app/ directory
+# referenced below does not exist. Re-enable once desktop tooling is added.
 name: Build Desktop Apps
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
+  # push:
+  #   branches: [ main, master ]
+  # pull_request:
+  #   branches: [ main, master ]
 
 jobs:
   build:

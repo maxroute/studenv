@@ -32,6 +32,7 @@ interface LandingPageProps {
 
 export default function LandingPage({ session }: LandingPageProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopModalOpen, setDesktopModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"vault" | "ai" | "rooms">("vault");
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [pricingCycle, setPricingCycle] = useState<"monthly" | "yearly">("monthly");
@@ -128,13 +129,13 @@ export default function LandingPage({ session }: LandingPageProps) {
             >
               Try Studenv <Globe className="w-4 h-4" />
             </Link>
-            <a
-              href="/downloads/Studenv Setup 1.0.0.exe"
+            <button
+              type="button"
+              onClick={() => setDesktopModalOpen(true)}
               className="text-sm font-medium border border-border bg-surface hover:bg-surface2 transition-all px-4 py-2 rounded-lg flex items-center gap-1.5"
-              download
             >
               Get App <Download className="w-4 h-4 text-amber" />
-            </a>
+            </button>
           </div>
 
           {/* MOBILE MENU TOGGLE */}
@@ -194,14 +195,16 @@ export default function LandingPage({ session }: LandingPageProps) {
               >
                 Try Studenv <Globe className="w-4 h-4" />
               </Link>
-              <a
-                href="/downloads/Studenv Setup 1.0.0.exe"
-                onClick={() => setMobileMenuOpen(false)}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setDesktopModalOpen(true);
+                }}
                 className="w-full text-center py-2.5 rounded-lg bg-surface2 border border-border2 text-sm font-medium hover:bg-surface3 transition-colors flex items-center justify-center gap-1.5"
-                download
               >
                 Download Desktop App <Download className="w-4 h-4 text-amber" />
-              </a>
+              </button>
             </div>
           </div>
         )}
@@ -213,7 +216,7 @@ export default function LandingPage({ session }: LandingPageProps) {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber/20 bg-amber/5 text-amber text-xs font-semibold mb-6 animate-pulse">
             <Laptop className="w-3.5 h-3.5" />
-            <span>Studenv Desktop App v1.0.0 is Live!</span>
+            <span>Desktop App Coming Soon • Web App Live</span>
           </div>
 
           {/* Heading */}
@@ -238,19 +241,22 @@ export default function LandingPage({ session }: LandingPageProps) {
               Try Studenv Online
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <a
-              href="/downloads/Studenv Setup 1.0.0.exe"
+            <button
+              type="button"
+              onClick={() => setDesktopModalOpen(true)}
               className="min-w-[233px] sm:w-auto px-8 py-4 rounded-xl bg-surface border border-border2 hover:border-amber/40 hover:bg-surface2 text-white text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
-              download
             >
               <Download className="w-5 h-5 text-amber" />
               Download for Windows
-            </a>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber/10 text-amber border border-amber/20 ml-1">
+                Soon
+              </span>
+            </button>
           </div>
 
           {/* Subtext */}
           <p className="text-xs text-muted2 mb-16">
-            Free to use. Windows NSIS Installer (~305MB). No terminal scripts or permissions required.
+            Windows desktop installer is in preparation. Complete platform is accessible directly on the web.
           </p>
         </div>
 
@@ -604,13 +610,16 @@ export default function LandingPage({ session }: LandingPageProps) {
               </div>
 
               <div className="pt-2">
-                <a
-                  href="/downloads/Studenv Setup 1.0.0.exe"
+                <button
+                  type="button"
+                  onClick={() => setDesktopModalOpen(true)}
                   className="inline-flex items-center gap-2 bg-amber hover:bg-amber/90 text-bg px-6 py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-amber/15 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                  download
                 >
                   <Download className="w-4 h-4" /> Download Windows Installer
-                </a>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-bg/20 text-bg border border-bg/30 ml-1">
+                    Soon
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -912,14 +921,17 @@ export default function LandingPage({ session }: LandingPageProps) {
             >
               Get Started for Free
             </Link>
-            <a
-              href="/downloads/Studenv Setup 1.0.0.exe"
+            <button
+              type="button"
+              onClick={() => setDesktopModalOpen(true)}
               className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-surface border border-border2 hover:border-amber/30 hover:bg-surface2 text-white text-sm font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-              download
             >
               <Download className="w-4 h-4 text-amber" />
               Download Desktop App
-            </a>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber/10 text-amber border border-amber/20 ml-1">
+                Soon
+              </span>
+            </button>
           </div>
 
         </div>
@@ -944,6 +956,44 @@ export default function LandingPage({ session }: LandingPageProps) {
           </div>
         </div>
       </footer>
+
+      {/* Desktop App Coming Soon Modal */}
+      {desktopModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-md rounded-2xl border border-border2 bg-surface p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setDesktopModalOpen(false)}
+              className="absolute top-4 right-4 text-muted hover:text-white transition-colors"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber/10 text-amber mb-4">
+              <Laptop className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Desktop App Coming Soon</h3>
+            <p className="text-sm text-muted mb-6 leading-relaxed">
+              The standalone Windows desktop installer is currently being prepared for GitHub Releases and is not yet available for direct download. You can access the complete Studenv platform right now directly in your browser.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                href="/dashboard"
+                onClick={() => setDesktopModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-amber hover:bg-amber/90 text-bg text-sm font-semibold text-center transition-all flex items-center justify-center gap-2"
+              >
+                Launch Web App <Globe className="w-4 h-4" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setDesktopModalOpen(false)}
+                className="py-2.5 px-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 text-white text-sm font-medium transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

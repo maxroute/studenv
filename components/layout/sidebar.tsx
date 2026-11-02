@@ -319,10 +319,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         initialSelectedIds={selectedId ? [selectedId] : []}
         onClose={() => setCollectionOpen(false)}
         onSave={async (payload) => {
-          const created = await createCollection(payload);
-          goShelf();
-          setNav(`collection:${created.id}`);
-          setSelectedId(created.itemIds[0] ?? null);
+          const result = await createCollection(payload);
+          const created = Array.isArray(result) ? result.find((c) => !c.id.startsWith("temp-")) ?? result[0] : undefined;
+          if (created) {
+            goShelf();
+            setNav(`collection:${created.id}`);
+            setSelectedId(created.itemIds[0] ?? null);
+          }
         }}
       />
     </>

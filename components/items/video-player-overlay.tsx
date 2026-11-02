@@ -332,7 +332,7 @@ export function VideoPlayerOverlay() {
   const latestProgressRef = useRef<PlaybackProgress | null>(null);
   const pendingResumeTimeRef = useRef(0);
   const playbackApiRef = useRef<{
-    updateItem: (id: string, payload: Record<string, unknown>) => Promise<ItemRecord>;
+    updateItem: (id: string, payload: Record<string, unknown>) => Promise<ItemRecord[] | undefined>;
     setPlaying: (value: boolean) => void;
     setProgress: (
       itemId: string,
@@ -1257,7 +1257,13 @@ export function VideoPlayerOverlay() {
         type: currentItem.type,
         ...(currentItem.url ? { url: currentItem.url } : {}),
       })
-      .then((updatedItem) => {
+      .then((result) => {
+        const updatedItem = Array.isArray(result) ? result.find((i) => i.id === currentItem.id) : undefined;
+        if (!updatedItem) {
+          itemRef.current = currentItem;
+          readingSyncRef.current = null;
+          return;
+        }
         itemRef.current = updatedItem;
         readingSyncRef.current = null;
         void mutate(

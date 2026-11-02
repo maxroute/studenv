@@ -51,6 +51,14 @@ type SessionLogEntry = {
   goal: string;
 };
 
+interface RecentSessionRecord {
+  id: string;
+  type: string;
+  durationMs: number;
+  createdAt: string;
+  goal?: string;
+}
+
 type DailyStat = {
   startedFocus: number;
   completedFocus: number;
@@ -725,9 +733,9 @@ export default function FocusPage() {
 
   const streak = analyticsData?.stats?.currentStreak ?? 0;
 
-  const displayLogs = useMemo(() => {
+  const displayLogs = useMemo((): SessionLogEntry[] => {
     if (analyticsData?.recentSessions) {
-      return analyticsData.recentSessions.map((s: any) => ({
+      return analyticsData.recentSessions.map((s: RecentSessionRecord) => ({
         id: s.id,
         type: s.type as SessionType,
         label: SESSION_LABELS[s.type as SessionType] || s.type,
@@ -1200,7 +1208,7 @@ export default function FocusPage() {
                     ].map((item) => (
                       <button
                         key={item.label}
-                        onClick={() => item.setValue((current) => !current)}
+                        onClick={() => item.setValue(!item.value)}
                         className="flex w-full items-center justify-between rounded-[8px] border border-white/[0.06] bg-[#1b1b16]/80 px-3 py-2.5 text-left text-[11.5px] text-[#9c9788] transition-all duration-200 hover:border-white/[0.12] hover:text-[#e4dfcf]"
                       >
                         <span className="flex items-center gap-2">
