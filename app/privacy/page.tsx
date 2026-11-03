@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { ApprovedHomepage } from "@/components/layout/approved-homepage";
+import { createPublicPageMetadata } from "@/lib/seo/page-metadata";
 import "@/components/layout/approved-homepage.css";
 
-export const metadata: Metadata = {
+export const metadata = createPublicPageMetadata({
   title: "Privacy Policy — Studenv",
   description: "Read how Studenv handles information when you use the platform.",
-  alternates: { canonical: "/privacy" },
-};
+  path: "/privacy",
+});
 
 export default function PublicPage() {
   return <ApprovedHomepage />;
