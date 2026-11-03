@@ -90,6 +90,8 @@ function getS3Client(): S3Client {
       endpoint: process.env.AWS_S3_ENDPOINT,
       forcePathStyle:
         process.env.AWS_S3_FORCE_PATH_STYLE !== "false",
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
   }
 

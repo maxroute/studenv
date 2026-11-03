@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+
+import { Analytics } from "@vercel/analytics/next"; import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { DM_Mono, DM_Sans, Fraunces } from "next/font/google";
 import "@/app/globals.css";
@@ -46,6 +47,7 @@ export default async function RootLayout({
           <BootLoaderGate>{children}</BootLoaderGate>
           <div id="viewer-portal-root" className="fixed inset-0 pointer-events-none z-[9999]" />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
