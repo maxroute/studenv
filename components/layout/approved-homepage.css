@@ -362,3 +362,111 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
   .approved-homepage #page-contact .contact-form h2{font-size:27px!important;margin-bottom:16px!important}
   .approved-homepage .page-view.active + .footer{margin-top:0}
 }
+
+
+/* Final spacing pass: CTA, About and FAQ — desktop and mobile */
+.approved-homepage #final-cta .cta .kicker{
+  display:block;
+  margin:0 0 16px;
+}
+.approved-homepage #final-cta .cta h2{
+  margin:0 auto 22px;
+}
+.approved-homepage #final-cta .cta p{
+  margin:0 auto 30px;
+}
+.approved-homepage #page-about .page-block{
+  padding:28px 0 30px;
+}
+.approved-homepage #page-about .page-block .kicker{
+  display:block;
+  margin:0 0 14px;
+}
+.approved-homepage #page-about .page-block h2{
+  margin:0 0 17px;
+  line-height:1.16;
+}
+.approved-homepage #page-about .page-block p{
+  line-height:1.9;
+}
+.approved-homepage #page-about .page-block p + p{
+  margin-top:14px;
+}
+
+/* FAQ category labels need breathing room above and below */
+.approved-homepage #page-faq .faq-category{
+  margin:38px 0 16px;
+  padding-top:2px;
+}
+.approved-homepage #page-faq .faq-category:first-child{margin-top:0}
+.approved-homepage #page-faq .page-faq .faq-question{
+  min-height:64px;
+  padding:19px 3px;
+}
+.approved-homepage #page-faq .page-faq .faq-answer{
+  padding-bottom:19px;
+}
+
+/* The standalone pages use the same gentle entrance motion as the homepage */
+@keyframes studenvPageEnter{
+  from{opacity:0;transform:translateY(14px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.approved-homepage .page-view.active .page-hero{
+  animation:studenvPageEnter .55s cubic-bezier(.22,.61,.36,1) both;
+}
+.approved-homepage .page-view.active .page-content{
+  animation:studenvPageEnter .62s cubic-bezier(.22,.61,.36,1) .08s both;
+}
+.approved-homepage #page-about.active .page-block,
+.approved-homepage #page-about.active .page-callout{
+  animation:studenvPageEnter .5s cubic-bezier(.22,.61,.36,1) both;
+}
+.approved-homepage #page-about.active .page-block:nth-child(2){animation-delay:.08s}
+.approved-homepage #page-about.active .page-block:nth-child(3){animation-delay:.16s}
+.approved-homepage #page-about.active .page-block:nth-child(4){animation-delay:.24s}
+.approved-homepage #page-about.active .page-callout{animation-delay:.32s}
+.approved-homepage #page-faq.active .faq-category,
+.approved-homepage #page-faq.active .page-faq .faq-item,
+.approved-homepage #page-faq.active .page-callout{
+  animation:studenvPageEnter .42s cubic-bezier(.22,.61,.36,1) both;
+}
+.approved-homepage #page-faq.active .faq-category:nth-of-type(2){animation-delay:.08s}
+.approved-homepage #page-faq.active .faq-category:nth-of-type(3){animation-delay:.16s}
+.approved-homepage #page-faq.active .faq-category:nth-of-type(4){animation-delay:.24s}
+.approved-homepage #page-faq.active .page-faq .faq-item:nth-child(2){animation-delay:.035s}
+.approved-homepage #page-faq.active .page-faq .faq-item:nth-child(3){animation-delay:.07s}
+.approved-homepage #page-faq.active .page-faq .faq-item:nth-child(4){animation-delay:.105s}
+.approved-homepage #page-faq.active .page-faq .faq-item:nth-child(5){animation-delay:.14s}
+.approved-homepage #page-contact.active .contact-layout{
+  animation:studenvPageEnter .58s cubic-bezier(.22,.61,.36,1) .08s both;
+}
+@media(max-width:800px){
+  .approved-homepage #final-cta .cta .kicker{margin-bottom:14px}
+  .approved-homepage #final-cta .cta h2{margin-bottom:18px}
+  .approved-homepage #final-cta .cta p{margin-bottom:24px}
+  .approved-homepage #page-about .page-block{padding:24px 0 26px}
+  .approved-homepage #page-about .page-block .kicker{margin-bottom:13px}
+  .approved-homepage #page-about .page-block h2{margin-bottom:14px;line-height:1.18}
+  .approved-homepage #page-about .page-block p{line-height:1.85}
+  .approved-homepage #page-about .page-block p + p{margin-top:12px}
+  .approved-homepage #page-faq .faq-category{margin:32px 0 13px}
+  .approved-homepage #page-faq .page-faq .faq-question{
+    min-height:62px;
+    padding:18px 2px;
+    line-height:1.38;
+  }
+  .approved-homepage #page-faq .page-faq .faq-answer{padding-bottom:17px}
+}
+@media(prefers-reduced-motion:reduce){
+  .approved-homepage .page-view.active .page-hero,
+  .approved-homepage .page-view.active .page-content,
+  .approved-homepage #page-about.active .page-block,
+  .approved-homepage #page-about.active .page-callout,
+  .approved-homepage #page-faq.active .faq-category,
+  .approved-homepage #page-faq.active .page-faq .faq-item,
+  .approved-homepage #page-faq.active .page-callout,
+  .approved-homepage #page-contact.active .contact-layout{
+    animation:none!important;
+  }
+}
