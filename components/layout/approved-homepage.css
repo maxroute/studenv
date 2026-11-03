@@ -628,7 +628,5 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
   }
 }
 
-/* Standalone public pages use the same approved visual system without the homepage shell. */
-.approved-homepage.has-active-page > .topbar,
-.approved-homepage.has-active-page > #top,
-.approved-homepage.has-active-page > .footer { display: none; }
+/* Standalone public pages retain the shared navigation and footer; only homepage content is hidden. */
+.approved-homepage.has-active-page > #top { display: none; }
