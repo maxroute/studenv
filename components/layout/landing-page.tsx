@@ -1,30 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import type { ElementType, ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  BookOpen,
   CalendarDays,
   Check,
   ChevronDown,
-  CircleHelp,
-  Clock3,
-  FileImage,
-  FileText,
   Focus,
   Layers3,
   Library,
   Menu,
-  MessageCircle,
-  MoreHorizontal,
-  NotebookPen,
   Play,
   Search,
   Sparkles,
-  Users,
   X,
 } from "lucide-react";
 import { BrandLockup } from "@/components/ui/brand-logo";
@@ -66,7 +58,7 @@ const featureLinks = [
   { label: "Achievements", href: "#supporting-tools", note: "Notice your progress" },
 ];
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#d7a34b]">
       {children}
@@ -149,7 +141,7 @@ function ShelfPreview() {
 }
 
 function FeatureCard({ icon: Icon, eyebrow, title, description, href, status }: {
-  icon: React.ElementType; eyebrow: string; title: string; description: string; href: string; status?: string;
+  icon: ElementType; eyebrow: string; title: string; description: string; href: string; status?: string;
 }) {
   return (
     <Link href={href} className="group flex min-h-[230px] flex-col rounded-xl border border-[#34312d] bg-[#151412] p-6 transition duration-200 hover:-translate-y-1 hover:border-[#8a6835] hover:bg-[#1b1916]">
