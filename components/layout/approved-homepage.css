@@ -106,3 +106,9 @@
  .approved-homepage .faq-list .faq-answer,
  .approved-homepage .faq-list .faq-question span:last-child{transition:none}
 }
+
+
+/* Consistent anchor landing position across the public homepage */
+html{scroll-behavior:smooth;scroll-padding-top:100px}
+.approved-homepage [id]{scroll-margin-top:100px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
