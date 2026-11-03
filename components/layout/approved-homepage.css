@@ -75,3 +75,34 @@
  .approved-homepage .faq-layout{grid-template-columns:1fr}
  .approved-homepage .faq-layout>.section-head h2,.approved-homepage .faq-layout>.section-head .section-intro{max-width:100%}
 }
+
+
+/* Smooth FAQ accordion interaction */
+.approved-homepage .faq-list .faq-answer{
+ display:block;
+ max-height:0;
+ overflow:hidden;
+ opacity:0;
+ padding:0 30px 0 0;
+ transform:translateY(-4px);
+ transition:max-height .38s cubic-bezier(.22,.61,.36,1),opacity .24s ease,transform .30s ease,padding-bottom .30s ease;
+ will-change:max-height,opacity;
+}
+.approved-homepage .faq-list .faq-item.open .faq-answer{
+ max-height:180px;
+ opacity:1;
+ padding-bottom:19px;
+ transform:translateY(0);
+}
+.approved-homepage .faq-list .faq-question span:last-child{
+ display:inline-block;
+ transition:transform .28s ease,color .2s ease;
+ transform-origin:center;
+}
+.approved-homepage .faq-list .faq-item.open .faq-question span:last-child{
+ transform:rotate(180deg);
+}
+@media(prefers-reduced-motion:reduce){
+ .approved-homepage .faq-list .faq-answer,
+ .approved-homepage .faq-list .faq-question span:last-child{transition:none}
+}
