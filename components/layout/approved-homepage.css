@@ -19,3 +19,43 @@
 .approved-homepage .contact-layout{display:grid;grid-template-columns:.85fr 1.15fr;gap:54px;align-items:start}.approved-homepage .contact-form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px}.approved-homepage .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.approved-homepage .field{display:grid;gap:7px;margin-bottom:16px}.approved-homepage .field label{font:10px var(--mono);letter-spacing:1px;color:#b8ae9c;text-transform:uppercase}.approved-homepage .field input,.approved-homepage .field select,.approved-homepage .field textarea{width:100%;background:#10100e;border:1px solid #39352b;border-radius:6px;color:var(--text);padding:13px 14px;font:13px var(--sans);outline:none}.approved-homepage .field textarea{min-height:145px;resize:vertical}.approved-homepage .field input:focus,.approved-homepage .field select:focus,.approved-homepage .field textarea:focus{border-color:#9b712e;box-shadow:0 0 0 3px #f5a62314}.approved-homepage .form-hint{font-size:11px;color:#81796c;line-height:1.7;margin:13px 0 0}.approved-homepage .form-status{display:none;margin-top:15px;padding:12px;border:1px solid #6e542d;border-radius:6px;color:#d9bd83;font-size:12px}.approved-homepage .form-status.show{display:block}.approved-homepage .contact-aside{position:sticky;top:110px}.approved-homepage .contact-detail{padding:18px 0;border-top:1px solid var(--line)}.approved-homepage .contact-detail strong{display:block;font:20px var(--serif);margin-bottom:5px}.approved-homepage .contact-detail span{color:var(--muted);font-size:12px}.approved-homepage .footer-grid{grid-template-columns:1.5fr 1.15fr 1fr 1fr}
 .approved-homepage .footer h4{letter-spacing:.2px}.approved-homepage .footer-links a{transition:color .2s}.approved-homepage .footer-brand p{line-height:1.9}
 @media(max-width:760px){.approved-homepage .page-hero{padding:65px 0 42px}.approved-homepage .page-content{padding:44px 0 65px}.approved-homepage .contact-layout{grid-template-columns:1fr;gap:30px}.approved-homepage .contact-aside{position:static}.approved-homepage .form-grid{grid-template-columns:1fr}.approved-homepage .footer-grid{grid-template-columns:1fr 1fr}.approved-homepage .feature-menu{top:100%}}
+
+
+/* Targeted layout corrections after local v2.2 integration review */
+.approved-homepage .about{
+  grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:clamp(48px,6vw,84px);
+  align-items:start;
+}
+.approved-homepage .about h2{max-width:480px}
+.approved-homepage .about-copy{min-width:0}
+.approved-homepage .faq-layout{
+  grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+  gap:clamp(48px,6vw,84px);
+  align-items:start;
+}
+.approved-homepage .faq-layout>.section-head{min-width:0;max-width:none}
+.approved-homepage .faq-layout .section-intro{max-width:440px}
+.approved-homepage .contact-section{
+  gap:clamp(52px,6vw,88px);
+  align-items:center;
+}
+.approved-homepage .contact-section>div:first-child{max-width:560px}
+.approved-homepage .contact-card{padding:32px}
+.approved-homepage .contact-card h3{line-height:1.2}
+.approved-homepage .contact-card p{margin:12px 0 18px}
+.approved-homepage .contact-note{margin-top:20px}
+.approved-homepage .footer-brand{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+}
+.approved-homepage .footer-brand .brand{margin:0}
+.approved-homepage .footer-brand p{margin:0;line-height:1.9}
+@media(max-width:800px){
+  .approved-homepage .about,
+  .approved-homepage .faq-layout,
+  .approved-homepage .contact-section{grid-template-columns:1fr;gap:30px}
+  .approved-homepage .contact-card{padding:24px}
+}
