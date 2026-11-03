@@ -211,3 +211,154 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
   .approved-homepage .contact-form h2{font-size:27px!important;line-height:1.2}
   .approved-homepage .footer{margin-top:64px}
 }
+
+
+/* Public information pages: shared vertical rhythm for desktop and mobile */
+.approved-homepage .page-view .page-hero{
+  padding:clamp(56px,6vw,76px) 0 42px;
+}
+.approved-homepage .page-view .page-hero .kicker{margin:0 0 12px}
+.approved-homepage .page-view .page-hero h1{
+  margin:0 0 14px;
+  line-height:1.02;
+}
+.approved-homepage .page-view .page-hero p{
+  max-width:700px;
+  margin:0;
+  line-height:1.78;
+}
+.approved-homepage .page-view .page-content{
+  padding:44px 0 58px;
+}
+.approved-homepage .page-view .page-content p{
+  margin:0;
+  line-height:1.82;
+}
+.approved-homepage .page-view .page-content p + p{margin-top:12px}
+
+/* About: consistent spacing between each editorial section */
+.approved-homepage #page-about .page-narrow{max-width:850px}
+.approved-homepage #page-about .page-block{
+  padding:22px 0 24px;
+}
+.approved-homepage #page-about .page-block:first-child{padding-top:0}
+.approved-homepage #page-about .page-block .kicker{margin:0 0 7px}
+.approved-homepage #page-about .page-block h2{
+  margin:0 0 11px;
+  line-height:1.14;
+  max-width:800px;
+}
+.approved-homepage #page-about .page-block p + p{margin-top:9px}
+.approved-homepage #page-about .page-callout{
+  margin-top:24px;
+  padding:24px;
+}
+.approved-homepage #page-about .page-callout h2{
+  margin:3px 0 10px;
+  line-height:1.14;
+}
+.approved-homepage #page-about .page-callout p{margin:0 0 14px;max-width:780px}
+
+/* FAQs: category labels, rows and answers form one consistent list */
+.approved-homepage #page-faq .page-content>.wrap{max-width:920px}
+.approved-homepage #page-faq .faq-category{
+  margin:26px 0 9px;
+  line-height:1.4;
+}
+.approved-homepage #page-faq .faq-category:first-child{margin-top:0}
+.approved-homepage #page-faq .page-faq .faq-item{padding:0}
+.approved-homepage #page-faq .page-faq .faq-question{
+  min-height:58px;
+  padding:16px 2px;
+  align-items:center;
+  line-height:1.3;
+}
+.approved-homepage #page-faq .page-faq .faq-question span:first-child{
+  min-width:0;
+  max-width:calc(100% - 34px);
+}
+.approved-homepage #page-faq .page-faq .faq-question span:last-child{
+  flex:0 0 20px;
+  text-align:center;
+}
+.approved-homepage #page-faq .page-faq .faq-answer{
+  padding:0 34px 16px 2px;
+  max-width:760px;
+  line-height:1.8;
+}
+.approved-homepage #page-faq .page-callout{
+  margin-top:24px;
+  padding:24px;
+}
+.approved-homepage #page-faq .page-callout h2{margin:0 0 10px;line-height:1.15}
+.approved-homepage #page-faq .page-callout p{margin:0 0 14px}
+
+/* Contact: align the information column and form into a clear hierarchy */
+.approved-homepage #page-contact .contact-layout{
+  grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+  gap:clamp(36px,5vw,64px);
+  align-items:start;
+}
+.approved-homepage #page-contact .contact-aside h2{
+  margin:10px 0 12px!important;
+  line-height:1.16!important;
+}
+.approved-homepage #page-contact .contact-aside .section-intro{
+  margin:0;
+  line-height:1.8;
+}
+.approved-homepage #page-contact .contact-aside>.section-intro+.contact-detail{
+  margin-top:22px;
+  padding-top:18px;
+}
+.approved-homepage #page-contact .contact-detail{padding:16px 0}
+.approved-homepage #page-contact .contact-detail strong{margin-bottom:5px;line-height:1.25}
+.approved-homepage #page-contact .contact-detail a{
+  color:var(--gold);
+  font-size:13px;
+  overflow-wrap:anywhere;
+}
+.approved-homepage #page-contact .contact-aside .form-hint{margin:14px 0 0}
+.approved-homepage #page-contact .contact-form{padding:26px}
+.approved-homepage #page-contact .contact-form h2{
+  margin:8px 0 18px!important;
+  line-height:1.18!important;
+}
+.approved-homepage #page-contact .form-grid{gap:14px}
+.approved-homepage #page-contact .field{gap:7px;margin-bottom:14px}
+.approved-homepage #page-contact .field textarea{min-height:132px}
+.approved-homepage #page-contact .contact-form>.form-hint{margin:12px 0 0}
+.approved-homepage #page-contact .form-status{margin-top:12px}
+
+/* Standalone pages meet the footer without an oversized artificial gap */
+.approved-homepage .page-view.active + .footer{margin-top:0}
+
+/* Narrow screens: compact the page rhythm without squeezing question rows */
+@media(max-width:800px){
+  .approved-homepage .page-view .page-hero{padding:46px 0 30px}
+  .approved-homepage .page-view .page-hero .kicker{margin-bottom:10px}
+  .approved-homepage .page-view .page-hero h1{
+    font-size:clamp(36px,9.5vw,46px);
+    line-height:1.04;
+    letter-spacing:-1.7px;
+    margin-bottom:11px;
+  }
+  .approved-homepage .page-view .page-hero p{font-size:14px;line-height:1.72}
+  .approved-homepage .page-view .page-content{padding:30px 0 44px}
+  .approved-homepage #page-about .page-block{padding:19px 0 21px}
+  .approved-homepage #page-about .page-block h2{font-size:clamp(25px,6.4vw,30px);line-height:1.15;margin-bottom:9px}
+  .approved-homepage #page-about .page-callout{margin-top:20px;padding:20px}
+  .approved-homepage #page-about .page-callout h2{font-size:27px}
+  .approved-homepage #page-faq .faq-category{margin:22px 0 7px}
+  .approved-homepage #page-faq .page-faq .faq-question{min-height:56px;padding:15px 2px;font-size:18px}
+  .approved-homepage #page-faq .page-faq .faq-answer{padding:0 28px 15px 2px;font-size:13px}
+  .approved-homepage #page-faq .page-callout{margin-top:20px;padding:20px}
+  .approved-homepage #page-faq .page-callout h2{font-size:28px}
+  .approved-homepage #page-contact .contact-layout{grid-template-columns:1fr;gap:24px}
+  .approved-homepage #page-contact .contact-aside h2{font-size:30px!important}
+  .approved-homepage #page-contact .contact-aside>.section-intro+.contact-detail{margin-top:18px;padding-top:16px}
+  .approved-homepage #page-contact .contact-detail{padding:14px 0}
+  .approved-homepage #page-contact .contact-form{padding:20px}
+  .approved-homepage #page-contact .contact-form h2{font-size:27px!important;margin-bottom:16px!important}
+  .approved-homepage .page-view.active + .footer{margin-top:0}
+}
