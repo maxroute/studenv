@@ -188,9 +188,7 @@ export function ApprovedHomepage() {
       root.querySelectorAll<HTMLElement>(".page-view").forEach((view) => view.classList.remove("active"));
       root.classList.toggle("has-active-page", !!key);
 
-      const home = root.querySelector<HTMLElement>("#home-content");
       if (key) {
-        if (home) home.style.display = "none";
         root.querySelector<HTMLElement>("#page-" + key)?.classList.add("active");
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         const titles: Record<string, string> = {
@@ -202,7 +200,6 @@ export function ApprovedHomepage() {
         };
         document.title = titles[key] + " — Studenv";
       } else {
-        if (home) home.style.display = "";
         document.title = "Studenv — Your knowledge deserves a home";
         if (window.location.hash) {
           window.setTimeout(() => {
