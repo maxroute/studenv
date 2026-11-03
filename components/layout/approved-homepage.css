@@ -542,3 +542,88 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
   .approved-homepage #page-faq .page-faq .faq-answer,
   .approved-homepage #page-faq .page-faq .faq-question span:last-child{transition:none}
 }
+
+
+/* Privacy and Terms: reuse the approved About-page editorial hierarchy and rhythm */
+.approved-homepage #page-privacy .page-content,
+.approved-homepage #page-terms .page-content{
+  padding-top:76px;
+  padding-bottom:104px;
+}
+.approved-homepage #page-privacy .page-block,
+.approved-homepage #page-terms .page-block{
+  padding:38px 0 42px;
+}
+.approved-homepage #page-privacy .page-block:first-child,
+.approved-homepage #page-terms .page-block:first-child{
+  padding-top:0;
+}
+.approved-homepage #page-privacy .page-block .kicker,
+.approved-homepage #page-terms .page-block .kicker{
+  display:block;
+  margin:0 0 17px;
+}
+.approved-homepage #page-privacy .page-block h2,
+.approved-homepage #page-terms .page-block h2{
+  margin:0 0 21px;
+  line-height:1.18;
+}
+.approved-homepage #page-privacy .page-block p,
+.approved-homepage #page-terms .page-block p{
+  margin:0;
+  line-height:1.95;
+}
+.approved-homepage #page-privacy .page-block p+p,
+.approved-homepage #page-terms .page-block p+p{
+  margin-top:18px;
+}
+.approved-homepage #page-privacy.active .page-block,
+.approved-homepage #page-terms.active .page-block{
+  animation:studenvPageEnter .5s cubic-bezier(.22,.61,.36,1) both;
+}
+.approved-homepage #page-privacy.active .page-block:nth-child(2),
+.approved-homepage #page-terms.active .page-block:nth-child(2){animation-delay:.08s}
+.approved-homepage #page-privacy.active .page-block:nth-child(3),
+.approved-homepage #page-terms.active .page-block:nth-child(3){animation-delay:.16s}
+.approved-homepage #page-privacy.active .page-block:nth-child(4),
+.approved-homepage #page-terms.active .page-block:nth-child(4){animation-delay:.24s}
+.approved-homepage #page-privacy.active .page-block:nth-child(5),
+.approved-homepage #page-terms.active .page-block:nth-child(5){animation-delay:.32s}
+@media(max-width:800px){
+  .approved-homepage #page-privacy .page-content,
+  .approved-homepage #page-terms .page-content{
+    padding-top:42px;
+    padding-bottom:58px;
+  }
+  .approved-homepage #page-privacy .page-block,
+  .approved-homepage #page-terms .page-block{
+    padding:31px 0 34px;
+  }
+  .approved-homepage #page-privacy .page-block:first-child,
+  .approved-homepage #page-terms .page-block:first-child{
+    padding-top:0;
+  }
+  .approved-homepage #page-privacy .page-block .kicker,
+  .approved-homepage #page-terms .page-block .kicker{
+    margin-bottom:15px;
+  }
+  .approved-homepage #page-privacy .page-block h2,
+  .approved-homepage #page-terms .page-block h2{
+    margin-bottom:18px;
+    line-height:1.2;
+  }
+  .approved-homepage #page-privacy .page-block p,
+  .approved-homepage #page-terms .page-block p{
+    line-height:1.9;
+  }
+  .approved-homepage #page-privacy .page-block p+p,
+  .approved-homepage #page-terms .page-block p+p{
+    margin-top:16px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .approved-homepage #page-privacy.active .page-block,
+  .approved-homepage #page-terms.active .page-block{
+    animation:none!important;
+  }
+}
