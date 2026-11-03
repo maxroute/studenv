@@ -23,29 +23,40 @@ export function ApprovedHomepage() {
       observer?.unobserve(entry.target);
      }
     });
-   }, { threshold: 0.01, rootMargin: "0px 0px 160px 0px" });
+   }, { threshold: 0.01, rootMargin: "160px 0px 200px 0px" });
   }
-  root.addEventListener("click",handleClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));let revealFrame = 0;
+  root.addEventListener("click",handleClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));
+  let revealFrame = 0;
+  let revealSecondFrame = 0;
   const revealVisibleFades=()=>{
    if(revealFrame)window.cancelAnimationFrame(revealFrame);
+   if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);
+   // Wait for responsive styles and layout to settle before measuring positions.
    revealFrame=window.requestAnimationFrame(()=>{
-    fadeElements.forEach(el=>{
-     const rect=el.getBoundingClientRect();
-     if(rect.bottom>=-80&&rect.top<=window.innerHeight+160){
-      el.classList.add("visible");
-      observer?.unobserve(el);
-     }
+    revealSecondFrame=window.requestAnimationFrame(()=>{
+     fadeElements.forEach(el=>{
+      const rect=el.getBoundingClientRect();
+      if(rect.bottom>=-160&&rect.top<=window.innerHeight+200){
+       el.classList.add("visible");
+       observer?.unobserve(el);
+      }
+     });
     });
    });
   };
   fadeElements.forEach(el=>observer?observer.observe(el):el.classList.add("visible"));
+  const rootResizeObserver=typeof ResizeObserver!=="undefined"
+   ?new ResizeObserver(revealVisibleFades)
+   :null;
+  rootResizeObserver?.observe(root);
   window.addEventListener("resize",revealVisibleFades,{passive:true});
   window.visualViewport?.addEventListener("resize",revealVisibleFades,{passive:true});
+  window.addEventListener("orientationchange",revealVisibleFades,{passive:true});
   window.addEventListener("scroll",revealVisibleFades,{passive:true});
   window.addEventListener("pageshow",revealVisibleFades);
   route();
   revealVisibleFades();
-  return()=>{root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);observer?.disconnect();root.classList.remove("motion-enabled");};
+  return()=>{root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);rootResizeObserver?.disconnect();observer?.disconnect();root.classList.remove("motion-enabled");};
  },[]);
  return <div className="approved-homepage" dangerouslySetInnerHTML={{__html:approvedHomepageMarkup}} />;
 }
