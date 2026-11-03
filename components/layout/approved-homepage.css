@@ -627,3 +627,8 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
     animation:none!important;
   }
 }
+
+/* Standalone public pages use the same approved visual system without the homepage shell. */
+.approved-homepage.has-active-page > .topbar,
+.approved-homepage.has-active-page > #top,
+.approved-homepage.has-active-page > .footer { display: none; }
