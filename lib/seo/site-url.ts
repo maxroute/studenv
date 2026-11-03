@@ -1,26 +1,16 @@
 /**
  * Canonical public origin used by sitemap, robots, and page metadata.
- * Production deployments must set NEXT_PUBLIC_WEBSITE_URL explicitly.
+ * NEXT_PUBLIC_WEBSITE_URL may override the default in other deployments.
  */
+const DEFAULT_PUBLIC_SITE_URL = "https://studenv-online.vercel.app";
+
 export function getPublicSiteUrl(): URL {
-  const productionUrl = process.env.NEXT_PUBLIC_WEBSITE_URL;
-
-  if (process.env.NODE_ENV === "production") {
-    if (!productionUrl) {
-      throw new Error(
-        "Set NEXT_PUBLIC_WEBSITE_URL to the canonical production website URL.",
-      );
-    }
-
-    return new URL("/", productionUrl);
-  }
-
   const configuredUrl =
-    productionUrl ||
+    process.env.NEXT_PUBLIC_WEBSITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.AUTH_URL ||
     process.env.NEXTAUTH_URL ||
-    "http://localhost:3000";
+    DEFAULT_PUBLIC_SITE_URL;
 
   return new URL("/", configuredUrl);
 }
