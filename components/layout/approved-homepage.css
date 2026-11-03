@@ -513,26 +513,21 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
 }
 
 
-/* FIX: standalone FAQ accordions use the same animated open/close behavior as the homepage */
-.approved-homepage #page-faq .page-faq .faq-item .faq-answer{
+/* Standalone FAQ: mirror the homepage accordion animation exactly */
+.approved-homepage #page-faq .page-faq .faq-answer{
   display:block;
-  box-sizing:border-box;
-  max-height:0!important;
+  max-height:0;
   overflow:hidden;
-  padding-top:0!important;
-  padding-bottom:0!important;
   opacity:0;
-  transform:translateY(-6px);
-  transition:max-height .45s cubic-bezier(.22,.61,.36,1),
-             opacity .28s ease,
-             transform .32s ease,
-             padding .32s ease;
+  padding:0 34px 0 2px;
+  transform:translateY(-4px);
+  transition:max-height .38s cubic-bezier(.22,.61,.36,1),opacity .24s ease,transform .30s ease,padding-bottom .30s ease;
+  will-change:max-height,opacity;
 }
 .approved-homepage #page-faq .page-faq .faq-item.open .faq-answer{
-  max-height:500px!important;
-  padding-top:2px!important;
-  padding-bottom:19px!important;
+  max-height:180px;
   opacity:1;
+  padding-bottom:19px;
   transform:translateY(0);
 }
 .approved-homepage #page-faq .page-faq .faq-question span:last-child{
@@ -543,16 +538,7 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
 .approved-homepage #page-faq .page-faq .faq-item.open .faq-question span:last-child{
   transform:rotate(180deg);
 }
-@media(max-width:800px){
-  .approved-homepage #page-faq .page-faq .faq-item.open .faq-answer{
-    max-height:500px!important;
-    padding-bottom:17px!important;
-  }
-}
 @media(prefers-reduced-motion:reduce){
-  .approved-homepage #page-faq .page-faq .faq-item .faq-answer,
-  .approved-homepage #page-faq .page-faq .faq-question span:last-child{
-    transition:none!important;
-    transform:none;
-  }
+  .approved-homepage #page-faq .page-faq .faq-answer,
+  .approved-homepage #page-faq .page-faq .faq-question span:last-child{transition:none}
 }
