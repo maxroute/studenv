@@ -109,6 +109,6 @@
 
 
 /* Consistent anchor landing position across the public homepage */
-html{scroll-behavior:smooth;scroll-padding-top:100px}
-.approved-homepage [id]{scroll-margin-top:100px}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+.approved-homepage [id]{scroll-margin-top:76px}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
