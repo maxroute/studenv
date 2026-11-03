@@ -7,7 +7,6 @@ export function ApprovedHomepage() {
   root.classList.add("motion-enabled");
   const menuButton=root.querySelector<HTMLButtonElement>("#menuBtn");
   const mobilePanel=root.querySelector<HTMLElement>("#mobilePanel");
-  const handleMenuClick=()=>{if(!menuButton||!mobilePanel)return;mobilePanel.classList.toggle("open");menuButton.setAttribute("aria-expanded",String(mobilePanel.classList.contains("open")));};
   const sectionTarget=(id:string)=>{const aliases:Record<string,string>={shelf:"features",focus:"supporting-tools",planner:"supporting-tools",achievements:"supporting-tools"};return root.querySelector<HTMLElement>(`#${CSS.escape(aliases[id]??id)}`);};
   const scrollToSection=(target:HTMLElement)=>{const header=root.querySelector<HTMLElement>(".topbar");const offset=header?.getBoundingClientRect().height??76;const top=target.getBoundingClientRect().top+window.scrollY-offset;window.scrollTo({top:Math.max(0,top),behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});};
   const closeNavigation=()=>{if(mobilePanel&&menuButton){mobilePanel.classList.remove("open");menuButton.setAttribute("aria-expanded","false");}const featureToggle=root.querySelector<HTMLAnchorElement>(".feature-nav > a[aria-haspopup]");featureToggle?.setAttribute("aria-expanded","false");};
@@ -26,7 +25,7 @@ export function ApprovedHomepage() {
     });
    }, { threshold: 0.01, rootMargin: "160px 0px 200px 0px" });
   }
-  root.addEventListener("click",handleClick);document.addEventListener("pointerdown",handleOutsideMenuClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));
+  document.addEventListener("click",handleClick,true);document.addEventListener("pointerdown",handleOutsideMenuClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));
   let revealFrame = 0;
   let revealSecondFrame = 0;
   const revealVisibleFades=()=>{
@@ -57,7 +56,7 @@ export function ApprovedHomepage() {
   window.addEventListener("pageshow",revealVisibleFades);
   route();
   revealVisibleFades();
-  return()=>{root.removeEventListener("click",handleClick);document.removeEventListener("pointerdown",handleOutsideMenuClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);rootResizeObserver?.disconnect();observer?.disconnect();root.classList.remove("motion-enabled");};
+  return()=>{document.removeEventListener("click",handleClick,true);document.removeEventListener("pointerdown",handleOutsideMenuClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);rootResizeObserver?.disconnect();observer?.disconnect();root.classList.remove("motion-enabled");};
  },[]);
  return <div className="approved-homepage" dangerouslySetInnerHTML={{__html:approvedHomepageMarkup}} />;
 }
