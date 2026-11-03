@@ -470,3 +470,44 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
     animation:none!important;
   }
 }
+
+
+/* About page: give each editorial block and its concluding callout room to breathe */
+.approved-homepage #page-about .page-content{padding-top:76px;padding-bottom:104px}
+.approved-homepage #page-about .page-block{padding:38px 0 42px}
+.approved-homepage #page-about .page-block:first-child{padding-top:0}
+.approved-homepage #page-about .page-block .kicker{display:block;margin:0 0 17px}
+.approved-homepage #page-about .page-block h2{margin:0 0 21px;line-height:1.18}
+.approved-homepage #page-about .page-block p{margin:0;line-height:1.95}
+.approved-homepage #page-about .page-block p+p{margin-top:18px}
+.approved-homepage #page-about .page-callout{margin-top:48px;padding:34px}
+.approved-homepage #page-about .page-callout .kicker{display:block;margin:0 0 17px}
+.approved-homepage #page-about .page-callout h2{margin:0 0 20px;line-height:1.18}
+.approved-homepage #page-about .page-callout p{margin:0 0 26px;line-height:1.9}
+
+/* Match the compact Shelf brand lockup: icon and wordmark have equal visual height */
+.approved-homepage .brand{gap:8px}
+.approved-homepage .brand-logo,
+.approved-homepage .footer-brand .brand-logo{
+  width:22px;
+  height:22px;
+  max-height:22px;
+  flex:0 0 22px;
+  object-fit:contain;
+  object-position:center;
+}
+.approved-homepage .brand-name{font-size:22px;line-height:1}
+
+@media(max-width:800px){
+  .approved-homepage #page-about .page-content{padding-top:42px;padding-bottom:58px}
+  .approved-homepage #page-about .page-block{padding:31px 0 34px}
+  .approved-homepage #page-about .page-block:first-child{padding-top:0}
+  .approved-homepage #page-about .page-block .kicker{margin-bottom:15px}
+  .approved-homepage #page-about .page-block h2{margin-bottom:18px;line-height:1.2}
+  .approved-homepage #page-about .page-block p{line-height:1.9}
+  .approved-homepage #page-about .page-block p+p{margin-top:16px}
+  .approved-homepage #page-about .page-callout{margin-top:36px;padding:25px 22px}
+  .approved-homepage #page-about .page-callout .kicker{margin-bottom:15px}
+  .approved-homepage #page-about .page-callout h2{margin-bottom:18px}
+  .approved-homepage #page-about .page-callout p{margin-bottom:24px;line-height:1.9}
+}
