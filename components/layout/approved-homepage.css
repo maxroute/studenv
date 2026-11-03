@@ -189,3 +189,25 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
     -ms-overflow-style:none;
   }
 }
+
+
+/* Mobile page-view spacing: keep the About and Contact pages breathable */
+@media(max-width:760px){
+  .approved-homepage .page-hero{padding:54px 0 36px}
+  .approved-homepage .page-hero .kicker{margin-bottom:14px}
+  .approved-homepage .page-hero h1{font-size:clamp(38px,10vw,48px);line-height:1.04;letter-spacing:-1.8px;margin-bottom:16px}
+  .approved-homepage .page-hero p{font-size:14px;line-height:1.8}
+  .approved-homepage .page-content{padding:36px 0 56px}
+  .approved-homepage .page-block{padding:24px 0 28px}
+  .approved-homepage .page-block h2{line-height:1.16;margin-bottom:12px}
+  .approved-homepage .page-block p{margin:0;line-height:1.85}
+  .approved-homepage .page-callout{margin-top:24px;padding:22px}
+  .approved-homepage .contact-layout{gap:34px}
+  .approved-homepage .contact-aside h2{font-size:30px!important;line-height:1.18!important;margin:12px 0!important}
+  .approved-homepage .contact-aside .section-intro{margin:0;line-height:1.85}
+  .approved-homepage .contact-aside>.section-intro+.contact-detail{margin-top:22px;padding-top:20px}
+  .approved-homepage .contact-detail{padding:20px 0}
+  .approved-homepage .contact-form{padding:22px}
+  .approved-homepage .contact-form h2{font-size:27px!important;line-height:1.2}
+  .approved-homepage .footer{margin-top:64px}
+}
