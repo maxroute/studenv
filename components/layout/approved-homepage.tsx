@@ -25,7 +25,6 @@ export function ApprovedHomepage() {
     });
    }, { threshold: 0.01, rootMargin: "160px 0px 200px 0px" });
   }
-  menuButton?.addEventListener("click",handleMenuClick);
   root.addEventListener("click",handleClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));
   let revealFrame = 0;
   let revealSecondFrame = 0;
@@ -57,7 +56,13 @@ export function ApprovedHomepage() {
   window.addEventListener("pageshow",revealVisibleFades);
   route();
   revealVisibleFades();
-  return()=>{menuButton?.removeEventListener("click",handleMenuClick);root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);rootResizeObserver?.disconnect();observer?.disconnect();root.classList.remove("motion-enabled");};
+  return()=>{root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);if(revealSecondFrame)window.cancelAnimationFrame(revealSecondFrame);rootResizeObserver?.disconnect();observer?.disconnect();root.classList.remove("motion-enabled");};
  },[]);
- return <div className="approved-homepage" dangerouslySetInnerHTML={{__html:approvedHomepageMarkup}} />;
+ const handleReactClick=(event: React.MouseEvent<HTMLDivElement>)=>{
+  const target=event.target;
+  if(target instanceof Element && target.closest("#menuBtn")){
+   handleMenuClick();
+  }
+ };
+ return <div className="approved-homepage" onClick={handleReactClick} dangerouslySetInnerHTML={{__html:approvedHomepageMarkup}} />;
 }
