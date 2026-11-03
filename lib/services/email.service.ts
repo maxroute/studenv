@@ -88,7 +88,7 @@ export async function sendContactMessage(input: {
   message: string;
 }) {
   const transport = getTransport();
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const from = process.env.SMTP_FROM || (process.env.SMTP_USER ? { name: "Studenv", address: process.env.SMTP_USER } : undefined);
 
   if (!transport || !from) {
     throw new Error("Contact email delivery is not configured.");
