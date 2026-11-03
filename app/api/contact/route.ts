@@ -18,7 +18,7 @@ const contactSchema = z.object({
     "Partnership or other",
   ]),
   message: z.string().trim().min(10).max(5000),
-  website: z.string().max(0).optional().default(""),
+  website: z.string().max(200).optional().default(""),
 });
 
 function json(body: unknown, status = 200) {
@@ -49,7 +49,21 @@ export async function POST(request: NextRequest) {
 
     const parsed = contactSchema.safeParse(body);
     if (!parsed.success) {
-      return json({ ok: false, error: "Please check the form fields and try again." }, 400);
+      const messageIssue = parsed.error.issues.find((issue) => issue.path[0] === "message");
+      const emailIssue = parsed.error.issues.find((issue) => issue.path[0] === "email");
+      const nameIssue = parsed.error.issues.find((issue) => issue.path[0] === "name");
+      const subjectIssue = parsed.error.issues.find((issue) => issue.path[0] === "subject");
+      const issue = messageIssue ?? emailIssue ?? nameIssue ?? subjectIssue;
+      const errorMessage = messageIssue
+        ? "Please write a message of at least 10 characters."
+        : emailIssue
+          ? "Please enter a valid email address."
+          : nameIssue
+            ? "Please enter your name (at least 2 characters)."
+            : subjectIssue
+              ? "Please choose a subject."
+              : "Please check the form fields and try again.";
+      return json({ ok: false, error: errorMessage }, 400);
     }
 
     // Silently accept honeypot submissions without sending email.
