@@ -17,7 +17,7 @@ const contactSchema = z.object({
     "Suggestion or feature idea",
     "Partnership or other",
   ]),
-  message: z.string().trim().min(10).max(5000),
+  message: z.string().trim().min(2).max(5000),
   website: z.string().max(200).optional().default(""),
 });
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       const subjectIssue = parsed.error.issues.find((issue) => issue.path[0] === "subject");
       const issue = messageIssue ?? emailIssue ?? nameIssue ?? subjectIssue;
       const errorMessage = messageIssue
-        ? "Please write a message of at least 10 characters."
+        ? "Please write a message of at least 2 characters."
         : emailIssue
           ? "Please enter a valid email address."
           : nameIssue
