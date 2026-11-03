@@ -331,7 +331,7 @@ html{scroll-behavior:smooth;scroll-padding-top:76px}
 .approved-homepage #page-contact .form-status{margin-top:12px}
 
 /* Standalone pages meet the footer without an oversized artificial gap */
-.approved-homepage .page-view.active + .footer{margin-top:0}
+.approved-homepage.has-active-page .footer{margin-top:0}
 
 /* Narrow screens: compact the page rhythm without squeezing question rows */
 @media(max-width:800px){
