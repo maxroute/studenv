@@ -100,6 +100,7 @@ export const passwordResetLimiter = createLimiter(3, "1 h");
 export const apiRateLimiter = createLimiter(100, "1 m");
 export const searchRateLimiter = createLimiter(30, "1 m");
 export const extractRateLimiter = createLimiter(20, "1 m");
+export const contactRateLimiter = createLimiter(3, "15 m");
 
 export async function checkRateLimit(limiter: Limiter, identifier: string) {
   const result = await limiter.limit(identifier);

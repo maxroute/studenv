@@ -1,28 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import type { ElementType, ReactNode } from "react";
 import Link from "next/link";
 import {
-  Download,
-  Laptop,
-  Globe,
+  ArrowDownRight,
   ArrowRight,
-  ShieldCheck,
+  ArrowUpRight,
+  CalendarDays,
   Check,
-  Zap,
-  Users,
-  Flame,
-  BookOpen,
-  Sparkles,
-  Menu,
-  X,
-  Play,
-  FileText,
-  MessageSquare,
-  Video,
-  Clock,
-  ExternalLink,
   ChevronDown,
+  Focus,
+  Layers3,
+  Library,
+  Menu,
+  Play,
+  Search,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { BrandLockup } from "@/components/ui/brand-logo";
 
@@ -30,971 +25,228 @@ interface LandingPageProps {
   session: any;
 }
 
+const faqs = [
+  {
+    q: "What is Studenv?",
+    a: "Studenv is a personal learning environment: a place to collect resources, organize your thoughts, and return to what you have learned.",
+  },
+  {
+    q: "Is Studenv only for students?",
+    a: "No. It is designed for anyone who learns independently — students, curious minds, researchers, and people who work with information every day.",
+  },
+  {
+    q: "What can I keep in my Shelf?",
+    a: "Shelf brings learning resources together, including documents, links, videos, images, and your own notes.",
+  },
+  {
+    q: "What is the Workspace for?",
+    a: "Workspace is a visual space for arranging notes, resources, diagrams, and ideas on a canvas. You can explore the current Workspace from inside Studenv.",
+  },
+  {
+    q: "Is Rangan available now?",
+    a: "Not yet. Rangan is a planned AI librarian and learning companion. We will share more when it is ready.",
+  },
+];
+
+const featureLinks = [
+  { label: "The Shelf", href: "#shelf", note: "Your learning library" },
+  { label: "Workspace", href: "#workspace", note: "Think visually" },
+  { label: "Study Groups", href: "#study-groups", note: "Learn together" },
+  { label: "Rangan", href: "#rangan", note: "Coming soon" },
+  { label: "Focus Mode", href: "#supporting-tools", note: "Protect your attention" },
+  { label: "Planner", href: "#supporting-tools", note: "Plan your next step" },
+  { label: "Achievements", href: "#supporting-tools", note: "Notice your progress" },
+];
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#d7a34b]">
+      {children}
+    </p>
+  );
+}
+
+function WorkspacePreview() {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-[#d8d8d3] bg-[#fbfbf9] p-3 text-[#242424] shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-4">
+      <div className="flex items-center justify-between border-b border-[#e7e7e2] pb-3 text-[10px] text-[#5f6672]">
+        <div className="flex items-center gap-2 font-semibold text-[#252936]">
+          <span className="h-2 w-2 rounded-full bg-[#7556e8]" />
+          Operating Systems
+          <span className="rounded bg-[#eeeaff] px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-[#674bd1]">STUDIO</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[#15945d]">● Saved</span>
+          <span className="rounded bg-[#6541df] px-2 py-1 font-semibold text-white">Share</span>
+        </div>
+      </div>
+      <div className="grid min-h-[330px] grid-cols-[30px_minmax(0,1fr)_116px] gap-2 pt-3 sm:min-h-[390px] sm:grid-cols-[36px_minmax(0,1fr)_150px] sm:gap-3">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-[#e3e5eb] bg-white py-2 text-[#71809a] shadow-sm">
+          <span className="rounded bg-[#eeeaff] p-1 text-[#674bd1]">↖</span>
+          <span>✋</span><span className="h-px w-4 bg-[#e6e8ed]" />
+          <span>▣</span><span>T</span><span>▧</span><span className="h-px w-4 bg-[#e6e8ed]" />
+          <span>□</span><span>◯</span><span>△</span><span>／</span><span>⌁</span>
+          <span className="mt-auto">✎</span><span>⌫</span><span>···</span>
+        </div>
+        <div className="relative overflow-hidden rounded-lg border border-[#e5e7ec] bg-[radial-gradient(#dfe4ee_0.8px,transparent_0.8px)] [background-size:13px_13px]">
+          <div className="absolute left-3 top-3 w-[39%] rounded-md border border-[#e2e5ec] bg-white p-2 shadow-md">
+            <div className="mb-2 flex items-center justify-between text-[8px] font-semibold text-[#596174]"><span>Operating Systems — Overview</span><Play size={9} /></div>
+            <div className="flex aspect-video items-center justify-center rounded bg-[#17132d] text-center text-[11px] font-bold leading-tight text-white">
+              <span>OPERATING<br />SYSTEMS</span>
+            </div>
+          </div>
+          <div className="absolute left-1/2 top-[43%] flex h-[74px] w-[112px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[50%] border-2 border-[#7656e8] bg-[#eee9ff] text-center text-[12px] font-bold leading-tight text-[#28223f] shadow-sm sm:h-[86px] sm:w-[140px] sm:text-sm">Operating<br />System</div>
+          <div className="absolute left-[52%] top-[15%] h-[2px] w-[18%] rotate-[-25deg] bg-[#242424]" />
+          <div className="absolute right-[7%] top-[8%] w-[27%] rounded-md border border-[#b6e2c5] bg-[#effaf2] p-2 text-[9px] font-semibold text-[#253b2c]">Memory Management<div className="mt-1 font-normal leading-relaxed">• Allocation<br />• Paging<br />• Segmentation</div></div>
+          <div className="absolute left-[7%] top-[55%] w-[31%] rounded-md border border-[#f0d47b] bg-[#fff7d8] p-2 text-[9px] font-semibold text-[#45391a]">CPU Scheduling<div className="mt-1 font-normal leading-relaxed">• FCFS<br />• SJF<br />• Round Robin</div></div>
+          <div className="absolute right-[6%] top-[49%] w-[29%] rounded-md border border-[#c9b8ff] bg-[#f4f0ff] p-2 text-[9px] font-semibold text-[#30244d]">File System<div className="mt-1 font-normal leading-relaxed">• Files<br />• Directories<br />• Permissions</div></div>
+          <div className="absolute bottom-[8%] left-[8%] w-[36%] rotate-[-2deg] rounded-sm border border-[#f0e0a0] bg-[#fff2b8] p-2 text-[9px] text-[#38301d] shadow-sm"><strong>Key takeaways</strong><div className="mt-1 leading-relaxed">✓ Manages resources<br />✓ Runs applications</div></div>
+          <div className="absolute bottom-[8%] right-[7%] w-[32%] rotate-[2deg] rounded-sm border border-[#d8caff] bg-[#f0eaff] p-2 text-[9px] text-[#352b50] shadow-sm"><strong>Next steps</strong><div className="mt-1 leading-relaxed">□ Revise notes<br />□ Practice questions</div></div>
+        </div>
+        <aside className="hidden flex-col gap-2 rounded-lg border border-[#e3e5eb] bg-white p-2 sm:flex">
+          <div className="flex items-center gap-1 text-[10px] font-bold text-[#263044]"><Library size={11} /> Vault Library</div>
+          <div className="rounded border border-[#e7e9ef] px-2 py-1 text-[8px] text-[#8a91a1]"><Search size={9} className="mr-1 inline" /> Search assets</div>
+          {["process-scheduling.pdf","memory-management.pdf","os-architecture.png","lecture-part-1.mp4"].map((file, i) => (
+            <div key={file} className="flex items-center gap-1.5 rounded border border-[#edf0f4] p-1.5 text-[8px] text-[#374151]">
+              <span className={i === 2 ? "text-emerald-600" : i === 3 ? "text-blue-600" : "text-red-500"}>{i === 2 ? "▧" : i === 3 ? "▶" : "▤"}</span>
+              <span className="min-w-0 truncate">{file}</span>
+            </div>
+          ))}
+        </aside>
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[8px] text-[#8a91a1]"><span>−　100%　＋</span><span>Canvas preview</span></div>
+    </div>
+  );
+}
+
+function ShelfPreview() {
+  return (
+    <div className="rounded-xl border border-[#34312d] bg-[#171614] p-4 shadow-2xl sm:p-5">
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-semibold text-[#eee7db]"><Library size={16} className="text-[#d7a34b]" /> My Shelf</div>
+        <span className="rounded-full border border-[#514536] px-2 py-1 font-mono text-[9px] text-[#c5a66c]">ALL RESOURCES</span>
+      </div>
+      <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#393631] bg-[#11100f] px-3 py-2 text-xs text-[#827b70]"><Search size={13} /> Search your library</div>
+      <div className="grid grid-cols-2 gap-3">
+        {[["PDF","Discrete Mathematics","12 pages"],["VIDEO","Understanding TCP/IP","18 min"],["NOTE","Ideas & references","Edited today"],["IMAGE","System architecture","PNG image"]].map(([kind,title,meta],i)=>(
+          <div key={title} className="rounded-lg border border-[#37332d] bg-[#201e1a] p-3">
+            <div className="mb-4 flex items-center justify-between"><span className="rounded bg-[#30291e] px-2 py-1 font-mono text-[8px] text-[#e2b45e]">{kind}</span><span className="text-[10px] text-[#777064]">···</span></div>
+            <div className="mb-1 text-xs font-medium text-[#e9e2d6]">{title}</div>
+            <div className="text-[10px] text-[#847d72]">{meta}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeatureCard({ icon: Icon, eyebrow, title, description, href, status }: {
+  icon: ElementType; eyebrow: string; title: string; description: string; href: string; status?: string;
+}) {
+  return (
+    <Link href={href} className="group flex min-h-[230px] flex-col rounded-xl border border-[#34312d] bg-[#151412] p-6 transition duration-200 hover:-translate-y-1 hover:border-[#8a6835] hover:bg-[#1b1916]">
+      <div className="mb-8 flex items-center justify-between">
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#51412a] bg-[#2a2115] text-[#d7a34b]"><Icon size={18} /></span>
+        {status && <span className="font-mono text-[9px] uppercase tracking-wider text-[#b69b6a]">{status}</span>}
+        {!status && <ArrowUpRight size={16} className="text-[#6d675d] transition group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-[#e4b45e]" />}
+      </div>
+      <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[#8b7b5d]">{eyebrow}</p>
+      <h3 className="mb-2 font-display text-2xl text-[#f0e9dc]">{title}</h3>
+      <p className="text-sm leading-6 text-[#999187]">{description}</p>
+    </Link>
+  );
+}
+
 export default function LandingPage({ session }: LandingPageProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopModalOpen, setDesktopModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"vault" | "ai" | "rooms">("vault");
-  const [faqOpen, setFaqOpen] = useState<number | null>(null);
-  const [pricingCycle, setPricingCycle] = useState<"monthly" | "yearly">("monthly");
-  const [selectedVaultItem, setSelectedVaultItem] = useState<string | null>(null);
-
-  const toggleFaq = (index: number) => {
-    setFaqOpen(faqOpen === index ? null : index);
-  };
-
-  const pricing = {
-    monthly: { starter: "$0", student: "$4", team: "$12" },
-    yearly: { starter: "$0", student: "$3.20", team: "$9.60" },
-  };
-
-  const features = [
-    {
-      icon: <BookOpen className="w-5 h-5 text-amber" />,
-      title: "Knowledge Vault",
-      description: "Upload PDFs, bookmark articles, extract YouTube transcripts, and write markdown notes. All organized in one searchable, custom-tagged library.",
-    },
-    {
-      icon: <Sparkles className="w-5 h-5 text-purple-400" />,
-      title: "Contextual AI Assistant",
-      description: "Chat with your library. Ask questions about specific PDFs, summarize videos, auto-generate concept flashcards, and discover hidden connections.",
-    },
-    {
-      icon: <Users className="w-5 h-5 text-teal" />,
-      title: "Shared Study Rooms",
-      description: "Create private groups to study together. Share a real-time group vault, draw on collaborative whiteboards, and talk over high-quality audio/video.",
-    },
-    {
-      icon: <Flame className="w-5 h-5 text-red-400" />,
-      title: "Focus & Flow State",
-      description: "Block out distractions with customizable Pomodoro timers, background ambient soundscapes, and comprehensive session statistics.",
-    },
-  ];
-
-  const faqs = [
-    {
-      q: "Is the desktop app fully synced with the web version?",
-      a: "Yes! All your notes, uploaded PDFs, bookmarks, and configurations are synced in real-time between your web account and the desktop app.",
-    },
-    {
-      q: "Does the desktop app support offline access?",
-      a: "Yes. The desktop app caches your personal vault and text-based notes locally, allowing you to read and write without an active internet connection. Synced files will update automatically once you go back online.",
-    },
-    {
-      q: "Why should I use the desktop app instead of the browser?",
-      a: "The desktop app runs in a dedicated native container (Electron) which provides a zero-latency UI, native OS shortcuts (like globally opening the search bar), tray launcher, launch-on-startup, and runs entirely in its own sandboxed process with offline support.",
-    },
-    {
-      q: "Are study rooms free to use?",
-      a: "Yes! The Starter and Student plans allow you to join and host study groups. The premium Lab/Team plan increases the limit of concurrent active audio/video feeds and offers larger shared workspace vaults.",
-    },
-    {
-      q: "What AI models power the assistant?",
-      a: "Studenv uses Gemini 1.5 Pro and Flash to summarize, analyze, and query your documents. This ensures extremely fast response times and high accuracy in text extraction.",
-    },
-  ];
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [faqOpen, setFaqOpen] = useState<number | null>(0);
+  const dashboardHref = session ? "/dashboard" : "/auth/login";
 
   return (
-    <div className="min-h-screen bg-bg text-text selection:bg-amber/30 selection:text-white font-sans overflow-x-hidden">
-
-      {/* BACKGROUND DECORATIONS */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-amber/5 rounded-full blur-[120px] pointer-events-none z-0" />
-      <div className="absolute top-[20%] right-10 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-[140px] pointer-events-none z-0" />
-      <div className="absolute bottom-[20%] left-10 w-[600px] h-[600px] bg-teal/5 rounded-full blur-[140px] pointer-events-none z-0" />
-
-      {/* HEADER */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-bg/75 backdrop-blur-xl transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <BrandLockup variant="mark" className="flex items-center gap-3 text-lg font-bold text-white" />
-            </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted">
-              <a href="#features" className="hover:text-text transition-colors">Features</a>
-              <a href="#desktop" className="hover:text-text transition-colors">Desktop App</a>
-              <a href="#pricing" className="hover:text-text transition-colors">Pricing</a>
-              <a href="#faq" className="hover:text-text transition-colors">FAQ</a>
-            </nav>
-          </div>
-
-          <div className="hidden md:flex items-center gap-4">
-            <Link
-              href={session ? "/dashboard" : "/auth/login"}
-              className="text-sm font-medium hover:text-amber transition-colors px-4 py-2"
-            >
-              {session ? "Go to Dashboard" : "Sign In"}
-            </Link>
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium text-bg bg-amber hover:bg-amber/90 transition-all px-4 py-2 rounded-lg font-medium shadow-lg shadow-amber/10 flex items-center gap-1.5"
-            >
-              Try Studenv <Globe className="w-4 h-4" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setDesktopModalOpen(true)}
-              className="text-sm font-medium border border-border bg-surface hover:bg-surface2 transition-all px-4 py-2 rounded-lg flex items-center gap-1.5"
-            >
-              Get App <Download className="w-4 h-4 text-amber" />
-            </button>
-          </div>
-
-          {/* MOBILE MENU TOGGLE */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-muted hover:text-text transition-colors"
-            aria-label="Toggle Menu"
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-
-        {/* MOBILE MENU */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-b border-border bg-surface px-4 py-6 flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 duration-200">
-            <a
-              href="#features"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-base font-medium py-1 text-muted hover:text-text transition-colors"
-            >
-              Features
-            </a>
-            <a
-              href="#desktop"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-base font-medium py-1 text-muted hover:text-text transition-colors"
-            >
-              Desktop App
-            </a>
-            <a
-              href="#pricing"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-base font-medium py-1 text-muted hover:text-text transition-colors"
-            >
-              Pricing
-            </a>
-            <a
-              href="#faq"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-base font-medium py-1 text-muted hover:text-text transition-colors"
-            >
-              FAQ
-            </a>
-            <hr className="border-border my-2" />
-            <div className="flex flex-col gap-3">
-              <Link
-                href={session ? "/dashboard" : "/auth/login"}
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-surface2 transition-colors"
-              >
-                {session ? "Go to Dashboard" : "Sign In"}
-              </Link>
-              <Link
-                href="/dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2.5 rounded-lg bg-amber text-bg text-sm font-semibold hover:bg-amber/90 transition-colors shadow-lg shadow-amber/10 flex items-center justify-center gap-1.5"
-              >
-                Try Studenv <Globe className="w-4 h-4" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setDesktopModalOpen(true);
-                }}
-                className="w-full text-center py-2.5 rounded-lg bg-surface2 border border-border2 text-sm font-medium hover:bg-surface3 transition-colors flex items-center justify-center gap-1.5"
-              >
-                Download Desktop App <Download className="w-4 h-4 text-amber" />
-              </button>
+    <main className="min-h-screen overflow-hidden bg-[#10100f] text-[#eee7db] selection:bg-[#d7a34b]/30 selection:text-white">
+      <header className="sticky top-0 z-50 border-b border-[#302d28] bg-[#10100f]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8">
+          <Link href="/" aria-label="Studenv home"><BrandLockup variant="mark" className="gap-3" imageClassName="h-7 w-7" textClassName="text-lg font-semibold tracking-tight text-[#f0e9dc]" /></Link>
+          <nav className="hidden items-center gap-8 text-sm text-[#aaa297] lg:flex">
+            <div className="group relative">
+              <a href="#features" className="inline-flex items-center gap-1 transition hover:text-white">Features <ChevronDown size={13} /></a>
+              <div className="invisible absolute left-0 top-full z-50 mt-4 w-64 translate-y-1 rounded-xl border border-[#3a352e] bg-[#181714] p-2 opacity-0 shadow-2xl transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                {featureLinks.map((item)=><a key={item.label} href={item.href} className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-[#25221d]"><span className="text-xs text-[#eee7db]">{item.label}</span><span className="text-[9px] text-[#827a6e]">{item.note}</span></a>)}
+              </div>
             </div>
+            <a href="#about" className="transition hover:text-white">About</a>
+            <a href="#faq" className="transition hover:text-white">FAQs</a>
+            <a href="#contact" className="transition hover:text-white">Contact</a>
+          </nav>
+          <div className="hidden items-center gap-5 lg:flex">
+            <Link href={session ? "/dashboard" : "/auth/login"} className="text-sm text-[#c7beb1] transition hover:text-white">{session ? "Open Studenv" : "Sign in"}</Link>
+            <Link href={dashboardHref} className="inline-flex items-center gap-2 rounded-md bg-[#d7a34b] px-4 py-2.5 text-sm font-semibold text-[#17130d] transition hover:bg-[#e7b75f]">Get started <ArrowUpRight size={15} /></Link>
           </div>
-        )}
+          <button className="rounded-md border border-[#3a352e] p-2 text-[#eee7db] lg:hidden" onClick={()=>setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Close menu" : "Open menu"}>{menuOpen ? <X size={19}/> : <Menu size={19}/>}</button>
+        </div>
+        {menuOpen && <div className="border-t border-[#302d28] bg-[#151412] px-5 py-4 lg:hidden">
+          {[["Features","#features"],["About","#about"],["FAQs","#faq"],["Contact","#contact"]].map(([label,href])=><a key={label} href={href} onClick={()=>setMenuOpen(false)} className="block border-b border-[#302d28] py-3 text-sm text-[#c9c0b4]">{label}</a>)}
+          <Link href={dashboardHref} className="mt-4 inline-flex rounded-md bg-[#d7a34b] px-4 py-2.5 text-sm font-semibold text-[#17130d]">Get started <ArrowUpRight size={15} className="ml-2"/></Link>
+        </div>}
       </header>
 
-      {/* HERO SECTION */}
-      <section className="relative pt-20 pb-16 sm:pb-24 lg:pt-32 lg:pb-32 z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber/20 bg-amber/5 text-amber text-xs font-semibold mb-6 animate-pulse">
-            <Laptop className="w-3.5 h-3.5" />
-            <span>Desktop App Coming Soon • Web App Live</span>
-          </div>
-
-          {/* Heading */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight font-display text-white max-w-4xl mx-auto leading-none mb-6">
-            Your Online Study Environment, <br />
-            <span className="bg-gradient-to-r from-amber via-[#ffd18c] to-purple-400 bg-clip-text text-transparent">
-              Supercharged by AI.
-            </span>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-base sm:text-xl text-muted max-w-2xl mx-auto leading-relaxed mb-10">
-            Collect articles, import PDFs, extract YouTube transcripts, write clean markdown notes, and study with peers in real-time study rooms. Speed of a native desktop app, convenience of the web.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto mb-4">
-            <Link
-              href="/dashboard"
-              className="min-w-[200px] sm:w-auto px-8 py-4 rounded-xl bg-amber hover:bg-amber/90 text-bg text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-amber/20 flex items-center justify-center gap-2 group"
-            >
-              Try Studenv Online
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setDesktopModalOpen(true)}
-              className="min-w-[233px] sm:w-auto px-8 py-4 rounded-xl bg-surface border border-border2 hover:border-amber/40 hover:bg-surface2 text-white text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              <Download className="w-5 h-5 text-amber" />
-              Download for Windows
-              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber/10 text-amber border border-amber/20 ml-1">
-                Soon
-              </span>
-            </button>
-          </div>
-
-          {/* Subtext */}
-          <p className="text-xs text-muted2 mb-16">
-            Windows desktop installer is in preparation. Complete platform is accessible directly on the web.
-          </p>
-        </div>
-
-        {/* INTERACTIVE SHOWCASE FRAME */}
-        <div className="relative max-w-5xl mx-auto border border-border2/80 rounded-2xl bg-surface/90 shadow-2xl overflow-hidden backdrop-blur-md">
-          {/* Top window bar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/80 bg-surface2/60">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red/80" />
-              <span className="w-3 h-3 rounded-full bg-amber/80" />
-              <span className="w-3 h-3 rounded-full bg-green/80" />
+      <section className="relative mx-auto max-w-7xl px-5 pb-24 pt-20 sm:px-8 sm:pt-28 lg:pb-32 lg:pt-36">
+        <div className="pointer-events-none absolute -right-40 top-10 h-[460px] w-[460px] rounded-full bg-[#b98537]/[0.08] blur-[110px]" />
+        <div className="relative grid items-center gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10">
+          <div className="max-w-xl">
+            <SectionLabel>A personal learning environment</SectionLabel>
+            <h1 className="mb-7 font-display text-5xl leading-[1.04] tracking-[-0.045em] text-[#f3ecdf] sm:text-6xl lg:text-[68px]">Your knowledge deserves a <span className="text-[#d7a34b]">home.</span></h1>
+            <p className="mb-9 max-w-lg text-base leading-8 text-[#a9a195] sm:text-lg">Collect what you discover. Organize what you learn. Build a second brain that grows with you.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href={dashboardHref} className="inline-flex items-center gap-2 rounded-md bg-[#d7a34b] px-5 py-3.5 text-sm font-semibold text-[#17130d] transition hover:bg-[#e7b75f]">Get started <ArrowRight size={16}/></Link>
+              <a href="#philosophy" className="inline-flex items-center gap-2 rounded-md border border-[#494239] px-5 py-3.5 text-sm font-medium text-[#e3dbcf] transition hover:border-[#8d7044] hover:bg-white/[0.03]">Explore Studenv <ArrowDownRight size={15}/></a>
             </div>
-            <div className="text-xs font-mono text-muted flex items-center gap-1.5 bg-bg/50 px-3 py-1 rounded-md border border-border/60">
-              <span className="w-2 h-2 rounded-full bg-teal animate-pulse" />
-              studenv-app-live-preview
-            </div>
-            <div className="w-14" /> {/* spacer */}
+            <p className="mt-5 font-mono text-[10px] tracking-wide text-[#716b61]">A quieter place for everything you are learning.</p>
           </div>
-
-          {/* Tab selector */}
-          <div className="flex border-b border-border/60 bg-surface">
-            <button
-              onClick={() => setActiveTab("vault")}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 flex items-center justify-center gap-2 transition-all ${activeTab === "vault"
-                ? "border-amber text-amber bg-surface2/30"
-                : "border-transparent text-muted hover:text-text hover:bg-surface2/10"
-                }`}
-            >
-              <FileText className="w-4 h-4" />
-              Knowledge Vault
-            </button>
-            <button
-              onClick={() => setActiveTab("ai")}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 flex items-center justify-center gap-2 transition-all ${activeTab === "ai"
-                ? "border-amber text-amber bg-surface2/30"
-                : "border-transparent text-muted hover:text-text hover:bg-surface2/10"
-                }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              AI Assistant Chat
-            </button>
-            <button
-              onClick={() => setActiveTab("rooms")}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 flex items-center justify-center gap-2 transition-all ${activeTab === "rooms"
-                ? "border-amber text-amber bg-surface2/30"
-                : "border-transparent text-muted hover:text-text hover:bg-surface2/10"
-                }`}
-            >
-              <Users className="w-4 h-4" />
-              Collaborative Study Rooms
-            </button>
-          </div>
-
-          {/* Interactive display area */}
-          <div className="min-h-[440px] p-6 bg-bg/50 flex flex-col justify-between">
-
-            {/* VAULT PREVIEW */}
-            {activeTab === "vault" && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border/40 pb-4">
-                  <div>
-                    <h4 className="text-base font-semibold text-white">Your Personal Knowledge Vault</h4>
-                    <p className="text-xs text-muted">Click a resource card to view metadata and simulated options.</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-mono text-muted bg-surface/60 border border-border/80 px-2.5 py-1 rounded">
-                    Storage: 24 / 200 items (Free)
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    {
-                      id: "calculus",
-                      title: "Calculus Foundations & Limits.pdf",
-                      type: "pdf",
-                      tag: "#math",
-                      size: "4.8 MB",
-                      progress: 75,
-                      desc: "Comprehensive review of limits, derivative rules, and integral approximations.",
-                    },
-                    {
-                      id: "react",
-                      title: "React 19 Server Components Tutorial",
-                      type: "video",
-                      tag: "#webdev",
-                      duration: "24:15",
-                      progress: 40,
-                      desc: "Imported Youtube video. AI extracted transcript of 4,200 words ready.",
-                    },
-                    {
-                      id: "notes",
-                      title: "Product Launch Strategy Plan",
-                      type: "note",
-                      tag: "#business",
-                      words: "850 words",
-                      progress: 100,
-                      desc: "Personal markdown note detailing phase 1 milestones and budget limits.",
-                    },
-                  ].map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => setSelectedVaultItem(selectedVaultItem === item.id ? null : item.id)}
-                      className={`border rounded-xl p-4 bg-surface/40 hover:bg-surface/80 transition-all cursor-pointer ${selectedVaultItem === item.id ? "border-amber ring-1 ring-amber/30" : "border-border/60"
-                        }`}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          {item.type === "pdf" && <FileText className="w-4 h-4 text-red-400" />}
-                          {item.type === "video" && <Play className="w-4 h-4 text-blue" />}
-                          {item.type === "note" && <FileText className="w-4 h-4 text-amber" />}
-                          <span className="text-xs font-mono text-muted bg-surface2/60 px-1.5 py-0.5 rounded border border-border/40">
-                            {item.tag}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted font-mono">{item.size || item.duration || item.words}</span>
-                      </div>
-
-                      <h5 className="text-sm font-semibold text-white line-clamp-1 mb-1">{item.title}</h5>
-                      <p className="text-xs text-muted line-clamp-2 mb-4">{item.desc}</p>
-
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-[10px] font-mono text-muted">
-                          <span>Progress</span>
-                          <span>{item.progress}%</span>
-                        </div>
-                        <div className="h-1 bg-border/60 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-amber to-amber/60 rounded-full transition-all duration-500"
-                            style={{ width: `${item.progress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {selectedVaultItem === item.id && (
-                        <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs animate-in fade-in duration-200">
-                          <span className="text-amber font-medium flex items-center gap-1">
-                            Ask AI <Sparkles className="w-3.5 h-3.5" />
-                          </span>
-                          <span className="text-muted hover:text-white transition-colors flex items-center gap-0.5">
-                            Open item <ExternalLink className="w-3 h-3" />
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AI ASSISTANT PREVIEW */}
-            {activeTab === "ai" && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="flex items-center justify-between border-b border-border/40 pb-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
-                    <div>
-                      <h4 className="text-base font-semibold text-white">AI Assistant</h4>
-                      <p className="text-xs text-muted">Ask questions directly in context of your vault.</p>
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted bg-surface/50 border border-border2 px-2.5 py-1 rounded-md flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-400" />
-                    Document Context: <strong className="text-white font-medium">Calculus Foundations.pdf</strong>
-                  </div>
-                </div>
-
-                <div className="border border-border/60 rounded-xl bg-surface/20 p-4 space-y-4 max-h-[280px] overflow-y-auto font-sans text-sm">
-                  <div className="flex gap-3 items-start">
-                    <div className="w-7 h-7 rounded-full bg-surface3 flex items-center justify-center text-xs font-bold text-muted border border-border2">
-                      U
-                    </div>
-                    <div className="bg-surface2/60 border border-border/60 rounded-xl p-3 max-w-[85%] text-text text-xs">
-                      What are the main applications of limits mentioned in Chapter 1?
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <div className="w-7 h-7 rounded-full bg-amber/10 border border-amber/30 flex items-center justify-center text-xs font-bold text-amber">
-                      AI
-                    </div>
-                    <div className="bg-surface/60 border border-border2/60 rounded-xl p-3 max-w-[85%] text-text text-xs leading-relaxed space-y-2">
-                      <p>According to Chapter 1 of <strong className="text-amber">Calculus Foundations.pdf</strong>, limits are primarily used for:</p>
-                      <ul className="list-disc pl-4 space-y-1 text-muted">
-                        <li>Determining the <strong className="text-white">Instantaneous Rate of Change</strong> of a function (which defines the derivative).</li>
-                        <li>Finding the <strong className="text-white">Slope of a Tangent Line</strong> to a curve at any specific point.</li>
-                        <li>Evaluating <strong className="text-white">Infinite Sums</strong> and approximating the area under a curve.</li>
-                      </ul>
-                      <p className="text-[10px] text-purple-400 flex items-center gap-1 font-mono pt-1">
-                        Source matched: Page 14, Paragraph 3 <Check className="w-3 h-3" />
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 border border-border/60 rounded-xl bg-surface/50 p-2">
-                  <input
-                    type="text"
-                    placeholder="Ask the AI a question about your files..."
-                    className="flex-1 bg-transparent border-0 py-2 text-xs focus:ring-0 text-text outline-none px-2"
-                    readOnly
-                  />
-                  <button className="bg-amber hover:bg-amber/90 text-bg px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all">
-                    Send <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* STUDY ROOMS PREVIEW */}
-            {activeTab === "rooms" && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="flex items-center justify-between border-b border-border/40 pb-4">
-                  <div>
-                    <h4 className="text-base font-semibold text-white">Study Room: #algorithms-midterm</h4>
-                    <p className="text-xs text-muted">Join collaborative audio/video channels with shared canvases.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1.5 text-xs text-green font-mono bg-green/10 border border-green/20 px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green animate-ping" />
-                      Live (4 online)
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-amber font-mono bg-amber/5 border border-amber/20 px-2 py-0.5 rounded-full">
-                      <Clock className="w-3 h-3" />
-                      23:14 left
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  {[
-                    { name: "Sophia", role: "Host", avatar: "S", speaking: true, video: true },
-                    { name: "Marcus", role: "Student", avatar: "M", speaking: false, video: false },
-                    { name: "You (Web)", role: "Presenter", avatar: "Y", speaking: false, video: true },
-                    { name: "David", role: "Student", avatar: "D", speaking: false, video: false },
-                  ].map((user, idx) => (
-                    <div
-                      key={idx}
-                      className={`relative rounded-xl border p-3 flex flex-col items-center justify-center aspect-video ${user.speaking ? "border-green bg-green/5" : "border-border/60 bg-surface/20"
-                        }`}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-surface3 border border-border/80 flex items-center justify-center font-bold text-sm text-white mb-2">
-                        {user.avatar}
-                      </div>
-                      <span className="text-xs font-semibold text-white">{user.name}</span>
-                      <span className="text-[9px] text-muted font-mono">{user.role}</span>
-
-                      {/* Speaking indicator */}
-                      {user.speaking && (
-                        <div className="absolute top-2 right-2 flex items-center gap-0.5">
-                          <span className="w-1 h-3.5 bg-green rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                          <span className="w-1 h-2 bg-green rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-                          <span className="w-1 h-3.5 bg-green rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border border-border/60 rounded-xl bg-surface/40 p-3.5 flex items-center justify-between text-xs text-muted">
-                  <div className="flex items-center gap-2">
-                    <Video className="w-4 h-4 text-teal" />
-                    <span>Active Shared Whiteboard: <strong className="text-white font-medium">B-Trees & Heap Operations</strong></span>
-                  </div>
-                  <button className="text-xs border border-border hover:border-amber/40 hover:bg-surface px-3 py-1.5 rounded-lg text-white font-medium transition-colors">
-                    Join Session Canvas
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="relative">
+            <div className="absolute -inset-5 rounded-2xl bg-[#d7a34b]/[0.06] blur-2xl" />
+            <div className="relative"><WorkspacePreview /></div>
+            <div className="absolute -bottom-5 -left-5 hidden w-44 rounded-lg border border-[#39342c] bg-[#191714] p-3 shadow-xl sm:block"><p className="font-mono text-[9px] uppercase tracking-wider text-[#b89a65]">Keep it connected</p><p className="mt-1 text-xs leading-5 text-[#d8d0c4]">Resources, notes, and ideas — together.</p></div>
           </div>
         </div>
       </section>
 
-      {/* DETAILED FEATURES SECTION */}
-      <section id="features" className="py-20 sm:py-28 border-t border-border/40 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 sm:mb-20">
-            <h2 className="text-xs font-mono uppercase tracking-widest text-amber mb-3">Core Capabilities</h2>
-            <h3 className="text-3xl sm:text-5xl font-bold font-display text-white mb-4">
-              Everything you need to learn, organize, and excel.
-            </h3>
-            <p className="text-base sm:text-lg text-muted">
-              Studenv bridges personal knowledge capture and real-time collaboration. Build a vault that grows with you.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feat, idx) => (
-              <div
-                key={idx}
-                className="group p-6 rounded-2xl border border-border bg-surface/30 hover:bg-surface2/40 hover:border-amber/20 transition-all duration-300 hover:translate-y-[-2px] flex flex-col justify-between"
-              >
-                <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-surface/80 border border-border2/80 flex items-center justify-center shadow-md">
-                    {feat.icon}
-                  </div>
-                  <h4 className="text-lg font-bold text-white group-hover:text-amber transition-colors">{feat.title}</h4>
-                  <p className="text-sm text-muted leading-relaxed">{feat.description}</p>
-                </div>
-              </div>
-            ))}
+      <section id="philosophy" className="border-y border-[#302d28] bg-[#151412] py-20 sm:py-28">
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24">
+          <div><SectionLabel>Why Studenv exists</SectionLabel><h2 className="font-display text-4xl leading-tight tracking-tight text-[#f0e9dc] sm:text-5xl">Learning leaves traces. Give them somewhere to live.</h2></div>
+          <div><p className="mb-10 max-w-2xl text-base leading-8 text-[#aaa297]">Learning happens everywhere — in a classroom, through a video, in an article, a passing thought or a document worth keeping. Your notes, ideas and discoveries deserve more than scattered tabs and forgotten files. Studenv gives everything you learn a place to come together.</p>
+            <div className="grid gap-7 border-t border-[#39342d] pt-7 sm:grid-cols-3">
+              {[["01 / CAPTURE","Stop losing the good stuff.","Keep class notes, useful resources, references and ideas close instead of letting them disappear into tabs and scattered files."],["02 / ORGANIZE","Make sense of what you keep.","Bring structure to your growing collection with tags, collections, personal notes and dedicated workspaces."],["03 / GROW","Make learning cumulative.","Revisit what matters, pick up where you left off, and build on your knowledge over time."]].map(([n,t,d])=><div key={n}><p className="mb-3 font-mono text-[9px] tracking-[0.16em] text-[#b18c50]">{n}</p><h3 className="mb-2 text-base font-semibold text-[#eee7db]">{t}</h3><p className="text-sm leading-6 text-[#918a80]">{d}</p></div>)}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* WHY DOWLOAD DESKTOP APP SECTION */}
-      <section id="desktop" className="py-20 sm:py-28 border-t border-border/40 bg-surface/10 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 sm:gap-16 items-center">
+      <section id="features" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
+        <div className="mb-14 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><SectionLabel>Made to work together</SectionLabel><h2 className="max-w-2xl font-display text-4xl tracking-tight text-[#f0e9dc] sm:text-5xl">A home for every part of learning.</h2></div><p className="max-w-sm text-sm leading-7 text-[#989187]">Not another place to collect tabs. A connected environment for the things you discover and the work you do with them.</p></div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <article id="shelf" className="grid gap-7 overflow-hidden rounded-xl border border-[#34312d] bg-[#151412] p-6 sm:grid-cols-[0.9fr_1.1fr] sm:p-8"><div className="flex flex-col justify-between"><div><span className="font-mono text-[9px] tracking-[0.18em] text-[#b18c50]">01 — THE SHELF</span><h3 className="mb-3 mt-4 font-display text-3xl text-[#f0e9dc]">Keep what matters.</h3><p className="text-sm leading-7 text-[#999187]">A personal library for the resources you want to return to — documents, links, videos, images, and notes.</p></div><a href="/shelf" className="mt-7 inline-flex items-center gap-2 text-xs font-semibold text-[#d7a34b]">Explore Shelf <ArrowUpRight size={14}/></a></div><ShelfPreview /></article>
+          <article id="workspace" className="overflow-hidden rounded-xl border border-[#34312d] bg-[#151412] p-6 sm:p-8"><div className="mb-7 flex items-start justify-between gap-5"><div><span className="font-mono text-[9px] tracking-[0.18em] text-[#b18c50]">02 — YOUR WORKSPACE</span><h3 className="mb-3 mt-4 font-display text-3xl text-[#f0e9dc]">Think on the canvas.</h3><p className="max-w-md text-sm leading-7 text-[#999187]">Bring notes, media, diagrams, and ideas into one visual space. Arrange them, connect them, and work things out.</p></div><Layers3 className="mt-1 shrink-0 text-[#d7a34b]" size={22}/></div><WorkspacePreview /></article>
+          <article id="study-groups" className="rounded-xl border border-[#34312d] bg-[#151412] p-7 sm:p-8"><div className="mb-7 flex items-center justify-between"><span className="font-mono text-[9px] tracking-[0.18em] text-[#b18c50]">03 — STUDY GROUPS</span><span className="rounded-full border border-[#55442d] px-2.5 py-1 font-mono text-[9px] text-[#b99a67]">IN DEVELOPMENT</span></div><div className="mb-4 flex -space-x-2"><span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#151412] bg-[#4c4236] text-xs">A</span><span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#151412] bg-[#65516c] text-xs">M</span><span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#151412] bg-[#47615d] text-xs">R</span><span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#151412] bg-[#37332d] text-xs">+</span></div><h3 className="mb-3 font-display text-3xl text-[#f0e9dc]">Learning can be shared.</h3><p className="max-w-lg text-sm leading-7 text-[#999187]">A place for focused group learning is part of the wider Studenv vision. We will share more as this experience takes shape.</p></article>
+          <article id="rangan" className="relative overflow-hidden rounded-xl border border-[#51432e] bg-[linear-gradient(135deg,#211d17,#171512_65%)] p-7 sm:p-8"><div className="absolute -right-10 -top-12 h-48 w-48 rounded-full bg-[#d7a34b]/[0.09] blur-3xl"/><div className="relative"><div className="mb-7 flex items-center justify-between"><span className="font-mono text-[9px] tracking-[0.18em] text-[#b18c50]">A FUTURE CAPABILITY</span><Sparkles size={20} className="text-[#d7a34b]"/></div><h3 className="mb-2 font-display text-4xl text-[#f0e9dc]">Rangan</h3><p className="mb-4 text-sm font-medium text-[#d7a34b]">Your AI librarian and learning companion.</p><p className="max-w-lg text-sm leading-7 text-[#999187]">A future way to rediscover what you have collected, ask better questions, and connect ideas across your learning. Rangan is coming later — it is not available yet.</p><span className="mt-7 inline-flex rounded-full border border-[#55442d] px-3 py-1.5 font-mono text-[9px] uppercase tracking-wider text-[#b99a67]">Coming soon</span></div></article>
+        </div>
+      </section>
 
-            <div className="space-y-6 sm:space-y-8">
-              <div>
-                <h2 className="text-xs font-mono uppercase tracking-widest text-amber mb-3">Native Windows Desktop App</h2>
-                <h3 className="text-3xl sm:text-5xl font-bold font-display text-white mb-4 leading-tight">
-                  Maximize speed. Eliminate latency. Learn offline.
-                </h3>
-                <p className="text-base text-muted leading-relaxed">
-                  While our web application is fully-featured, the native desktop app is designed for long, distraction-free study sessions. Built as a desktop-optimized package, it leverages native resources for unmatched response times.
-                </p>
-              </div>
-
-              <div className="space-y-4 font-sans text-sm">
-                {[
-                  {
-                    title: "No Network Firewall Prompts",
-                    desc: "Runs completely in local user space. Safe, sandboxed, and requires no administrative rights or firewall permissions.",
-                  },
-                  {
-                    title: "ASAR-Packed Lightning Fast Install",
-                    desc: "Installs in seconds. Uses bundled application archives to compress assets, preventing slow file copies during setup.",
-                  },
-                  {
-                    title: "Local Database & Offline Mode",
-                    desc: "Access your files, note revisions, and flashcards even during transit or poor internet connections. Auto-syncs later.",
-                  },
-                  {
-                    title: "Dedicated Taskbar & Window Control",
-                    desc: "Featuring the official Studenv logo branding. Runs in its own dedicated window context away from browser tabs.",
-                  },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      <ShieldCheck className="w-5 h-5 text-amber" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-white">{item.title}</h4>
-                      <p className="text-muted text-xs mt-0.5 leading-relaxed">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDesktopModalOpen(true)}
-                  className="inline-flex items-center gap-2 bg-amber hover:bg-amber/90 text-bg px-6 py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-amber/15 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
-                  <Download className="w-4 h-4" /> Download Windows Installer
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-bg/20 text-bg border border-bg/30 ml-1">
-                    Soon
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Desktop Mockup graphic */}
-            <div className="relative p-2 border border-border2/80 rounded-2xl bg-bg shadow-2xl overflow-hidden max-w-lg mx-auto w-full">
-              <div className="absolute inset-0 bg-gradient-to-tr from-amber/10 via-transparent to-purple-500/10 opacity-70 pointer-events-none" />
-              <div className="flex items-center justify-between px-3 py-2 border-b border-border/80 bg-surface2/60">
-                <div className="flex items-center gap-1.5">
-                  <Laptop className="w-3.5 h-3.5 text-amber" />
-                  <span className="text-[10px] font-mono text-muted">Studenv Desktop (Windows)</span>
-                </div>
-                <div className="flex gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-border2" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-border2" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-border2" />
-                </div>
-              </div>
-
-              {/* Graphic showing the app on desktop */}
-              <div className="bg-surface/40 p-6 aspect-[4/3] flex flex-col justify-between relative z-10">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1.5">
-                    <div className="h-4 w-24 bg-white/10 rounded" />
-                    <div className="h-3 w-40 bg-white/5 rounded" />
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-amber/10 border border-amber/30 flex items-center justify-center text-xs font-bold text-amber">
-                    S
-                  </div>
-                </div>
-
-                <div className="space-y-4 my-auto">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center border border-border">
-                      <Zap className="w-5 h-5 text-amber" />
-                    </div>
-                    <div>
-                      <h5 className="text-xs font-bold text-white">Local Indexing Done</h5>
-                      <p className="text-[10px] text-muted">Offline notes index complete (1,402 terms)</p>
-                    </div>
-                  </div>
-
-                  <div className="h-1 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-amber w-full rounded-full" />
-                  </div>
-                </div>
-
-                <div className="border border-border/40 bg-bg/60 p-2.5 rounded-lg flex items-center justify-between text-[10px] text-muted">
-                  <span>Connection: Secure (Local Sync Engine)</span>
-                  <span className="text-green font-mono">● Online</span>
-                </div>
-              </div>
-            </div>
-
+      <section id="supporting-tools" className="border-y border-[#302d28] bg-[#151412] py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8"><SectionLabel>Along the way</SectionLabel><div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><h2 className="font-display text-4xl text-[#f0e9dc] sm:text-5xl">Small tools. Better learning habits.</h2><p className="max-w-sm text-sm leading-7 text-[#989187]">Keep your attention, your plans, and your progress close to the work.</p></div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[{icon:Focus,title:"Focus Mode",desc:"Give a study session your full attention."},{icon:CalendarDays,title:"Planner",desc:"Turn intentions into manageable next steps."},{icon:Check,title:"Achievements",desc:"See the consistency behind your progress."}].map(({icon:Icon,title,desc})=><div key={title} className="flex gap-4 rounded-lg border border-[#39342d] bg-[#191714] p-5"><Icon className="mt-1 shrink-0 text-[#d7a34b]" size={19}/><div><h3 className="mb-1 text-sm font-semibold text-[#eee7db]">{title}</h3><p className="text-xs leading-6 text-[#918a80]">{desc}</p></div></div>)}
           </div>
         </div>
       </section>
 
-      {/* PLANS & PRICING SECTION */}
-      <section id="pricing" className="py-20 sm:py-28 border-t border-border/40 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="about" className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-[0.7fr_1.3fr] lg:gap-24"><div><SectionLabel>About Studenv</SectionLabel><h2 className="font-display text-4xl leading-tight text-[#f0e9dc] sm:text-5xl">Learning is more than consuming information.</h2></div><div className="max-w-2xl"><p className="text-lg leading-8 text-[#c3baad]">It is collecting, questioning, connecting, forgetting, returning, and making something of what you find.</p><p className="mt-5 text-sm leading-8 text-[#918a80]">Studenv is being built around that longer journey. We want your learning resources and your own thinking to live closer together — so the things you discover today can still be useful tomorrow.</p><a href="#philosophy" className="mt-7 inline-flex items-center gap-2 text-xs font-semibold text-[#d7a34b]">Our approach <ArrowUpRight size={14}/></a></div></section>
 
-          <div className="text-center max-w-3xl mx-auto mb-16 sm:mb-20">
-            <h2 className="text-xs font-mono uppercase tracking-widest text-amber mb-3">Pricing Plans</h2>
-            <h3 className="text-3xl sm:text-5xl font-bold font-display text-white mb-4">
-              Flexible options for every learning tier.
-            </h3>
-            <p className="text-base sm:text-lg text-muted">
-              Start building your knowledge vault for free. Upgrade whenever you need advanced AI limits or group features.
-            </p>
+      <section id="faq" className="border-y border-[#302d28] bg-[#151412] py-20 sm:py-24"><div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.7fr_1.3fr] lg:gap-24"><div><SectionLabel>Questions, answered</SectionLabel><h2 className="font-display text-4xl text-[#f0e9dc] sm:text-5xl">A few things you might be wondering.</h2></div><div className="border-t border-[#3b352d]">{faqs.map((faq,index)=><div key={faq.q} className="border-b border-[#3b352d]"><button className="flex w-full items-center justify-between gap-5 py-5 text-left text-sm font-medium text-[#e8e0d5]" onClick={()=>setFaqOpen(faqOpen===index?null:index)} aria-expanded={faqOpen===index}><span>{faq.q}</span><ChevronDown size={16} className={faqOpen===index?"rotate-180 text-[#d7a34b] transition":"text-[#81796d] transition"}/></button>{faqOpen===index&&<p className="max-w-2xl pb-5 pr-8 text-sm leading-7 text-[#989187]">{faq.a}</p>}</div>)}</div></div></section>
 
-            {/* Pricing Cycle Toggle */}
-            <div className="mt-8 inline-flex items-center p-1 rounded-xl bg-surface border border-border">
-              <button
-                onClick={() => setPricingCycle("monthly")}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${pricingCycle === "monthly" ? "bg-amber text-bg shadow-sm" : "text-muted hover:text-white"
-                  }`}
-              >
-                Monthly billing
-              </button>
-              <button
-                onClick={() => setPricingCycle("yearly")}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${pricingCycle === "yearly" ? "bg-amber text-bg shadow-sm" : "text-muted hover:text-white"
-                  }`}
-              >
-                Yearly billing
-                <span className="text-[9px] bg-bg text-amber px-1.5 py-0.5 rounded font-bold font-mono">
-                  -20%
-                </span>
-              </button>
-            </div>
-          </div>
+      <section id="contact" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28"><div className="flex flex-col justify-between gap-8 rounded-xl border border-[#51432e] bg-[linear-gradient(120deg,#211d17,#171512)] p-8 sm:flex-row sm:items-center sm:p-12"><div className="max-w-xl"><SectionLabel>Stay connected</SectionLabel><h2 className="mb-3 font-display text-4xl text-[#f0e9dc] sm:text-5xl">Have a thought about Studenv?</h2><p className="text-sm leading-7 text-[#a29a8e]">We are building this thoughtfully. Sign in to explore the product and follow along as the learning environment grows.</p></div><Link href={dashboardHref} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#d7a34b] px-5 py-3.5 text-sm font-semibold text-[#17130d] transition hover:bg-[#e7b75f]">Explore Studenv <ArrowUpRight size={15}/></Link></div></section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch max-w-5xl mx-auto">
-
-            {/* Starter Plan */}
-            <div className="border border-border bg-surface/20 rounded-2xl p-6 flex flex-col justify-between">
-              <div>
-                <h4 className="text-base font-mono uppercase tracking-wider text-muted mb-2">Starter</h4>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-bold text-white">{pricing[pricingCycle].starter}</span>
-                  <span className="text-xs text-muted">/ month</span>
-                </div>
-                <p className="text-xs text-muted leading-relaxed mb-6">
-                  Perfect for individual self-learners looking to organize notes and basic files.
-                </p>
-                <hr className="border-border/60 mb-6" />
-                <ul className="space-y-3.5 text-xs text-text">
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Up to 200 vault items</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Up to 50 custom tags</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Standard AI Assistant</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Web application access</span>
-                  </li>
-                  <li className="flex items-center gap-2.5 text-muted line-through">
-                    <X className="w-4 h-4 text-muted2 flex-shrink-0" />
-                    <span>Desktop App executable download</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="mt-8">
-                <Link
-                  href="/dashboard"
-                  className="w-full text-center block py-2.5 rounded-lg border border-border hover:border-amber/50 hover:bg-surface/50 text-xs font-semibold transition-all"
-                >
-                  Start For Free
-                </Link>
-              </div>
-            </div>
-
-            {/* Student Pro Plan */}
-            <div className="border-2 border-amber bg-surface/50 rounded-2xl p-6 flex flex-col justify-between relative shadow-xl shadow-amber/5">
-              <span className="absolute top-0 right-6 -translate-y-1/2 bg-amber text-bg text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-md">
-                Most Popular
-              </span>
-              <div>
-                <h4 className="text-base font-mono uppercase tracking-wider text-amber mb-2">Student Pro</h4>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-bold text-white">{pricing[pricingCycle].student}</span>
-                  <span className="text-xs text-muted">/ month</span>
-                </div>
-                <p className="text-xs text-muted leading-relaxed mb-6">
-                  For students and research professionals seeking unlimited library capacity and desktop integration.
-                </p>
-                <hr className="border-border/60 mb-6" />
-                <ul className="space-y-3.5 text-xs text-text">
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span><strong>Unlimited</strong> vault items</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span><strong>Unlimited</strong> custom tags</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Advanced Gemini Pro AI model</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span><strong>Web + Windows Desktop App</strong></span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Create & host study rooms</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="mt-8">
-                <Link
-                  href="/dashboard"
-                  className="w-full text-center block py-2.5 rounded-lg bg-amber hover:bg-amber/90 text-bg text-xs font-semibold transition-all shadow-md shadow-amber/10"
-                >
-                  Get Student Pro
-                </Link>
-                <span className="text-[10px] text-muted text-center block mt-2">
-                  Free student verification available via university email
-                </span>
-              </div>
-            </div>
-
-            {/* Lab/Team Plan */}
-            <div className="border border-border bg-surface/20 rounded-2xl p-6 flex flex-col justify-between">
-              <div>
-                <h4 className="text-base font-mono uppercase tracking-wider text-muted mb-2">Lab / Team</h4>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-bold text-white">{pricing[pricingCycle].team}</span>
-                  <span className="text-xs text-muted">/ month</span>
-                </div>
-                <p className="text-xs text-muted leading-relaxed mb-6">
-                  Best for study cohorts, lab labs, and collaborative educational clubs.
-                </p>
-                <hr className="border-border/60 mb-6" />
-                <ul className="space-y-3.5 text-xs text-text">
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Everything in Student Pro</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Up to 20 users per active study room</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Shared group vaults (up to 5 workspaces)</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Administrative member controls</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-amber flex-shrink-0" />
-                    <span>Priority AI assistant quota</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="mt-8">
-                <Link
-                  href="/dashboard"
-                  className="w-full text-center block py-2.5 rounded-lg border border-border hover:border-amber/50 hover:bg-surface/50 text-xs font-semibold transition-all"
-                >
-                  Contact Sales / Create Lab
-                </Link>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* FAQ SECTION */}
-      <section id="faq" className="py-20 sm:py-28 border-t border-border/40 bg-surface/5 relative z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-xs font-mono uppercase tracking-widest text-amber mb-3">Frequently Asked Questions</h2>
-            <h3 className="text-3xl font-bold font-display text-white mb-4">
-              Got questions? We have answers.
-            </h3>
-          </div>
-
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div
-                key={idx}
-                className="border border-border/60 rounded-xl bg-surface/30 overflow-hidden transition-all duration-200"
-              >
-                <button
-                  onClick={() => toggleFaq(idx)}
-                  className="w-full flex items-center justify-between p-5 text-left text-sm font-semibold text-white hover:bg-surface2/10 transition-colors"
-                >
-                  <span>{faq.q}</span>
-                  <ChevronDown
-                    className={`w-4 h-4 text-muted transition-transform duration-200 ${faqOpen === idx ? "transform rotate-180" : ""
-                      }`}
-                  />
-                </button>
-                {faqOpen === idx && (
-                  <div className="p-5 pt-0 text-xs text-muted leading-relaxed border-t border-border/20 animate-in fade-in slide-in-from-top-1 duration-150">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-      {/* BOTTOM CTA BANNER */}
-      <section className="py-20 sm:py-28 border-t border-border/40 relative overflow-hidden z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,166,35,0.04),transparent_60%)] pointer-events-none" />
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-
-          <h2 className="text-3xl sm:text-5xl font-bold font-display text-white mb-6 tracking-tight leading-tight">
-            Start building your personal knowledge vault today.
-          </h2>
-          <p className="text-base sm:text-lg text-muted max-w-2xl mx-auto mb-10 leading-relaxed">
-            Unleash the power of context-aware artificial intelligence. Read books, watch lectures, write summaries, and share insights in real-time.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
-            <Link
-              href="/dashboard"
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-amber hover:bg-amber/90 text-bg text-sm font-semibold shadow-lg shadow-amber/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              Get Started for Free
-            </Link>
-            <button
-              type="button"
-              onClick={() => setDesktopModalOpen(true)}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-surface border border-border2 hover:border-amber/30 hover:bg-surface2 text-white text-sm font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
-              <Download className="w-4 h-4 text-amber" />
-              Download Desktop App
-              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber/10 text-amber border border-amber/20 ml-1">
-                Soon
-              </span>
-            </button>
-          </div>
-
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="border-t border-border/40 bg-surface/30 py-12 relative z-10 text-xs text-muted">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <BrandLockup variant="mark" className="flex items-center gap-2 font-bold text-white text-sm" />
-            <span className="text-[10px] text-muted2 border-l border-border/60 pl-2">
-              © {new Date().getFullYear()} Studenv Inc. All rights reserved.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <a href="#features" className="hover:text-text transition-colors">Features</a>
-            <a href="#desktop" className="hover:text-text transition-colors">Desktop</a>
-            <a href="#pricing" className="hover:text-text transition-colors">Pricing</a>
-            <a href="#faq" className="hover:text-text transition-colors">FAQ</a>
-            <Link href="/auth/login" className="hover:text-text transition-colors">Dashboard Sign In</Link>
-          </div>
-        </div>
-      </footer>
-
-      {/* Desktop App Coming Soon Modal */}
-      {desktopModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md rounded-2xl border border-border2 bg-surface p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setDesktopModalOpen(false)}
-              className="absolute top-4 right-4 text-muted hover:text-white transition-colors"
-              aria-label="Close modal"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber/10 text-amber mb-4">
-              <Laptop className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Desktop App Coming Soon</h3>
-            <p className="text-sm text-muted mb-6 leading-relaxed">
-              The standalone Windows desktop installer is currently being prepared for GitHub Releases and is not yet available for direct download. You can access the complete Studenv platform right now directly in your browser.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/dashboard"
-                onClick={() => setDesktopModalOpen(false)}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-amber hover:bg-amber/90 text-bg text-sm font-semibold text-center transition-all flex items-center justify-center gap-2"
-              >
-                Launch Web App <Globe className="w-4 h-4" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => setDesktopModalOpen(false)}
-                className="py-2.5 px-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 text-white text-sm font-medium transition-all"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
+      <footer className="border-t border-[#302d28] bg-[#0c0c0b]"><div className="mx-auto max-w-7xl px-5 py-12 sm:px-8"><div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]"><div><BrandLockup variant="mark" className="gap-3" imageClassName="h-7 w-7" textClassName="text-lg font-semibold text-[#f0e9dc]"/><p className="mt-4 max-w-xs text-xs leading-6 text-[#81796e]">A personal learning environment for everything you discover and everything you make of it.</p></div><div><p className="mb-4 font-mono text-[9px] uppercase tracking-[0.18em] text-[#b18c50]">Product</p>{[["The Shelf","#shelf"],["Workspace","#workspace"],["Study Groups","#study-groups"],["Rangan","#rangan"],["Focus & Planner","#supporting-tools"]].map(([label,href])=><a key={label} href={href} className="mb-3 block text-xs text-[#a49b8e] transition hover:text-white">{label}</a>)}</div><div><p className="mb-4 font-mono text-[9px] uppercase tracking-[0.18em] text-[#b18c50]">Company</p>{[["About Studenv","#about"],["FAQs","#faq"],["Contact","#contact"]].map(([label,href])=><a key={label} href={href} className="mb-3 block text-xs text-[#a49b8e] transition hover:text-white">{label}</a>)}</div><div><p className="mb-4 font-mono text-[9px] uppercase tracking-[0.18em] text-[#b18c50]">Account</p><Link href="/auth/login" className="mb-3 block text-xs text-[#a49b8e] hover:text-white">Sign in</Link><Link href="/auth/signup" className="mb-3 block text-xs text-[#a49b8e] hover:text-white">Create account</Link><Link href="/dashboard" className="mb-3 block text-xs text-[#a49b8e] hover:text-white">Open Studenv</Link></div></div><div className="mt-12 flex flex-col gap-3 border-t border-[#302d28] pt-6 text-[10px] text-[#716b61] sm:flex-row sm:items-center sm:justify-between"><span>© {new Date().getFullYear()} Studenv. Built for the long journey of learning.</span><span>Settle in. Stay curious. Keep growing.</span></div></div></footer>
+    </main>
   );
 }

@@ -67,3 +67,52 @@ export async function sendWeeklyDigest(
     html: `<p>You have <strong>${payload.unreadCount}</strong> unread items.</p><ul>${payload.highlightedTitles.map((title) => `<li>${title}</li>`).join("")}</ul>`,
   });
 }
+
+function escapeEmailHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
+}
+
+export async function sendContactMessage(input: {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}) {
+  const transport = getTransport();
+  const from = process.env.SMTP_FROM || (process.env.SMTP_USER ? { name: "Studenv", address: process.env.SMTP_USER } : undefined);
+
+  if (!transport || !from) {
+    throw new Error("Contact email delivery is not configured.");
+  }
+
+  const safeName = escapeEmailHtml(input.name);
+  const safeEmail = escapeEmailHtml(input.email);
+  const safeSubject = escapeEmailHtml(input.subject);
+  const safeMessage = escapeEmailHtml(input.message).replace(/\r?\n/g, "<br>");
+
+  await transport.sendMail({
+    from,
+    to: "maxrouteemail@gmail.com",
+    replyTo: { name: input.name, address: input.email },
+    subject: `Studenv contact: ${input.subject}`,
+    text: [
+      "A new message was sent through the Studenv contact form.",
+      "",
+      `Name: ${input.name}`,
+      `Email: ${input.email}`,
+      `Subject: ${input.subject}`,
+      "",
+      input.message,
+    ].join("\n"),
+    html: `<h2>New Studenv contact message</h2><p><strong>Name:</strong> ${safeName}</p><p><strong>Email:</strong> ${safeEmail}</p><p><strong>Subject:</strong> ${safeSubject}</p><hr><p>${safeMessage}</p>`,
+  });
+}

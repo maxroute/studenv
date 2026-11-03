@@ -1,8 +1,14 @@
-import { auth } from "@/lib/auth/auth.config";
-import LandingPage from "@/components/layout/landing-page";
+import { ApprovedHomepage } from "@/components/layout/approved-homepage";
+import { createPublicPageMetadata } from "@/lib/seo/page-metadata";
+import "@/components/layout/approved-homepage.css";
 
-export default async function HomePage() {
-  const session = await auth();
-  return <LandingPage session={session} />;
+export const metadata = createPublicPageMetadata({
+  title: "Studenv — Your knowledge deserves a home",
+  description:
+    "Studenv is your personal learning environment. Capture what you learn, organize your knowledge and grow over time.",
+  path: "/",
+});
+
+export default function HomePage() {
+  return <ApprovedHomepage />;
 }
-

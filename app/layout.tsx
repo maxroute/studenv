@@ -5,6 +5,7 @@ import { DM_Mono, DM_Sans, Fraunces } from "next/font/google";
 import "@/app/globals.css";
 import { BootLoaderGate } from "@/components/ui/boot-loader-gate";
 import { Providers } from "@/components/ui/providers";
+import { getPublicSiteUrl } from "@/lib/seo/site-url";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -23,6 +24,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  metadataBase: getPublicSiteUrl(),
   title: "Studenv",
   description: "A production-ready personal knowledge management app.",
   icons: {
