@@ -4,6 +4,7 @@ import approvedHomepageMarkup from "./approved-homepage-content";
 export function ApprovedHomepage() {
  useEffect(() => {
   const root=document.querySelector<HTMLElement>(".approved-homepage"); if(!root)return;
+  root.classList.add("motion-enabled");
   const menuButton=root.querySelector<HTMLButtonElement>("#menuBtn");
   const mobilePanel=root.querySelector<HTMLElement>("#mobilePanel");
   const handleMenuClick=()=>{if(!menuButton||!mobilePanel)return;mobilePanel.classList.toggle("open");menuButton.setAttribute("aria-expanded",String(mobilePanel.classList.contains("open")));};
@@ -22,10 +23,29 @@ export function ApprovedHomepage() {
       observer?.unobserve(entry.target);
      }
     });
-   }, { threshold: 0.1 });
+   }, { threshold: 0.01, rootMargin: "0px 0px 160px 0px" });
   }
-  root.addEventListener("click",handleClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));const revealVisibleFades=()=>{fadeElements.forEach(el=>{const rect=el.getBoundingClientRect();if(rect.bottom>=0&&rect.top<=window.innerHeight){el.classList.add("visible");observer?.unobserve(el);}});};fadeElements.forEach(el=>observer?observer.observe(el):el.classList.add("visible"));window.addEventListener("resize",revealVisibleFades,{passive:true});window.addEventListener("scroll",revealVisibleFades,{passive:true});window.addEventListener("pageshow",revealVisibleFades);route();revealVisibleFades();
-  return()=>{root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);observer?.disconnect();};
+  root.addEventListener("click",handleClick);root.addEventListener("submit",handleSubmit);window.addEventListener("hashchange",route);const fadeElements=Array.from(root.querySelectorAll<HTMLElement>(".fade"));let revealFrame = 0;
+  const revealVisibleFades=()=>{
+   if(revealFrame)window.cancelAnimationFrame(revealFrame);
+   revealFrame=window.requestAnimationFrame(()=>{
+    fadeElements.forEach(el=>{
+     const rect=el.getBoundingClientRect();
+     if(rect.bottom>=-80&&rect.top<=window.innerHeight+160){
+      el.classList.add("visible");
+      observer?.unobserve(el);
+     }
+    });
+   });
+  };
+  fadeElements.forEach(el=>observer?observer.observe(el):el.classList.add("visible"));
+  window.addEventListener("resize",revealVisibleFades,{passive:true});
+  window.visualViewport?.addEventListener("resize",revealVisibleFades,{passive:true});
+  window.addEventListener("scroll",revealVisibleFades,{passive:true});
+  window.addEventListener("pageshow",revealVisibleFades);
+  route();
+  revealVisibleFades();
+  return()=>{root.removeEventListener("click",handleClick);root.removeEventListener("submit",handleSubmit);window.removeEventListener("hashchange",route);window.removeEventListener("resize",revealVisibleFades);window.visualViewport?.removeEventListener("resize",revealVisibleFades);window.removeEventListener("scroll",revealVisibleFades);window.removeEventListener("pageshow",revealVisibleFades);if(revealFrame)window.cancelAnimationFrame(revealFrame);observer?.disconnect();root.classList.remove("motion-enabled");};
  },[]);
  return <div className="approved-homepage" dangerouslySetInnerHTML={{__html:approvedHomepageMarkup}} />;
 }
