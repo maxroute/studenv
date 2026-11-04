@@ -197,11 +197,13 @@ export function LoginContent() {
           {searchParams.get("signup") === "account-exists" ? (
             <div className="signup-login-notice" role="status">
               <strong>Couldn't complete sign-up?</strong>
+              <p>If you already have an account, try signing in with this email.</p>
               <p>
-                Try signing in with this email. If you can't remember your password, you can{" "}
+                Or, try the{" "}
                 <Link href={`/auth/forgot-password?email=${encodeURIComponent(email)}`}>
-                  reset it here
-                </Link>.
+                  Forgot Password
+                </Link>{" "}
+                option if you can't remember your password.
               </p>
             </div>
           ) : null}
