@@ -6459,8 +6459,9 @@ textarea {
   padding-right: 44px;
 }
 
-.password-visibility-toggle {
+ .password-visibility-toggle {
   position: absolute;
+  z-index: 2;
   top: 50%;
   right: 9px;
   display: inline-flex;
@@ -6472,7 +6473,8 @@ textarea {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted2);
+  color: var(--text);
+  opacity: 0.8;
   cursor: pointer;
   transform: translateY(-50%);
 }
@@ -6495,4 +6497,10 @@ textarea {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.password-visibility-toggle svg {
+  display: block;
+  flex: 0 0 17px;
+  pointer-events: none;
 }
