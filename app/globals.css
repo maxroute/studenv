@@ -6597,3 +6597,49 @@ textarea {
   background: var(--amber);
   transition: width 0.18s ease;
 }
+
+
+/* Keep signup password guidance layout stable against shared form styles. */
+.auth-form-signup .field .password-guide-header {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.auth-form-signup .field .password-guide-heading {
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-width: 0;
+  color: var(--text) !important;
+  font-family: var(--font-dm-sans), sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.auth-form-signup .field .password-strength-label {
+  display: block !important;
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  color: var(--amber) !important;
+  text-align: right !important;
+}
+
+.auth-form-signup .field ul.password-requirements {
+  display: flex !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 7px !important;
+  grid-template-columns: none !important;
+}
+
+.auth-form-signup .field ul.password-requirements > li.password-requirement {
+  display: flex !important;
+  width: 100% !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
