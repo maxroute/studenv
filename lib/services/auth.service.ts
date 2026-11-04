@@ -138,7 +138,8 @@ export async function signup(
     }
 
     return {
-      message: "If that email can be used, check your inbox for the next step.",
+      code: "EMAIL_ALREADY_EXISTS" as const,
+      message: "An account with this email already exists.",
     };
   }
 
