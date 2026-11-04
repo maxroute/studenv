@@ -28,8 +28,8 @@ async function deliver(options: nodemailer.SendMailOptions) {
   });
 }
 
-export async function sendVerificationEmail(email: string, token: string) {
-  const url = `${appUrl}/auth/verify-email?token=${encodeURIComponent(token)}`;
+export async function sendVerificationEmail(email: string, token: string, baseUrl = appUrl) {
+  const url = `${baseUrl.replace(/\/$/, "")}/auth/verify-email?token=${encodeURIComponent(token)}`;
 
   await deliver({
     to: email,
@@ -40,10 +40,10 @@ export async function sendVerificationEmail(email: string, token: string) {
       "Please verify your email address using this link:",
       url,
       "",
-      "This link expires in 1 hour. If you don't see this message in your inbox, check your Spam or Junk folder.",
-      "If you didn't create a Studenv account, you can safely ignore this email.",
+      "This link expires in 1 hour.",
+      "If you did not sign up for Studenv, you can ignore this message. No action is needed.",
     ].join("\n"),
-    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124;max-width:560px;margin:0 auto;padding:24px"><h2>Welcome to Studenv!</h2><p>We're glad you're here. Verify your email address to finish setting up your account.</p><p style="margin:28px 0"><a href="${url}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Verify email</a></p><p>This verification link expires in <strong>1 hour</strong>.</p><p>If you don't see this email in your inbox, check your <strong>Spam or Junk</strong> folder.</p><p>If you didn't create a Studenv account, you can safely ignore this email.</p></div>`,
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124;max-width:560px;margin:0 auto;padding:24px"><h2>Welcome to Studenv!</h2><p>We're glad you're here. Verify your email address to finish setting up your account.</p><p style="margin:28px 0"><a href="${url}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Verify email</a></p><p>This verification link expires in <strong>1 hour</strong>.</p><p>If you did not sign up for Studenv, you can ignore this message. No action is needed.</p></div>`,
   });
 }
 export async function sendPasswordResetEmail(email: string, token: string) {
