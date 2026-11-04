@@ -185,10 +185,11 @@ export default function SignupPage() {
                 }
               />
             </label>
-            <label className="field">
-              <span>Password</span>
+            <div className="field">
+              <label htmlFor="signup-password">Password</label>
               <div className="password-input-wrap">
                 <input
+                  id="signup-password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   minLength={8}
@@ -223,11 +224,12 @@ export default function SignupPage() {
                   }}
                 />
               </div>
-            </label>
-            <label className="field">
-              <span>Confirm password</span>
+            </div>
+            <div className="field">
+              <label htmlFor="signup-confirm-password">Confirm password</label>
               <div className="password-input-wrap">
                 <input
+                  id="signup-confirm-password"
                   type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   minLength={8}
@@ -252,7 +254,7 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
-            </label>
+            </div>
           </div>
           <button
             className="btn-primary"
