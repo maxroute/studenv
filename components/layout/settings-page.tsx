@@ -159,7 +159,7 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
     if (resendCountdown <= 0) return;
     const timer = window.setInterval(() => setResendCountdown((current) => Math.max(0, current - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [resendCountdown > 0]);
+  }, [resendCountdown]);
 
   useEffect(() => {
     setFormData(settings);
