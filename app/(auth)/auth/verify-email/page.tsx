@@ -15,11 +15,11 @@ function VerifyEmailContent() {
   );
   const [message, setMessage] = useState(
     initialEmail
-      ? `We sent a verification link to ${initialEmail}.`
+      ? "If this email address belongs to an account that needs verification, a verification link will be sent. If your account is already verified, you can sign in."
       : "Enter your email address to request a verification link.",
   );
   const [resending, setResending] = useState(false);
-  const [countdown, setCountdown] = useState(initialEmail && !token ? 60 : 0);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     if (!countdown) return;
@@ -53,7 +53,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If an unverified account exists for that email, a new verification link has been sent. Check your inbox for the new verification email.");
+      setMessage("If this email address belongs to an account that still needs verification, a new link will be sent. If your account is already verified, you can sign in.");
       setCountdown(60);
     } catch (error) {
       const apiError = error as Error & { details?: { retryAfter?: number } };
@@ -85,7 +85,7 @@ function VerifyEmailContent() {
               />
             </label>
             <p className="field-hint verify-email-instructions">
-              Open the verification email we sent to your address. If you don't see it in your inbox, check your Spam or Junk folder.
+              If you receive a verification email, open its link. Check your Spam or Junk folder if it isn't in your inbox.
             </p>
             <p className="field-hint verify-email-instructions">
               The link expires after 1 hour.
