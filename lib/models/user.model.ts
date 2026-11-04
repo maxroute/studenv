@@ -13,7 +13,7 @@ const passwordSchema = z
   .max(128, "Password must be 128 characters or fewer.")
   .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
   .regex(/[0-9]/, "Password must contain at least one number.")
-  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character.");
+  .regex(/[^A-Za-z0-9\s]/, "Password must contain at least one special character.");
 
 export const signupSchema = z
   .object({
