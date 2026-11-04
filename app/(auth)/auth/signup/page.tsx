@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { signIn } from "next-auth/react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
 import { signupSchema } from "@/lib/models/user.model";
@@ -41,33 +40,19 @@ export default function SignupPage() {
     try {
       setLoading(true);
       const signupData = parsed.data;
-      await apiFetcher("/api/auth/signup", {
+      const result = await apiFetcher<{ code?: string }>("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify(signupData),
       });
 
-      // Authenticate with the submitted credentials rather than guessing
-      // whether the email already belongs to an account. This keeps the
-      // signup response generic and avoids account enumeration.
-      const result = await signIn("credentials", {
-        email: signupData.email,
-        password: signupData.password,
-        redirect: false,
-      });
-
-      if (!result || result.error) {
-        if (result?.code === "email-not-verified") {
-          router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
-          return;
-        }
-
+      if (result.code === "EMAIL_ALREADY_EXISTS") {
         router.push(
           `/auth/login?signupAttempt=1&email=${encodeURIComponent(signupData.email)}`,
         );
         return;
       }
 
-      router.push("/dashboard");
+      router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
