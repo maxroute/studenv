@@ -17,6 +17,10 @@ function getTransport() {
     port,
     secure: port === 465,
     auth: { user, pass },
+    // Never let a stalled SMTP connection hold a signup request open.
+    connectionTimeout: 5_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 8_000,
   });
 }
 
