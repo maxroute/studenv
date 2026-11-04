@@ -15,7 +15,7 @@ function VerifyEmailContent() {
   );
   const [message, setMessage] = useState(
     initialEmail
-      ? "If you just created an account, check your inbox for a verification link. If you already have a Studenv account, sign in with your existing password. Creating an account again does not change your existing password or profile."
+      ? "If this address can be used to create an account, we’ll send a verification link. If you already have a Studenv account, sign in with your existing password or reset it. Creating an account again never changes your existing password or profile."
       : "Enter your email address to request a verification link.",
   );
   const [resending, setResending] = useState(false);
@@ -53,7 +53,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If this email address belongs to an account that still needs verification, your request has been received. If you requested a link recently, wait 60 seconds before trying again. If your account is already verified, you can sign in.");
+      setMessage("If this address belongs to an account that needs verification, a link will be sent. If you requested one recently, wait 60 seconds before trying again. If you already have an account, sign in or reset your password.");
       setCountdown(60);
     } catch (error) {
       const apiError = error as Error & { details?: { retryAfter?: number } };
