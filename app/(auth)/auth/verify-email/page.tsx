@@ -85,7 +85,10 @@ function VerifyEmailContent() {
               />
             </label>
             <p className="field-hint verify-email-instructions">
-              Open the verification email we sent to your address. If you don't see it in your inbox, check your Spam or Junk folder. The link expires after 1 hour.
+              Open the verification email we sent to your address. If you don't see it in your inbox, check your Spam or Junk folder.
+            </p>
+            <p className="field-hint verify-email-instructions">
+              The link expires after 1 hour.
             </p>
             <button
               className="btn-primary"
