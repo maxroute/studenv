@@ -1,6 +1,6 @@
 import type { Adapter, AdapterUser } from "@auth/core/adapters";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import type { Provider } from "next-auth/providers";
@@ -193,6 +193,14 @@ declare module "next-auth/jwt" {
   }
 }
 
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email-not-verified";
+}
+
+class AccountTemporarilyLockedError extends CredentialsSignin {
+  code = "account-temporarily-locked";
+}
+
 const providers: Provider[] = [
   Credentials({
     name: "Credentials",
@@ -236,7 +244,23 @@ const providers: Provider[] = [
           isEmailVerified: user.emailVerified,
         };
       } catch (error) {
-        console.error("[authorize] login failed:", error);
+        const status =
+          error && typeof error === "object" && "status" in error
+            ? Number(error.status)
+            : 0;
+
+        if (status === 403) {
+          throw new EmailNotVerifiedError();
+        }
+
+        if (status === 429) {
+          throw new AccountTemporarilyLockedError();
+        }
+
+        if (status !== 401) {
+          console.error("[authorize] login failed:", error);
+        }
+
         return null;
       }
     },
