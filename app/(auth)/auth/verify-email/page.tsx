@@ -15,7 +15,7 @@ function VerifyEmailContent() {
   );
   const [message, setMessage] = useState(
     initialEmail
-      ? "If this email address belongs to an account that needs verification, you can request a verification link below. If your account is already verified, you can sign in."
+      ? "If you just created an account, check your inbox for a verification link. If you already have a Studenv account, sign in with your existing password. Creating an account again does not change your existing password or profile."
       : "Enter your email address to request a verification link.",
   );
   const [resending, setResending] = useState(false);
