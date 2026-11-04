@@ -5232,6 +5232,32 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  /* Keep the sign-in screen within the mobile viewport without page scrolling. */
+  .auth-wrap:not(.auth-wrap-signup) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-right {
+    min-height: 0;
+    overflow: hidden;
+    padding: clamp(14px, 3.2dvh, 26px) 22px;
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-form {
+    gap: clamp(9px, 1.7dvh, 15px);
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-fields {
+    gap: clamp(8px, 1.4dvh, 12px);
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-browser-hint {
+    margin-top: 4px !important;
+  }
+
   .auth-wrap,
   .interest-grid,
   .field-row,
