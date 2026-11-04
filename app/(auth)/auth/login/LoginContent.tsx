@@ -226,11 +226,12 @@ export function LoginContent() {
               <span>Email</span>
               <input value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <label className="field">
-              <span>Password</span>
+            <div className="field">
+              <label htmlFor="login-password">Password</label>
               <div className="password-input-wrap">
                 <input
                   type={showPassword ? "text" : "password"}
+                  id="login-password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -249,7 +250,7 @@ export function LoginContent() {
                   )}
                 </button>
               </div>
-            </label>
+            </div>
           </div>
           <button
             className="btn-primary"
