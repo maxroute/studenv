@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { signupSchema } from "@/lib/models/user.model";
 import { BrandLockup } from "@/components/ui/brand-logo";
 
 export default function SignupPage() {
@@ -29,17 +30,26 @@ export default function SignupPage() {
   }, [form.password]);
 
   async function handleSignup() {
+    if (loading) return;
+
+    const parsed = signupSchema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Please check your details.");
+      return;
+    }
+
     try {
       setLoading(true);
+      const signupData = parsed.data;
       await apiFetcher("/api/auth/signup", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(signupData),
       });
 
       // Automatically sign in
       const result = await signIn("credentials", {
-        email: form.email,
-        password: form.password,
+        email: signupData.email,
+        password: signupData.password,
         redirect: false,
       });
 
@@ -47,7 +57,7 @@ export default function SignupPage() {
         throw new Error(result.error);
       }
 
-      router.push(`/auth/onboarding?email=${encodeURIComponent(form.email)}`);
+      router.push(`/auth/onboarding?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -142,6 +152,8 @@ export default function SignupPage() {
               <label className="field">
                 <span>First name</span>
                 <input
+                  autoComplete="given-name"
+                  required
                   value={form.firstName}
                   onChange={(event) =>
                     setForm((state) => ({ ...state, firstName: event.target.value }))
@@ -151,6 +163,8 @@ export default function SignupPage() {
               <label className="field">
                 <span>Last name</span>
                 <input
+                  autoComplete="family-name"
+                  required
                   value={form.lastName}
                   onChange={(event) =>
                     setForm((state) => ({ ...state, lastName: event.target.value }))
@@ -161,6 +175,9 @@ export default function SignupPage() {
             <label className="field">
               <span>Email</span>
               <input
+                type="email"
+                autoComplete="email"
+                required
                 value={form.email}
                 onChange={(event) =>
                   setForm((state) => ({ ...state, email: event.target.value }))
@@ -171,6 +188,10 @@ export default function SignupPage() {
               <span>Password</span>
               <input
                 type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={128}
+                required
                 value={form.password}
                 onChange={(event) =>
                   setForm((state) => ({ ...state, password: event.target.value }))
@@ -191,6 +212,10 @@ export default function SignupPage() {
               <span>Confirm password</span>
               <input
                 type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={128}
+                required
                 value={form.confirmPassword}
                 onChange={(event) =>
                   setForm((state) => ({ ...state, confirmPassword: event.target.value }))
@@ -198,7 +223,12 @@ export default function SignupPage() {
               />
             </label>
           </div>
-          <button className="btn-primary" type="button" onClick={handleSignup}>
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={handleSignup}
+            disabled={loading}
+          >
             {loading ? "Creating..." : "Create Account"}
           </button>
           <div className="auth-divider">or</div>
