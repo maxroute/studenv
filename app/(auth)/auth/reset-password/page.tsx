@@ -12,8 +12,11 @@ function ResetPasswordContent() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       await apiFetcher("/api/auth/reset-password", {
         method: "POST",
@@ -23,6 +26,8 @@ function ResetPasswordContent() {
       toast.success("Password reset complete.");
     } catch (error) {
       toast.error((error as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -50,12 +55,12 @@ function ResetPasswordContent() {
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
             </label>
-            <button className="btn-primary" type="button" onClick={handleSubmit}>
-              Reset Password
+            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={submitting || !token}>
+              {submitting ? "Resetting..." : "Reset Password"}
             </button>
           </>
         ) : (
-          <Link className="btn-primary" href="/auth/signin">
+          <Link className="btn-primary" href="/auth/signin" target="_self" style={{ display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
             Sign In
           </Link>
         )}

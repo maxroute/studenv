@@ -8,8 +8,11 @@ import { apiFetcher } from "@/lib/client/fetcher";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
 
   async function handleSubmit() {
+    if (sending) return;
+    setSending(true);
     try {
       await apiFetcher("/api/auth/forgot-password", {
         method: "POST",
@@ -19,6 +22,8 @@ export default function ForgotPasswordPage() {
       toast.success("If the account exists, reset instructions were sent.");
     } catch (error) {
       toast.error((error as Error).message);
+    } finally {
+      setSending(false);
     }
   }
 
@@ -37,14 +42,14 @@ export default function ForgotPasswordPage() {
           <>
             <label className="field">
               <span>Email</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <button className="btn-primary" type="button" onClick={handleSubmit}>
-              Send Reset Link
+            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={sending || !email.trim()}>
+              {sending ? "Sending..." : "Send Reset Link"}
             </button>
           </>
         ) : null}
-        <Link href="/auth/signin">Back to sign in</Link>
+        <Link href="/auth/signin" target="_self">Back to sign in</Link>
       </div>
     </div>
   );

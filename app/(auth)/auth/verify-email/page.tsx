@@ -104,7 +104,7 @@ function VerifyEmailContent() {
             </button>
           </div>
         ) : null}
-        <Link className="btn-primary verify-email-signin" href="/auth/signin">
+        <Link className="btn-primary verify-email-signin" href="/auth/signin" target="_self">
           Go to Sign In
         </Link>
       </div>
