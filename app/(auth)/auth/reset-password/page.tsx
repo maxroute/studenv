@@ -55,7 +55,7 @@ function ResetPasswordContent() {
             </button>
           </>
         ) : (
-          <Link className="btn-primary" href="/auth/login">
+          <Link className="btn-primary" href="/auth/signin">
             Sign In
           </Link>
         )}
