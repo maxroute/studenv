@@ -5,6 +5,7 @@ const publicUserSelect = {
   id: true,
   email: true,
   emailVerified: true,
+  emailVerifySentAt: true,
   name: true,
   username: true,
   bio: true,
@@ -100,12 +101,42 @@ export async function updatePasswordHash(userId: string, passwordHash: string) {
   });
 }
 
-export async function storeVerificationToken(userId: string, hashedToken: string, expiresAt: Date) {
+export async function storeVerificationToken(
+  userId: string,
+  hashedToken: string,
+  expiresAt: Date,
+  sentAt: Date = new Date(),
+) {
   return prisma.user.update({
     where: { id: userId },
     data: {
       emailVerifyToken: hashedToken,
       emailVerifyExpiry: expiresAt,
+      emailVerifySentAt: sentAt,
+    },
+  });
+}
+
+export async function claimVerificationResend(
+  userId: string,
+  hashedToken: string,
+  expiresAt: Date,
+  sentAt: Date,
+  cooldownBefore: Date,
+) {
+  return prisma.user.updateMany({
+    where: {
+      id: userId,
+      emailVerified: null,
+      OR: [
+        { emailVerifySentAt: null },
+        { emailVerifySentAt: { lte: cooldownBefore } },
+      ],
+    },
+    data: {
+      emailVerifyToken: hashedToken,
+      emailVerifyExpiry: expiresAt,
+      emailVerifySentAt: sentAt,
     },
   });
 }
@@ -153,6 +184,7 @@ export async function markEmailVerified(userId: string) {
       emailVerified: new Date(),
       emailVerifyToken: null,
       emailVerifyExpiry: null,
+      emailVerifySentAt: null,
     },
     select: publicUserSelect,
   });
