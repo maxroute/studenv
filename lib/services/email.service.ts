@@ -29,16 +29,23 @@ async function deliver(options: nodemailer.SendMailOptions) {
 }
 
 export async function sendVerificationEmail(email: string, token: string) {
-  const url = `${appUrl}/auth/verify-email?token=${token}`;
+  const url = `${appUrl}/auth/verify-email?token=`${encodeURIComponent(token)}`;
 
   await deliver({
     to: email,
     subject: "Verify your Studenv account",
-    text: `Welcome to Studenv. Verify your account: ${url}`,
-    html: `<p>Welcome to <strong>Studenv</strong>.</p><p><a href="${url}">Verify your account</a></p>`,
+    text: [
+      "Welcome to Studenv!",
+      "",
+      "Please verify your email address using this link:",
+      url,
+      "",
+      "This link expires in 1 hour. If you don't see this message in your inbox, check your Spam or Junk folder.",
+      "If you didn't create a Studenv account, you can safely ignore this email.",
+    ].join("\\n"),
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124;max-width:560px;margin:0 auto;padding:24px"><h2>Welcome to Studenv!</h2><p>We're glad you're here. Verify your email address to finish setting up your account.</p><p style="margin:28px 0"><a href="`${url}`" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Verify email</a></p><p>This verification link expires in <strong>1 hour</strong>.</p><p>If you don't see this email in your inbox, check your <strong>Spam or Junk</strong> folder.</p><p>If you didn't create a Studenv account, you can safely ignore this email.</p></div>`,
   });
 }
-
 export async function sendPasswordResetEmail(email: string, token: string) {
   const url = `${appUrl}/auth/reset-password?token=${token}`;
 
