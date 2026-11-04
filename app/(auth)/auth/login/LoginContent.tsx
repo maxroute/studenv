@@ -68,7 +68,9 @@ export function LoginContent() {
       router.push(toLocalAppPath(result?.url ?? callbackUrl, "/dashboard"));
       router.refresh();
     } catch (error) {
-      toast.error((error as Error).message);
+      if (loginErrorCode !== "email-not-verified") {
+        toast.error((error as Error).message);
+      }
     } finally {
       setLoading(false);
     }
@@ -195,7 +197,7 @@ export function LoginContent() {
             <div className="auth-alert" role="alert">
               <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
               <button
-                className="btn-secondary"
+                className="btn-primary"
                 type="button"
                 onClick={handleResendVerification}
                 disabled={!email.trim() || resendingVerification}
