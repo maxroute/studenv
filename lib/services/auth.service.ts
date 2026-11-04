@@ -130,7 +130,7 @@ export async function signup(
     // to the same server-enforced cooldown. Verified accounts receive no link.
     // The public response remains identical either way.
     try {
-      await resendVerificationEmail(input.email, appUrl);
+      await resendVerificationEmailForUser(existing, appUrl);
     } catch (deliveryError) {
       // Do not expose account existence through a different public status or
       // message when delivery fails for an existing address.
@@ -310,17 +310,21 @@ export async function resetPassword(
   return updated;
 }
 
-export async function resendVerificationEmail(email: string, appUrl?: string) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await userRepository.findByEmail(normalizedEmail);
+const genericVerificationResponse = {
+  message: "If your account needs verification, a link will be sent. If you requested one recently, wait a minute before trying again.",
+};
 
+type VerificationUser = NonNullable<
+  Awaited<ReturnType<typeof userRepository.findByEmail>>
+>;
+
+async function resendVerificationEmailForUser(
+  user: VerificationUser | null,
+  appUrl?: string,
+) {
   // Keep the response generic so callers cannot discover registered addresses.
-  const genericResponse = {
-    message: "If your account needs verification, a link will be sent. If you requested one recently, wait a minute before trying again.",
-  };
-
   if (!user || user.emailVerified) {
-    return genericResponse;
+    return genericVerificationResponse;
   }
 
   const now = new Date();
@@ -328,7 +332,7 @@ export async function resendVerificationEmail(email: string, appUrl?: string) {
   const lastSentAt = user.emailVerifySentAt;
 
   if (lastSentAt && now.getTime() - lastSentAt.getTime() < cooldownMs) {
-    return genericResponse;
+    return genericVerificationResponse;
   }
 
   const verificationToken = generateResetToken();
@@ -341,7 +345,7 @@ export async function resendVerificationEmail(email: string, appUrl?: string) {
   );
 
   if (claimed.count === 0) {
-    return genericResponse;
+    return genericVerificationResponse;
   }
 
   try {
@@ -354,7 +358,13 @@ export async function resendVerificationEmail(email: string, appUrl?: string) {
     throw error;
   }
 
-  return genericResponse;
+  return genericVerificationResponse;
+}
+
+export async function resendVerificationEmail(email: string, appUrl?: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await userRepository.findByEmail(normalizedEmail);
+  return resendVerificationEmailForUser(user, appUrl);
 }
 
 export async function verifyEmail(
