@@ -55,12 +55,15 @@ export function LoginContent() {
 
       if (result?.error) {
         setLoginErrorCode(result.code ?? null);
+
+        if (result.code === "email-not-verified") {
+          return;
+        }
+
         throw new Error(
-          result.code === "email-not-verified"
-            ? "Please verify your email before signing in."
-            : result.code === "account-temporarily-locked"
-              ? "Too many unsuccessful sign-in attempts. Please try again later."
-              : getAuthErrorMessage(result.error),
+          result.code === "account-temporarily-locked"
+            ? "Too many unsuccessful sign-in attempts. Please try again later."
+            : getAuthErrorMessage(result.error),
         );
       }
 
@@ -68,9 +71,7 @@ export function LoginContent() {
       router.push(toLocalAppPath(result?.url ?? callbackUrl, "/dashboard"));
       router.refresh();
     } catch (error) {
-      if (loginErrorCode !== "email-not-verified") {
-        toast.error((error as Error).message);
-      }
+      toast.error((error as Error).message);
     } finally {
       setLoading(false);
     }
