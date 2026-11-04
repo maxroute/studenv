@@ -20,6 +20,8 @@ function VerifyEmailContent() {
   const [resending, setResending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const verificationInFlight = useRef(false);
+  const verifiedToken = useRef<string | null>(null);
 
   useEffect(() => {
     if (!countdown) return;
@@ -30,8 +32,16 @@ function VerifyEmailContent() {
   }, [countdown]);
 
   async function handleVerify() {
-    if (!token || verifying || status === "done") return;
+    if (
+      !token ||
+      verificationInFlight.current ||
+      verifiedToken.current === token ||
+      status === "done"
+    ) return;
 
+    // State updates are asynchronous. Lock synchronously so rapid clicks
+    // cannot submit the same one-time token more than once.
+    verificationInFlight.current = true;
     setVerifying(true);
     setStatus("loading");
     try {
@@ -39,6 +49,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ token }),
       });
+      verifiedToken.current = token;
       publishAuthSyncEvent("email-verified");
       setStatus("done");
       setMessage("Your email has been verified. You can sign in now.");
@@ -46,6 +57,7 @@ function VerifyEmailContent() {
       setStatus("error");
       setMessage((error as Error).message || "This verification link is invalid or expired.");
     } finally {
+      verificationInFlight.current = false;
       setVerifying(false);
     }
   }
