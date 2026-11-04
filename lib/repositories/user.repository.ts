@@ -55,7 +55,11 @@ export async function create(input: SignupInput & { passwordHash: string; userna
   });
 }
 
-export async function updateProfile(userId: string, input: UpdateProfileInput) {
+export async function updateProfile(
+  userId: string,
+  input: UpdateProfileInput,
+  verification?: { hashedToken: string; expiresAt: Date; sentAt: Date },
+) {
   return prisma.user.update({
     where: { id: userId },
     data: {
@@ -64,6 +68,14 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
       bio: input.bio,
       email: input.email.toLowerCase(),
       avatarUrl: input.avatarUrl,
+      ...(verification
+        ? {
+            emailVerified: null,
+            emailVerifyToken: verification.hashedToken,
+            emailVerifyExpiry: verification.expiresAt,
+            emailVerifySentAt: verification.sentAt,
+          }
+        : {}),
     },
     select: publicUserSelect,
   });
