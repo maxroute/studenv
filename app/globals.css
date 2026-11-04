@@ -6354,3 +6354,28 @@ textarea {
   background: var(--surface2);
   color: var(--text);
 }
+
+
+/* Email verification page readability */
+.verify-email-message {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.verify-email-instructions {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.verify-email-signin {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
