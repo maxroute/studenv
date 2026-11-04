@@ -2112,7 +2112,7 @@ textarea {
   line-height: 1.5;
 }
 
-.signup-login-notice {
+.signup-signin-notice {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface2);
@@ -2121,20 +2121,20 @@ textarea {
   line-height: 1.6;
 }
 
-.signup-login-notice strong {
+.signup-signin-notice strong {
   display: block;
   margin-bottom: 5px;
   font-size: 14px;
   font-weight: 650;
 }
 
-.signup-login-notice p {
+.signup-signin-notice p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.signup-login-notice a {
+.signup-signin-notice a {
   color: var(--text);
   font-weight: 600;
   text-decoration: underline;

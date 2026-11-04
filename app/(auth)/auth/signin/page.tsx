@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { LoginContent } from "./LoginContent";
+import { SigninContent } from "./SigninContent";
 
-export default function LoginPage() {
+export default function SigninPage() {
   return (
     <Suspense fallback={<div className="simple-auth-page" />}>
-      <LoginContent />
+      <SigninContent />
     </Suspense>
   );
 }

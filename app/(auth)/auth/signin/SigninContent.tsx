@@ -9,7 +9,7 @@ import { getAuthErrorMessage } from "@/lib/auth/error-message";
 import { toLocalAppPath } from "@/lib/auth/local-redirect";
 import { BrandLockup } from "@/components/ui/brand-logo";
 
-export function LoginContent() {
+export function SigninContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
@@ -17,7 +17,7 @@ export function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [loginErrorCode, setLoginErrorCode] = useState<string | null>(null);
+  const [signinErrorCode, setLoginErrorCode] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   const callbackUrl = toLocalAppPath(searchParams.get("callbackUrl"), "/dashboard");
   const authError = searchParams.get("error");
@@ -44,7 +44,7 @@ export function LoginContent() {
     }
   }, [searchParams]);
 
-  async function handleLogin() {
+  async function handleSignin() {
     try {
       setLoading(true);
       const result = await signIn("credentials", {
@@ -117,17 +117,17 @@ export function LoginContent() {
 
     if (isMobileApp) {
       const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
+      const signinUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
       const Browser = (window as any).Capacitor?.Plugins?.Browser;
       if (Browser) {
-        Browser.open({ url: loginUrl });
+        Browser.open({ url: signinUrl });
       } else {
-        window.open(loginUrl, "_blank");
+        window.open(signinUrl, "_blank");
       }
     } else if (isDesktop) {
       const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
-      window.open(loginUrl, "_blank");
+      const signinUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
+      window.open(signinUrl, "_blank");
     } else {
       void signIn("google", { callbackUrl: toLocalAppPath(callbackUrl, "/dashboard") });
     }
@@ -196,7 +196,7 @@ export function LoginContent() {
           </div>
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
           {searchParams.get("signup") === "account-exists" ? (
-            <div className="signup-login-notice" role="status">
+            <div className="signup-signin-notice" role="status">
               <strong>Couldn't complete sign-up?</strong>
               <p>If you already have an account, try signing in with this email.</p>
               <p>
@@ -208,7 +208,7 @@ export function LoginContent() {
               </p>
             </div>
           ) : null}
-          {loginErrorCode === "email-not-verified" ? (
+          {signinErrorCode === "email-not-verified" ? (
             <div className="auth-alert" role="alert">
               <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
               <button
@@ -227,11 +227,11 @@ export function LoginContent() {
               <input value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
             <div className="field">
-              <label htmlFor="login-password">Password</label>
+              <label htmlFor="signin-password">Password</label>
               <div className="password-input-wrap">
                 <input
                   type={showPassword ? "text" : "password"}
-                  id="login-password"
+                  id="signin-password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -255,7 +255,7 @@ export function LoginContent() {
           <button
             className="btn-primary"
             type="button"
-            onClick={handleLogin}
+            onClick={handleSignin}
             disabled={loading || googleLoading}
           >
             {loading ? "Signing in..." : "Sign In"}
