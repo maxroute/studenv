@@ -132,12 +132,7 @@ export async function signup(
     }
 
     // Existing unverified accounts stay on the verification flow.
-    try {
-      await resendVerificationEmailForUser(existing, appUrl);
-    } catch (deliveryError) {
-      console.error("Could not resend verification during duplicate signup:", deliveryError);
-    }
-
+    await resendVerificationEmailForUser(existing, appUrl);
     return { outcome: "verification_required" as const };
   }
 
@@ -159,12 +154,17 @@ export async function signup(
     verificationToken.hashed,
     verificationToken.expiresAt,
   );
-  await sendVerificationEmail(user.email, verificationToken.raw, appUrl).catch(async (err) => {
-    // Keep the public signup response identical if SMTP delivery fails.
-    // The user can safely request another link from the confirmation page.
+  try {
+    await sendVerificationEmail(user.email, verificationToken.raw, appUrl);
+  } catch (deliveryError) {
     await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
-    console.error("Failed to send verification email:", err);
-  });
+    console.error("Failed to send signup verification email:", deliveryError);
+    const error = new Error(
+      "Your account was created, but the verification email could not be sent. Please use Resend verification email.",
+    );
+    Object.assign(error, { status: 503 });
+    throw error;
+  }
   await auditLog({
     userId: user.id,
     action: "SIGNUP",
@@ -371,9 +371,22 @@ export async function verifyEmail(
   const user = await userRepository.findByEmailVerifyToken(hashedToken);
 
   if (!user) {
+    // Never log the raw token or its hash.
+    console.warn("[auth.verify-email] Verification token hash was not found in this database.");
     const error = new Error("Verification token is invalid or expired.");
     Object.assign(error, { status: 400 });
     throw error;
+  }
+
+  if (!user.emailVerifyExpiry || user.emailVerifyExpiry <= new Date()) {
+    console.warn("[auth.verify-email] Matching verification token exists but is expired.");
+    const error = new Error("Verification token is invalid or expired.");
+    Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  if (user.emailVerified) {
+    return user;
   }
 
   const verified = await userRepository.markEmailVerified(user.id);

@@ -191,8 +191,11 @@ export async function findByPasswordResetToken(hashedToken: string) {
 
 export async function findByEmailVerifyToken(hashedToken: string) {
   return prisma.user.findFirst({
-    where: { emailVerifyToken: hashedToken, emailVerifyExpiry: { gt: new Date() } },
-    select: publicUserSelect,
+    where: { emailVerifyToken: hashedToken },
+    select: {
+      ...publicUserSelect,
+      emailVerifyExpiry: true,
+    },
   });
 }
 
