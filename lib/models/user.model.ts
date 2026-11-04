@@ -5,7 +5,8 @@ const emailSchema = z
   .trim()
   .min(1, "Email is required.")
   .email("Enter a valid email address.")
-  .max(255, "Email must be 255 characters or fewer.");
+  .max(255, "Email must be 255 characters or fewer.")
+  .transform((email) => email.toLowerCase());
 const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters.")
