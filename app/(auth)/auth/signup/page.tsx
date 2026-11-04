@@ -224,11 +224,32 @@ export default function SignupPage() {
               </div>
               {form.password.length > 0 && (
                 <div className="password-guide" aria-live="polite">
-                  <div className="password-guide-header">
+                  <div
+                    className="password-guide-header"
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
                     <span className="password-guide-heading">Password requirements</span>
                     <span className="password-strength-label">{strengthLabel}</span>
                   </div>
-                  <ul className="password-requirements">
+                  <ul
+                    className="password-requirements"
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "7px",
+                      margin: 0,
+                      padding: 0,
+                      listStyle: "none",
+                    }}
+                  >
                     {passwordRequirements.map((requirement) => (
                       <li
                         className={requirement.met ? "password-requirement met" : "password-requirement"}
