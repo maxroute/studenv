@@ -8,7 +8,7 @@ export default function DesktopCallbackPage() {
     cookieStore.get("__Secure-next-auth.session-token")?.value;
 
   if (!token) {
-    redirect("/auth/login?error=SessionExpired");
+    redirect("/auth/signin?error=SessionExpired");
   }
 
   return (
