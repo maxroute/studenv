@@ -307,7 +307,6 @@ export default function SignupPage() {
             {loading ? "Creating..." : "Create Account"}
           </button>
         </div>
-        </div>
       </div>
     </div>
   );
