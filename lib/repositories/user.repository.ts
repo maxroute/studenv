@@ -100,11 +100,12 @@ export async function updatePasswordHash(userId: string, passwordHash: string) {
   });
 }
 
-export async function storeVerificationToken(userId: string, hashedToken: string) {
+export async function storeVerificationToken(userId: string, hashedToken: string, expiresAt: Date) {
   return prisma.user.update({
     where: { id: userId },
     data: {
       emailVerifyToken: hashedToken,
+      emailVerifyExpiry: expiresAt,
     },
   });
 }
@@ -140,7 +141,7 @@ export async function findByPasswordResetToken(hashedToken: string) {
 
 export async function findByEmailVerifyToken(hashedToken: string) {
   return prisma.user.findFirst({
-    where: { emailVerifyToken: hashedToken },
+    where: { emailVerifyToken: hashedToken, emailVerifyExpiry: { gt: new Date() } },
     select: publicUserSelect,
   });
 }
@@ -151,6 +152,7 @@ export async function markEmailVerified(userId: string) {
     data: {
       emailVerified: new Date(),
       emailVerifyToken: null,
+      emailVerifyExpiry: null,
     },
     select: publicUserSelect,
   });
