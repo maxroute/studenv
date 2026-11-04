@@ -301,7 +301,7 @@ export async function resendVerificationEmail(email: string) {
 
   // Keep the response generic so callers cannot discover registered addresses.
   const genericResponse = {
-    message: "If an unverified account exists for that email, a verification link will be sent.",
+    message: "If your account needs verification, a link will be sent. If you requested one recently, wait a minute before trying again.",
   };
 
   if (!user || user.emailVerified) {
@@ -313,10 +313,7 @@ export async function resendVerificationEmail(email: string) {
   const lastSentAt = user.emailVerifySentAt;
 
   if (lastSentAt && now.getTime() - lastSentAt.getTime() < cooldownMs) {
-    const retryAfter = Math.max(1, Math.ceil((cooldownMs - (now.getTime() - lastSentAt.getTime())) / 1000));
-    const error = new Error("Please wait before requesting another verification email.");
-    Object.assign(error, { status: 429, details: { retryAfter } });
-    throw error;
+    return genericResponse;
   }
 
   const verificationToken = generateResetToken();
@@ -329,9 +326,7 @@ export async function resendVerificationEmail(email: string) {
   );
 
   if (claimed.count === 0) {
-    const error = new Error("Please wait before requesting another verification email.");
-    Object.assign(error, { status: 429, details: { retryAfter: 60 } });
-    throw error;
+    return genericResponse;
   }
 
   try {
