@@ -61,7 +61,7 @@ export default function SignupPage() {
 
       if (result.outcome === "existing_verified") {
         router.push(
-          `/auth/login?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
+          `/auth/signin?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
         );
         return;
       }
@@ -154,7 +154,7 @@ export default function SignupPage() {
             Create your <em>account</em>
           </div>
           <div className="auth-sub">
-            Already have one? <Link href="/auth/login">Sign in</Link>
+            Already have one? <Link href="/auth/signin">Sign in</Link>
           </div>
           <div className="auth-fields">
             <div className="field-row">
