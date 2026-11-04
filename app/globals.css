@@ -5232,30 +5232,38 @@ textarea {
 }
 
 @media (max-width: 760px) {
-  /* Match the sign-up form width and typography; allow short screens to scroll naturally. */
+  /* Match sign-up horizontal sizing while fitting sign-in into the mobile viewport. */
   .auth-wrap:not(.auth-wrap-signup) {
-    min-height: 100vh;
-    min-height: 100dvh;
-    height: auto;
-    overflow: visible;
+    position: fixed;
+    inset: 0;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-right {
-    min-height: 100dvh;
-    overflow: visible;
-    padding: 24px 48px;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: clamp(12px, 2.5dvh, 20px) 48px;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-form {
-    gap: 18px;
+    gap: clamp(8px, 1.35dvh, 12px);
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-fields {
-    gap: 14px;
+    gap: clamp(8px, 1.2dvh, 10px);
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-browser-hint {
-    margin-top: 4px !important;
+    margin-top: 2px !important;
+    line-height: 1.35;
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-divider {
+    line-height: 1;
   }
 
   .auth-wrap,
