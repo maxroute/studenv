@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
