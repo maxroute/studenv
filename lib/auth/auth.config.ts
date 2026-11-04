@@ -1,11 +1,7 @@
-import type { Adapter, AdapterUser } from "@auth/core/adapters";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import type { Provider } from "next-auth/providers";
 import { loginSchema } from "@/lib/models/user.model";
-import { prisma } from "@/lib/db/prisma";
 import * as authService from "@/lib/services/auth.service";
 import { toLocalAppUrl } from "@/lib/auth/local-redirect";
 
@@ -22,144 +18,6 @@ const useSecureCookies =
   !process.env.NEXTAUTH_URL?.startsWith("http://localhost") &&
   !process.env.NEXT_PUBLIC_APP_URL?.startsWith("http://127.0.0.1") &&
   !process.env.NEXT_PUBLIC_APP_URL?.startsWith("http://localhost");
-
-function toAdapterUser(
-  user: {
-    id: string;
-    email: string;
-    emailVerified: Date | null;
-    name: string | null;
-    username?: string | null;
-    avatarUrl: string | null;
-  },
-) {
-  return {
-    ...user,
-    image: user.avatarUrl,
-  } as AdapterUser & { avatarUrl?: string | null };
-}
-
-const prismaAdapter = PrismaAdapter(prisma);
-const adapter: Adapter = {
-  ...prismaAdapter,
-  async createUser(data) {
-    const { image, ...rest } = data;
-    const username = await authService.generateUniqueUsername(rest.name, rest.email);
-    const user = await prisma.user.create({
-      data: {
-        ...rest,
-        username,
-        avatarUrl: image ?? null,
-      },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        name: true,
-        username: true,
-        avatarUrl: true,
-      },
-    });
-
-    return toAdapterUser(user);
-  },
-  async getUser(id) {
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        name: true,
-        username: true,
-        avatarUrl: true,
-      },
-    });
-
-    return user ? toAdapterUser(user) : null;
-  },
-  async getUserByEmail(email) {
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        name: true,
-        username: true,
-        avatarUrl: true,
-      },
-    });
-
-    return user ? toAdapterUser(user) : null;
-  },
-  async getUserByAccount(providerAccountId) {
-    const account = await prisma.account.findUnique({
-      where: { provider_providerAccountId: providerAccountId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            emailVerified: true,
-            name: true,
-            username: true,
-            avatarUrl: true,
-          },
-        },
-      },
-    });
-
-    return account?.user ? toAdapterUser(account.user) : null;
-  },
-  async updateUser(data) {
-    const { id, image, ...rest } = data;
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(image !== undefined ? { avatarUrl: image } : {}),
-      },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        name: true,
-        username: true,
-        avatarUrl: true,
-      },
-    });
-
-    return toAdapterUser(user);
-  },
-  async getSessionAndUser(sessionToken) {
-    const userAndSession = await prisma.session.findUnique({
-      where: { sessionToken },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            emailVerified: true,
-            name: true,
-            username: true,
-            avatarUrl: true,
-          },
-        },
-      },
-    });
-
-    if (!userAndSession) {
-      return null;
-    }
-
-    const { user, ...session } = userAndSession;
-    return {
-      session,
-      user: toAdapterUser(user),
-    };
-  },
-};
 
 declare module "next-auth" {
   interface Session {
@@ -267,17 +125,7 @@ const providers: Provider[] = [
   }),
 ];
 
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  providers.push(
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-  );
-}
-
 const { handlers, auth: originalAuth, signIn, signOut } = NextAuth({
-  adapter,
   debug: false,
   session: {
     strategy: "jwt",

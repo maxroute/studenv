@@ -1568,11 +1568,6 @@ textarea {
   animation: spin 0.9s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .auth-wrap {
   display: grid;
@@ -2180,56 +2175,10 @@ textarea {
   color: var(--text);
 }
 
-.social-btn-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.social-btn-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.social-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border2);
-  border-top-color: var(--amber);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.social-btn-cancel {
-  width: 100%;
-  border: 1px solid rgba(224, 90, 75, 0.3);
-  border-radius: 6px;
-  background: rgba(224, 90, 75, 0.08);
-  padding: 8px 16px;
-  color: #f6b1a6;
-  font-size: 13px;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.social-btn-cancel:hover {
-  border-color: rgba(224, 90, 75, 0.5);
-  background: rgba(224, 90, 75, 0.15);
-  color: #ffd4cc;
 }
 
 .simple-auth-page {

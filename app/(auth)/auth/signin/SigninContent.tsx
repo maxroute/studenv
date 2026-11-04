@@ -16,7 +16,6 @@ export function SigninContent() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [signinErrorCode, setLoginErrorCode] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   const callbackUrl = toLocalAppPath(searchParams.get("callbackUrl"), "/dashboard");
@@ -31,18 +30,6 @@ export function SigninContent() {
       toast.error(authErrorMessage);
     }
   }, [authErrorMessage]);
-
-  useEffect(() => {
-    const isDesktop =
-      typeof window !== "undefined" &&
-      (window.navigator.userAgent.includes("Electron") ||
-        document.documentElement.dataset.desktopApp === "true");
-
-    if (!isDesktop && searchParams.get("desktopSignIn") === "true") {
-      setGoogleLoading(true);
-      void signIn("google", { callbackUrl: "/auth/desktop-callback" });
-    }
-  }, [searchParams]);
 
   async function handleSignin() {
     try {
@@ -102,39 +89,6 @@ export function SigninContent() {
     } finally {
       setResendingVerification(false);
     }
-  }
-
-  function handleGoogleSignIn() {
-    setGoogleLoading(true);
-    const isDesktop =
-      typeof window !== "undefined" &&
-      (window.navigator.userAgent.includes("Electron") ||
-        document.documentElement.dataset.desktopApp === "true");
-
-    const isMobileApp =
-      typeof window !== "undefined" &&
-      (window as any).Capacitor;
-
-    if (isMobileApp) {
-      const websiteUrl = window.location.origin;
-      const signinUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
-      const Browser = (window as any).Capacitor?.Plugins?.Browser;
-      if (Browser) {
-        Browser.open({ url: signinUrl });
-      } else {
-        window.open(signinUrl, "_blank");
-      }
-    } else if (isDesktop) {
-      const websiteUrl = window.location.origin;
-      const signinUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
-      window.open(signinUrl, "_blank");
-    } else {
-      void signIn("google", { callbackUrl: toLocalAppPath(callbackUrl, "/dashboard") });
-    }
-  }
-
-  function cancelGoogleSignIn() {
-    setGoogleLoading(false);
   }
 
   return (
@@ -256,39 +210,10 @@ export function SigninContent() {
             className="btn-primary"
             type="button"
             onClick={handleSignin}
-            disabled={loading || googleLoading}
+            disabled={loading}
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
-          <div className="auth-divider">or</div>
-          <div className="social-btns">
-            {googleLoading ? (
-              <div className="social-btn-group">
-                <button
-                  className="social-btn social-btn-loading"
-                  type="button"
-                  disabled
-                >
-                  <span className="social-spinner" /> Connecting to Google...
-                </button>
-                <button
-                  className="social-btn-cancel"
-                  type="button"
-                  onClick={cancelGoogleSignIn}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                className="social-btn"
-                type="button"
-                onClick={handleGoogleSignIn}
-              >
-                Continue with Google
-              </button>
-            )}
-          </div>
           <div className="auth-sub">
             <Link href="/auth/forgot-password">Forgot password?</Link>
           </div>

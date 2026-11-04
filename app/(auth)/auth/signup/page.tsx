@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
@@ -307,12 +306,7 @@ export default function SignupPage() {
           >
             {loading ? "Creating..." : "Create Account"}
           </button>
-          <div className="auth-divider">or</div>
-          <div className="social-btns">
-            <button className="social-btn" type="button" onClick={() => signIn("google")}>
-              Continue with Google
-            </button>
-          </div>
+        </div>
         </div>
       </div>
     </div>

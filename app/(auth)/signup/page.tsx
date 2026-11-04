@@ -53,10 +53,6 @@ export default function SignupPage() {
     }
   }
 
-  async function doGoogleLogin() {
-    await signIn("google", { callbackUrl: "/dashboard" });
-  }
-
   return (
     <div className="auth-wrap">
       <div className="auth-left">
@@ -156,9 +152,6 @@ export default function SignupPage() {
 
           <div className="auth-divider">or sign up with</div>
           <div className="social-btns">
-            <button type="button" className="social-btn" onClick={doGoogleLogin}>
-              <span className="social-icon">G</span> Google
-            </button>
             <button type="button" className="social-btn">
               <span className="social-icon">𝕏</span> Twitter/X
             </button>
