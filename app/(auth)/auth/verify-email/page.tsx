@@ -53,7 +53,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If an unverified account exists for that email, a new verification link has been sent. Check your inbox and Spam/Junk folder.");
+      setMessage("If an unverified account exists for that email, a new verification link has been sent. Check your inbox for the new verification email.");
       setCountdown(60);
     } catch (error) {
       const apiError = error as Error & { details?: { retryAfter?: number } };
@@ -71,7 +71,7 @@ function VerifyEmailContent() {
         <div className="auth-title">
           Verify your <em>email</em>
         </div>
-        <p className="auth-sub">{status === "loading" ? "Verifying..." : message}</p>
+        <p className="auth-sub verify-email-message">{status === "loading" ? "Verifying your email address..." : message}</p>
         {status !== "done" ? (
           <div className="auth-fields">
             <label className="field">
@@ -84,9 +84,8 @@ function VerifyEmailContent() {
                 placeholder="you@example.com"
               />
             </label>
-            <p className="field-hint">
-              Check your inbox. If the email isn't there, look in your Spam or Junk folder.
-              Verification links expire after 1 hour.
+            <p className="field-hint verify-email-instructions">
+              Open the verification email we sent to your address. The link expires after 1 hour.
             </p>
             <button
               className="btn-primary"
@@ -102,7 +101,7 @@ function VerifyEmailContent() {
             </button>
           </div>
         ) : null}
-        <Link className="btn-primary" href="/auth/login">
+        <Link className="btn-primary verify-email-signin" href="/auth/login">
           Go to Sign In
         </Link>
       </div>
