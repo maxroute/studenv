@@ -5232,26 +5232,26 @@ textarea {
 }
 
 @media (max-width: 760px) {
-  /* Keep the sign-in screen within the mobile viewport without page scrolling. */
+  /* Match the sign-up form width and typography; allow short screens to scroll naturally. */
   .auth-wrap:not(.auth-wrap-signup) {
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-right {
-    min-height: 0;
-    overflow: hidden;
-    padding: clamp(14px, 3.2dvh, 26px) 22px;
+    min-height: 100dvh;
+    overflow: visible;
+    padding: 24px 48px;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-form {
-    gap: clamp(9px, 1.7dvh, 15px);
+    gap: 18px;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-fields {
-    gap: clamp(8px, 1.4dvh, 12px);
+    gap: 14px;
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-browser-hint {
