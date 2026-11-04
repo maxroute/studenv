@@ -24,7 +24,7 @@ function VerifyEmailContent() {
       try {
         await apiFetcher(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
         setStatus("done");
-        setMessage("Your email is verified. You can sign in now.");
+        setMessage("Your email has been verified successfully. You can now sign in to your account.");
       } catch (error) {
         setStatus("error");
         setMessage((error as Error).message);
