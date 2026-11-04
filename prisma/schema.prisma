@@ -49,6 +49,7 @@ model User {
   lastLoginIp         String?
   emailVerifyToken    String?      @unique
   emailVerifyExpiry   DateTime?
+  emailVerifySentAt   DateTime?
   passwordResetToken  String?      @unique
   passwordResetExpiry DateTime?
   twoFactorSecret     String?
