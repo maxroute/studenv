@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { apiFetcher } from "@/lib/client/fetcher";
 import { publishAuthSyncEvent } from "@/lib/auth/auth-sync";
 
@@ -19,6 +19,7 @@ function VerifyEmailContent() {
   );
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const verificationAttemptedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!countdown) return;
@@ -29,7 +30,9 @@ function VerifyEmailContent() {
   }, [countdown]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || verificationAttemptedFor.current === token) return;
+    verificationAttemptedFor.current = token;
+
     void (async () => {
       try {
         await apiFetcher(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
@@ -85,7 +88,7 @@ function VerifyEmailContent() {
               />
             </label>
             <p className="field-hint verify-email-instructions">
-              Check your inbox or spam folder for the verification link.
+              Enter your email to request another link. Check your inbox or spam folder.
             </p>
             <button
               className="btn-primary"

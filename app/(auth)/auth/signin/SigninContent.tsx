@@ -19,6 +19,7 @@ export function SigninContent() {
   const [loading, setLoading] = useState(false);
   const [signinErrorCode, setLoginErrorCode] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationResendCooldown, setVerificationResendCooldown] = useState(0);
   const callbackUrl = toLocalAppPath(searchParams.get("callbackUrl"), "/dashboard");
   const authError = searchParams.get("error");
   const authErrorMessage = useMemo(
@@ -37,6 +38,14 @@ export function SigninContent() {
       toast.success("Password reset in another tab. Sign in with your new password.");
     }
   }), []);
+
+  useEffect(() => {
+    if (verificationResendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setVerificationResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [verificationResendCooldown]);
 
   useEffect(() => {
     if (authErrorMessage) {
@@ -79,7 +88,7 @@ export function SigninContent() {
   }
 
   async function handleResendVerification() {
-    if (!email.trim() || resendingVerification) return;
+    if (!email.trim() || resendingVerification || verificationResendCooldown > 0) return;
 
     setResendingVerification(true);
     try {
@@ -94,8 +103,9 @@ export function SigninContent() {
         throw new Error(data?.message || "We couldn't send the verification email. Please try again shortly.");
       }
 
+      setVerificationResendCooldown(60);
       toast.success(
-        "If your account still needs verification, a new link will be sent. Check your inbox.",
+        "If your account needs verification, we will send a link. Recent requests may take a minute.",
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -182,9 +192,9 @@ export function SigninContent() {
                 className="btn-primary"
                 type="button"
                 onClick={handleResendVerification}
-                disabled={!email.trim() || resendingVerification}
+                disabled={!email.trim() || resendingVerification || verificationResendCooldown > 0}
               >
-                {resendingVerification ? "Sending..." : "Resend verification email"}
+                {resendingVerification ? "Sending..." : verificationResendCooldown > 0 ? `Try again in ${verificationResendCooldown}s` : "Resend verification email"}
               </button>
             </div>
           ) : null}
