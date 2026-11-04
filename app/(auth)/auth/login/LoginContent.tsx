@@ -195,8 +195,14 @@ export function LoginContent() {
           </div>
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
           {searchParams.get("signup") === "account-exists" ? (
-            <div className="auth-alert" role="alert">
-              Please sign in to continue. If you’re having trouble accessing your account, you can reset your password.
+            <div className="signup-login-notice" role="status">
+              <strong>Couldn't complete sign-up?</strong>
+              <p>
+                Try signing in with this email. If you can't remember your password, you can{" "}
+                <Link href={`/auth/forgot-password?email=${encodeURIComponent(email)}`}>
+                  reset it here
+                </Link>.
+              </p>
             </div>
           ) : null}
           {loginErrorCode === "email-not-verified" ? (
