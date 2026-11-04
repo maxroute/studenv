@@ -129,7 +129,13 @@ export async function signup(
     // For an unverified account, safely resend the verification link subject
     // to the same server-enforced cooldown. Verified accounts receive no link.
     // The public response remains identical either way.
-    await resendVerificationEmail(input.email, appUrl);
+    try {
+      await resendVerificationEmail(input.email, appUrl);
+    } catch (deliveryError) {
+      // Do not expose account existence through a different public status or
+      // message when delivery fails for an existing address.
+      console.error("Could not resend verification during duplicate signup:", deliveryError);
+    }
 
     return {
       message: "If that email can be used, check your inbox for the next step.",
