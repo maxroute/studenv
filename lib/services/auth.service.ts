@@ -294,6 +294,58 @@ export async function resetPassword(
   return updated;
 }
 
+export async function resendVerificationEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await userRepository.findByEmail(normalizedEmail);
+
+  // Keep the response generic so callers cannot discover registered addresses.
+  const genericResponse = {
+    message: "If an unverified account exists for that email, a verification link will be sent.",
+  };
+
+  if (!user || user.emailVerified) {
+    return genericResponse;
+  }
+
+  const now = new Date();
+  const cooldownMs = 60 * 1000;
+  const lastSentAt = user.emailVerifySentAt;
+
+  if (lastSentAt && now.getTime() - lastSentAt.getTime() < cooldownMs) {
+    const retryAfter = Math.max(1, Math.ceil((cooldownMs - (now.getTime() - lastSentAt.getTime())) / 1000));
+    const error = new Error("Please wait before requesting another verification email.");
+    Object.assign(error, { status: 429, details: { retryAfter } });
+    throw error;
+  }
+
+  const verificationToken = generateResetToken();
+  const claimed = await userRepository.claimVerificationResend(
+    user.id,
+    verificationToken.hashed,
+    verificationToken.expiresAt,
+    now,
+    new Date(now.getTime() - cooldownMs),
+  );
+
+  if (claimed.count === 0) {
+    const error = new Error("Please wait before requesting another verification email.");
+    Object.assign(error, { status: 429, details: { retryAfter: 60 } });
+    throw error;
+  }
+
+  try {
+    await sendVerificationEmail(user.email, verificationToken.raw);
+  } catch (deliveryError) {
+    await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
+    console.error("Failed to resend verification email:", deliveryError);
+    const error = new Error("We couldn't send the verification email. Please try again shortly.");
+    Object.assign(error, { status: 503 });
+    throw error;
+  }
+
+  return genericResponse;
+}
+
 export async function verifyEmail(
   rawToken: string,
   context?: { ip?: string | null; userAgent?: string | null },
