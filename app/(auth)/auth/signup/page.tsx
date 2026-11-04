@@ -22,14 +22,22 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const strength = useMemo(() => {
-    let score = 0;
-    if (form.password.length >= 8) score += 1;
-    if (/[A-Z]/.test(form.password)) score += 1;
-    if (/[0-9]/.test(form.password)) score += 1;
-    if (/[^A-Za-z0-9]/.test(form.password)) score += 1;
-    return score;
-  }, [form.password]);
+  const passwordRequirements = useMemo(
+    () => [
+      { label: "At least 8 characters", detail: "", met: form.password.length >= 8 },
+      { label: "Uppercase", detail: "(A–Z)", met: /[A-Z]/.test(form.password) },
+      { label: "Number", detail: "(0–9)", met: /[0-9]/.test(form.password) },
+      {
+        label: "Special character",
+        detail: "(!@#$...)",
+        met: /[^A-Za-z0-9]/.test(form.password),
+      },
+    ],
+    [form.password],
+  );
+
+  const strength = passwordRequirements.filter((requirement) => requirement.met).length;
+  const strengthLabel = strength <= 1 ? "Weak" : strength <= 3 ? "Fair" : "Strong";
 
   async function handleSignup() {
     if (loading) return;
@@ -214,15 +222,30 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
-              <div className="pwd-strength">
-                <div
-                  className="pwd-strength-fill"
-                  style={{
-                    width: `${strength * 25}%`,
-                    background:
-                      strength < 2 ? "#e05a4b" : strength < 4 ? "#f5a623" : "#5abf7a",
-                  }}
-                />
+              <div className="password-guide" aria-live="polite">
+                <div className="password-guide-heading">Password requirements</div>
+                <ul className="password-requirements">
+                  {passwordRequirements.map((requirement) => (
+                    <li
+                      className={requirement.met ? "password-requirement met" : "password-requirement"}
+                      key={requirement.label}
+                    >
+                      <span className="password-requirement-check" aria-hidden="true">
+                        {requirement.met ? "✓" : "○"}
+                      </span>
+                      <span>{requirement.label}</span>
+                      {requirement.detail && (
+                        <span className="password-requirement-detail">{requirement.detail}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="password-strength-row">
+                  <div className="password-strength-track" aria-label={`Password strength: ${strengthLabel}`}>
+                    <span style={{ width: `${strength * 25}%` }} />
+                  </div>
+                  <span className="password-strength-label">{strengthLabel}</span>
+                </div>
               </div>
             </div>
             <div className="field">
