@@ -138,8 +138,7 @@ export async function signup(
     }
 
     return {
-      code: "EMAIL_ALREADY_EXISTS" as const,
-      message: "An account with this email already exists.",
+      message: "If this address can be used to create an account, we’ll send the next steps. If you already have a Studenv account, sign in or reset your password.",
     };
   }
 
@@ -178,7 +177,7 @@ export async function signup(
   });
 
   return {
-    message: "Check your email to verify your account.",
+    message: "If this address can be used to create an account, we’ll send the next steps. If you already have a Studenv account, sign in or reset your password.",
   };
 }
 
