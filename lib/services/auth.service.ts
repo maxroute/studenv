@@ -147,7 +147,8 @@ export async function signup(
     verificationToken.hashed,
     verificationToken.expiresAt,
   );
-  await sendVerificationEmail(user.email, verificationToken.raw).catch((err) => {
+  await sendVerificationEmail(user.email, verificationToken.raw).catch(async (err) => {
+    await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
     console.error("Failed to send verification email:", err);
     const error = new Error("Your account was created, but the verification email could not be sent. Please request a new verification email.");
     Object.assign(error, { status: 503 });
