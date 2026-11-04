@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireJsonContentType(request);
     const body = await validateBody(request, signupSchema);
-    const result = await authService.signup(body, getRequestContext(request));
+    const result = await authService.signup(body, getRequestContext(request), request.nextUrl.origin);
     return apiSuccess(result, { status: 201 });
   } catch (error) {
     console.error("Signup error:", error);
