@@ -22,16 +22,8 @@ function getTransport() {
 
 async function deliver(options: nodemailer.SendMailOptions) {
   const transport = getTransport();
-
-  const transport = getTransport();
-
   await transport.sendMail({
-    from: process.env.SMTP_FROM,
-    ...options,
-  });
-
-  await transport.sendMail({
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
     ...options,
   });
 }
