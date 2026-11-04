@@ -163,6 +163,11 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
 
   useEffect(() => {
     setFormData(settings);
+    if (settings.emailVerified || !settings.emailVerifySentAt) {
+      setResendCountdown(0);
+    } else {
+      setResendCountdown(Math.max(0, 60 - Math.floor((Date.now() - new Date(settings.emailVerifySentAt).getTime()) / 1000)));
+    }
   }, [settings]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -177,6 +182,7 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || "Failed to update profile");
+      onRefresh();
     } finally {
       setIsSaving(false);
     }
