@@ -2112,6 +2112,35 @@ textarea {
   line-height: 1.5;
 }
 
+.signup-login-notice {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface2);
+  padding: 16px 18px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.signup-login-notice strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.signup-login-notice p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.signup-login-notice a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;
