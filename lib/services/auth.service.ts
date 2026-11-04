@@ -138,16 +138,21 @@ export async function signup(
     ...input, 
     passwordHash, 
     username,
-    emailVerified: new Date() 
+    emailVerified: null 
   });
   const verificationToken = generateResetToken();
 
-  await userRepository.storeVerificationToken(user.id, verificationToken.hashed);
-  try {
-    await sendVerificationEmail(user.email, verificationToken.raw);
-  } catch (err) {
+  await userRepository.storeVerificationToken(
+    user.id,
+    verificationToken.hashed,
+    verificationToken.expiresAt,
+  );
+  await sendVerificationEmail(user.email, verificationToken.raw).catch((err) => {
     console.error("Failed to send verification email:", err);
-  }
+    const error = new Error("Your account was created, but the verification email could not be sent. Please request a new verification email.");
+    Object.assign(error, { status: 503 });
+    throw error;
+  });
   await auditLog({
     userId: user.id,
     action: "SIGNUP",
@@ -195,14 +200,11 @@ export async function login(
     throw error;
   }
 
-  // Temporarily disabled for development verification
-  /*
   if (!user.emailVerified) {
-    const error = new Error("Verify your email before signing in.");
+    const error = new Error("Please verify your email before signing in.");
     Object.assign(error, { status: 403 });
     throw error;
   }
-  */
 
   await resetLoginAttempts(user.id, context?.ip ?? "unknown");
   await userRepository.updateLoginState(user.id, {
