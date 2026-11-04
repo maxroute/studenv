@@ -51,13 +51,21 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   });
 }
 export async function sendPasswordResetEmail(email: string, token: string) {
-  const url = `${appUrl}/auth/reset-password?token=${token}`;
+  const url = `${appUrl.replace(/\/$/, "")}/auth/reset-password?token=${encodeURIComponent(token)}`;
 
   await deliver({
     to: email,
     subject: "Reset your Studenv password",
-    text: `Reset your password: ${url}`,
-    html: `<p>Reset your password by clicking the link below.</p><p><a href="${url}">Reset password</a></p>`,
+    text: [
+      "We received a request to reset the password for your Studenv account.",
+      "",
+      "Use the link below to choose a new password:",
+      url,
+      "",
+      "This link expires in 1 hour and can only be used once.",
+      "If you did not request a password reset, you can safely ignore this email. Your password will not change.",
+    ].join("\n"),
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124;max-width:560px;margin:0 auto;padding:24px"><h2>Reset your Studenv password</h2><p>We received a request to reset the password for your Studenv account.</p><p style="margin:28px 0"><a href="${url}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Reset password</a></p><p>This link expires in <strong>1 hour</strong> and can only be used once.</p><p>If you did not request a password reset, you can safely ignore this email. Your password will not change.</p></div>`,
   });
 }
 
