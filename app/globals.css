@@ -6511,21 +6511,26 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding-top: 2px;
+  padding-top: 3px;
+}
+
+.password-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .password-guide-heading {
-  color: var(--muted);
-  font-family: var(--font-dm-mono), monospace;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .password-requirements {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -6535,10 +6540,11 @@ textarea {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 6px;
-  color: var(--muted2);
+  gap: 7px;
+  color: var(--muted);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
+  text-align: left;
   transition: color 0.15s ease;
 }
 
@@ -6547,32 +6553,38 @@ textarea {
 }
 
 .password-requirement-check {
-  flex: 0 0 13px;
-  color: var(--muted2);
-  font-size: 12px;
-  text-align: center;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 9px;
+  line-height: 1;
 }
 
 .password-requirement.met .password-requirement-check {
-  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--bg);
   font-weight: 700;
 }
 
-.password-requirement-detail {
-  color: inherit;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-.password-strength-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.password-strength-label {
+  flex: 0 0 auto;
+  color: var(--amber);
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 10px;
+  text-align: right;
+  text-transform: uppercase;
 }
 
 .password-strength-track {
+  display: flex;
   height: 3px;
-  flex: 1;
   overflow: hidden;
   border-radius: 999px;
   background: var(--border2);
@@ -6584,13 +6596,4 @@ textarea {
   border-radius: inherit;
   background: var(--amber);
   transition: width 0.18s ease;
-}
-
-.password-strength-label {
-  min-width: 36px;
-  color: var(--amber);
-  font-family: var(--font-dm-mono), monospace;
-  font-size: 9px;
-  text-align: right;
-  text-transform: uppercase;
 }
