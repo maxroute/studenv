@@ -40,17 +40,10 @@ export default function SignupPage() {
     try {
       setLoading(true);
       const signupData = parsed.data;
-      const result = await apiFetcher<{ code?: string }>("/api/auth/signup", {
+      await apiFetcher("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify(signupData),
       });
-
-      if (result.code === "EMAIL_ALREADY_EXISTS") {
-        router.push(
-          `/auth/login?signupAttempt=1&email=${encodeURIComponent(signupData.email)}`,
-        );
-        return;
-      }
 
       router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
