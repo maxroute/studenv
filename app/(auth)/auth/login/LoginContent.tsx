@@ -194,11 +194,6 @@ export function LoginContent() {
             New here? <Link href="/auth/signup">Create your account</Link>
           </div>
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
-          {searchParams.get("signupAttempt") === "1" ? (
-            <div className="auth-alert" role="status">
-              We couldn&apos;t create a new account because an account with this email already exists. Sign in using your existing password, or reset it if you no longer remember it.
-            </div>
-          ) : null}
           {loginErrorCode === "email-not-verified" ? (
             <div className="auth-alert" role="alert">
               <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
