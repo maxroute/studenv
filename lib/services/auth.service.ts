@@ -440,6 +440,7 @@ export async function updateProfile(
     try {
       await sendVerificationEmail(user.email, verificationToken.raw);
     } catch (deliveryError) {
+      await userRepository.clearVerificationSentAt(userId, verificationToken.hashed);
       console.error("Failed to send email-change verification:", deliveryError);
       const error = new Error("Your email was changed, but the verification email could not be sent. Use Resend verification email in Account settings.");
       Object.assign(error, { status: 503 });
