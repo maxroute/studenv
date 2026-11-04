@@ -41,10 +41,20 @@ export default function SignupPage() {
     try {
       setLoading(true);
       const signupData = parsed.data;
-      await apiFetcher("/api/auth/signup", {
-        method: "POST",
-        body: JSON.stringify(signupData),
-      });
+      const result = await apiFetcher<{ outcome: "created" | "verification_required" | "existing_verified" }>(
+        "/api/auth/signup",
+        {
+          method: "POST",
+          body: JSON.stringify(signupData),
+        },
+      );
+
+      if (result.outcome === "existing_verified") {
+        router.push(
+          `/auth/login?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
+        );
+        return;
+      }
 
       router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
