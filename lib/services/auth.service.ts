@@ -125,6 +125,12 @@ export async function signup(
   const existing = await userRepository.findByEmail(input.email);
 
   if (existing) {
+    // Never replace an existing account's password or profile during signup.
+    // For an unverified account, safely resend the verification link subject
+    // to the same server-enforced cooldown. Verified accounts receive no link.
+    // The public response remains identical either way.
+    await resendVerificationEmail(input.email, appUrl);
+
     return {
       message: "If that email can be used, check your inbox for the next step.",
     };
