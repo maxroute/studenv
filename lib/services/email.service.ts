@@ -9,7 +9,7 @@ function getTransport() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
-    return null;
+    throw new Error("SMTP is not configured. Email delivery is unavailable.");
   }
 
   return nodemailer.createTransport({
@@ -23,10 +23,12 @@ function getTransport() {
 async function deliver(options: nodemailer.SendMailOptions) {
   const transport = getTransport();
 
-  if (!transport) {
-    console.warn("SMTP is not configured. Skipping email send.", options.subject);
-    return;
-  }
+  const transport = getTransport();
+
+  await transport.sendMail({
+    from: process.env.SMTP_FROM,
+    ...options,
+  });
 
   await transport.sendMail({
     from: process.env.SMTP_FROM,
