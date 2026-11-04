@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
@@ -46,18 +45,7 @@ export default function SignupPage() {
         body: JSON.stringify(signupData),
       });
 
-      // Automatically sign in
-      const result = await signIn("credentials", {
-        email: signupData.email,
-        password: signupData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      router.push(`/auth/onboarding?email=${encodeURIComponent(signupData.email)}`);
+      router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
