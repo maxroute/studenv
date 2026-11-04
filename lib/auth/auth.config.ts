@@ -284,8 +284,8 @@ const { handlers, auth: originalAuth, signIn, signOut } = NextAuth({
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   },
   pages: {
-    error: "/auth/login",
-    signIn: "/auth/login",
+    error: "/auth/signin",
+    signIn: "/auth/signin",
   },
   providers,
   trustHost: true,
