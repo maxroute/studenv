@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { signIn } from "next-auth/react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
 import { signupSchema } from "@/lib/models/user.model";
