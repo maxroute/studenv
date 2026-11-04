@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { LoginContent } from "./LoginContent";
 
-export default async function LoginPage({
+export default function LoginPage({
   searchParams,
 }: {
   searchParams?: { [key: string]: string | string[] | undefined };
