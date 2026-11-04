@@ -120,6 +120,7 @@ function publicAuthResponse(user: Awaited<ReturnType<typeof userRepository.findB
 export async function signup(
   input: SignupInput,
   context?: { ip?: string | null; userAgent?: string | null },
+  appUrl?: string,
 ) {
   const existing = await userRepository.findByEmail(input.email);
 
@@ -147,7 +148,7 @@ export async function signup(
     verificationToken.hashed,
     verificationToken.expiresAt,
   );
-  await sendVerificationEmail(user.email, verificationToken.raw).catch(async (err) => {
+  await sendVerificationEmail(user.email, verificationToken.raw, appUrl).catch(async (err) => {
     await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
     console.error("Failed to send verification email:", err);
     const error = new Error("Your account was created, but the verification email could not be sent. Please request a new verification email.");
@@ -295,7 +296,7 @@ export async function resetPassword(
   return updated;
 }
 
-export async function resendVerificationEmail(email: string) {
+export async function resendVerificationEmail(email: string, appUrl?: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const user = await userRepository.findByEmail(normalizedEmail);
 
@@ -389,6 +390,7 @@ export async function updateProfile(
   userId: string,
   input: UpdateProfileInput,
   context?: { ip?: string | null; userAgent?: string | null },
+  appUrl?: string,
 ) {
   const sanitized = sanitizeProfileInput(input);
   const conflict = await userRepository.findByUsername(
