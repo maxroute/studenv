@@ -221,7 +221,12 @@ export function LoginContent() {
               />
             </label>
           </div>
-          <button className="btn-primary" type="button" onClick={handleLogin}>
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={handleLogin}
+            disabled={loading || googleLoading}
+          >
             {loading ? "Signing in..." : "Sign In"}
           </button>
           <div className="auth-divider">or</div>
