@@ -5262,10 +5262,6 @@ textarea {
     gap: clamp(8px, 1.2dvh, 10px);
   }
 
-  .auth-wrap:not(.auth-wrap-signup) .auth-browser-hint {
-    margin-top: 2px !important;
-    line-height: 1.35;
-  }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-divider {
     line-height: 1;

@@ -289,9 +289,6 @@ export function SigninContent() {
               </button>
             )}
           </div>
-          <div className="auth-sub auth-browser-hint" style={{ fontSize: "11px", opacity: 0.6 }}>
-            Brave user? If sign-in fails, try disabling Shields or allowing cookies.
-          </div>
           <div className="auth-sub">
             <Link href="/auth/forgot-password">Forgot password?</Link>
           </div>
