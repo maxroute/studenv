@@ -30,7 +30,7 @@ export default function SignupPage() {
       {
         label: "Special character",
         detail: "(!@#$...)",
-        met: /[^A-Za-z0-9]/.test(form.password),
+        met: /[^A-Za-z0-9\s]/.test(form.password),
       },
     ],
     [form.password],
