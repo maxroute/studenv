@@ -16,7 +16,7 @@ const websiteStructuredData = {
 export const metadata = createPublicPageMetadata({
   title: "Studenv – Your Personal Online Study Environment",
   description:
-    "Studenv is your personal online study environment to organize learning resources, manage notes, explore ideas and bring your study workflow together in one space. Build your second brain and make learning more organized.",
+    "Studenv is your personal online study environment to capture what you learn, organize your knowledge, manage study resources and explore ideas—all in one connected space. Build your second brain and grow your knowledge over time.",
   path: "/",
 });
 
