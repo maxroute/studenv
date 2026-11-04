@@ -117,7 +117,7 @@ export function LoginContent() {
 
     if (isMobileApp) {
       const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/login?desktopSignIn=true`;
+      const loginUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
       const Browser = (window as any).Capacitor?.Plugins?.Browser;
       if (Browser) {
         Browser.open({ url: loginUrl });
@@ -126,7 +126,7 @@ export function LoginContent() {
       }
     } else if (isDesktop) {
       const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/login?desktopSignIn=true`;
+      const loginUrl = `${websiteUrl}/auth/signin?desktopSignIn=true`;
       window.open(loginUrl, "_blank");
     } else {
       void signIn("google", { callbackUrl: toLocalAppPath(callbackUrl, "/dashboard") });
