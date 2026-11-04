@@ -15,7 +15,7 @@ function VerifyEmailContent() {
   );
   const [message, setMessage] = useState(
     initialEmail
-      ? "If this email address belongs to an account that needs verification, a verification link will be sent. If your account is already verified, you can sign in."
+      ? "If this email address belongs to an account that needs verification, you can request a verification link below. If your account is already verified, you can sign in."
       : "Enter your email address to request a verification link.",
   );
   const [resending, setResending] = useState(false);
@@ -53,7 +53,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If this email address belongs to an account that still needs verification, a new link will be sent. If your account is already verified, you can sign in.");
+      setMessage("If this email address belongs to an account that still needs verification, your request has been received. If you requested a link recently, wait 60 seconds before trying again. If your account is already verified, you can sign in.");
       setCountdown(60);
     } catch (error) {
       const apiError = error as Error & { details?: { retryAfter?: number } };
@@ -88,7 +88,7 @@ function VerifyEmailContent() {
               If you receive a verification email, open its link. Check your Spam or Junk folder if it isn't in your inbox.
             </p>
             <p className="field-hint verify-email-instructions">
-              The link expires after 1 hour.
+              Verification links expire after 1 hour.
             </p>
             <button
               className="btn-primary"
