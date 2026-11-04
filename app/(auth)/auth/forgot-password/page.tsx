@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
             </button>
           </>
         ) : null}
-        <Link href="/auth/login">Back to sign in</Link>
+        <Link href="/auth/signin">Back to sign in</Link>
       </div>
     </div>
   );
