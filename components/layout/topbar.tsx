@@ -80,7 +80,7 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
 
   function handleSignOut() {
     setMenuOpen(false);
-    void signOut({ callbackUrl: "/auth/login" });
+    void signOut({ callbackUrl: "/auth/signin" });
   }
 
   const isLibraryRoute =
