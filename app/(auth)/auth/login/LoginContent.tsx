@@ -12,7 +12,7 @@ import { BrandLockup } from "@/components/ui/brand-logo";
 export function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -194,6 +194,11 @@ export function LoginContent() {
             New here? <Link href="/auth/signup">Create your account</Link>
           </div>
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
+          {searchParams.get("signupAttempt") === "1" ? (
+            <div className="auth-alert" role="status">
+              We couldn&apos;t sign you in with the password entered during account creation. If you already have an account, use your existing password or reset it.
+            </div>
+          ) : null}
           {loginErrorCode === "email-not-verified" ? (
             <div className="auth-alert" role="alert">
               <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
