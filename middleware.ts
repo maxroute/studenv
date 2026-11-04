@@ -57,6 +57,30 @@ function shouldUseAuthRateLimiter(pathname: string, method: string) {
   return method === "POST" && pathname.startsWith("/api/auth/");
 }
 
+function getRateLimitStatus(error: unknown) {
+  if (!error || typeof error !== "object" || !("status" in error)) {
+    return null;
+  }
+
+  const status = (error as { status?: unknown }).status;
+  return status === 429 ? 429 : null;
+}
+
+function getRetryAfterSeconds(error: unknown) {
+  if (!error || typeof error !== "object" || !("details" in error)) {
+    return null;
+  }
+
+  const details = (error as { details?: { reset?: unknown } }).details;
+  const reset = details?.reset;
+
+  if (typeof reset !== "number" || !Number.isFinite(reset)) {
+    return null;
+  }
+
+  return Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+}
+
 export default async function middleware(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
@@ -69,19 +93,51 @@ export default async function middleware(request: NextRequest) {
     return response;
   }
 
-  try {
-    if (isApiRoute) {
-      const token = await readSessionToken(request);
-      const limiter = shouldUseAuthRateLimiter(pathname, request.method)
-        ? authRateLimiter
-        : apiRateLimiter;
-      await checkRateLimit(
-        limiter,
-        getRateLimitIdentifier(request, typeof token?.sub === "string" ? token.sub : null),
+  if (isApiRoute) {
+    let token: Awaited<ReturnType<typeof readSessionToken>> = null;
+
+    // A session-cookie parsing problem must not be misreported as a rate-limit
+    // rejection. Fall back to the IP identifier and still enforce a limit.
+    try {
+      token = await readSessionToken(request);
+    } catch (error) {
+      console.error(
+        "[middleware] Session token lookup failed; applying IP-based rate limit.",
+        error,
       );
     }
-  } catch (error) {
-    return apiError("Too many requests.", 429, error);
+
+    const limiter = shouldUseAuthRateLimiter(pathname, request.method)
+      ? authRateLimiter
+      : apiRateLimiter;
+
+    try {
+      await checkRateLimit(
+        limiter,
+        getRateLimitIdentifier(
+          request,
+          typeof token?.sub === "string" ? token.sub : null,
+        ),
+      );
+    } catch (error) {
+      if (getRateLimitStatus(error) === 429) {
+        const retryAfter = getRetryAfterSeconds(error);
+        const response = apiError("Too many requests. Please try again later.", 429);
+        if (retryAfter !== null) {
+          response.headers.set("Retry-After", String(retryAfter));
+        }
+        addCorsHeaders(response);
+        return response;
+      }
+
+      console.error("[middleware] Rate-limit check failed.", error);
+      const response = apiError(
+        "Request protection is temporarily unavailable. Please try again shortly.",
+        503,
+      );
+      addCorsHeaders(response);
+      return response;
+    }
   }
 
   const response = NextResponse.next();
