@@ -6643,3 +6643,14 @@ textarea {
   justify-content: flex-start !important;
   text-align: left !important;
 }
+
+
+/* Auth cross-links use the accent by default and brighten on hover. */
+.auth-sub a {
+  color: var(--amber);
+}
+
+.auth-sub a:hover,
+.auth-sub a:focus-visible {
+  color: #ffd080;
+}
