@@ -5246,7 +5246,12 @@ textarea {
     min-height: 0;
     height: 100%;
     overflow: hidden;
-    padding: clamp(12px, 2.5dvh, 20px) 48px;
+    padding: clamp(12px, 2.5dvh, 20px) clamp(24px, 11.2vw, 44px);
+  }
+
+  .auth-right-signup {
+    padding-right: clamp(24px, 11.2vw, 44px);
+    padding-left: clamp(24px, 11.2vw, 44px);
   }
 
   .auth-wrap:not(.auth-wrap-signup) .auth-form {
