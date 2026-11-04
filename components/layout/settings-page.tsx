@@ -24,6 +24,8 @@ type UserSettings = {
     email: string;
     bio: string;
     hasPassword?: boolean;
+    emailVerified: boolean;
+    emailVerifySentAt?: string | null;
   };
   appearance: {
     theme: string;
@@ -147,6 +149,17 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
   const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(() => {
+    if (!settings.emailVerifySentAt || settings.emailVerified) return 0;
+    return Math.max(0, 60 - Math.floor((Date.now() - new Date(settings.emailVerifySentAt).getTime()) / 1000));
+  });
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = window.setInterval(() => setResendCountdown((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCountdown > 0]);
 
   useEffect(() => {
     setFormData(settings);
@@ -166,6 +179,23 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
       toast.error(error.message || "Failed to update profile");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendingVerification || resendCountdown > 0) return;
+    setResendingVerification(true);
+    try {
+      await apiFetcher("/api/auth/resend-verification", { method: "POST", body: JSON.stringify({ email: settings.email }) });
+      toast.success("If your account needs verification, a new link has been sent. Check your inbox and Spam/Junk folder.");
+      setResendCountdown(60);
+      onRefresh();
+    } catch (error: any) {
+      const retryAfter = error?.details?.retryAfter;
+      if (typeof retryAfter === "number") setResendCountdown(retryAfter);
+      toast.error(error.message || "Could not resend the verification email.");
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -240,6 +270,15 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
               placeholder="you@example.com"
             />
             <p className="field-hint">Changing your email will require re-verification.</p>
+            <p className="field-hint" role="status">Email status: <strong>{settings.emailVerified ? "Verified" : "Not verified"}</strong></p>
+            {!settings.emailVerified ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="ghost" onClick={handleResendVerification} disabled={resendingVerification || resendCountdown > 0}>
+                  {resendingVerification ? "Sending..." : resendCountdown > 0 ? `Resend available in ${resendCountdown}s` : "Resend verification email"}
+                </Button>
+                <span className="field-hint">Check your inbox and Spam/Junk folder. Links expire after 1 hour.</span>
+              </div>
+            ) : null}
           </label>
           <label className="field-full field">
             <span>Bio</span>
@@ -532,6 +571,8 @@ export function SettingsPage() {
         email: rawSettings?.email || "",
         bio: rawSettings?.bio || "",
         hasPassword: rawSettings?.hasPassword ?? false,
+        emailVerified: Boolean(rawSettings?.emailVerified),
+        emailVerifySentAt: rawSettings?.emailVerifySentAt ?? null,
       },
       appearance: {
         theme: "dark",
