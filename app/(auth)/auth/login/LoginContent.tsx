@@ -199,11 +199,11 @@ export function LoginContent() {
               <strong>Couldn't complete sign-up?</strong>
               <p>If you already have an account, try signing in with this email.</p>
               <p>
-                Or, try the{" "}
+                Don't remember your password? Try the{" "}
                 <Link href={`/auth/forgot-password?email=${encodeURIComponent(email)}`}>
                   Forgot Password
                 </Link>{" "}
-                option if you can't remember your password.
+                option.
               </p>
             </div>
           ) : null}
