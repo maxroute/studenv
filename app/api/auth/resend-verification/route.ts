@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireJsonContentType(request);
     const body = await validateBody(request, forgotPasswordSchema);
-    const result = await authService.resendVerificationEmail(body.email);
+    const result = await authService.resendVerificationEmail(body.email, request.nextUrl.origin);
     return apiSuccess(result);
   } catch (error) {
     const err = getErrorResponse(error);
