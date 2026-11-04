@@ -12,10 +12,12 @@ import { BrandLockup } from "@/components/ui/brand-logo";
 export function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [loginErrorCode, setLoginErrorCode] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const callbackUrl = toLocalAppPath(searchParams.get("callbackUrl"), "/dashboard");
   const authError = searchParams.get("error");
   const authErrorMessage = useMemo(
@@ -52,15 +54,52 @@ export function LoginContent() {
       });
 
       if (result?.error) {
-        throw new Error(getAuthErrorMessage(result.error));
+        setLoginErrorCode(result.code ?? null);
+
+        if (result.code === "email-not-verified") {
+          return;
+        }
+
+        throw new Error(
+          result.code === "account-temporarily-locked"
+            ? "Too many unsuccessful sign-in attempts. Please try again later."
+            : getAuthErrorMessage(result.error),
+        );
       }
 
+      setLoginErrorCode(null);
       router.push(toLocalAppPath(result?.url ?? callbackUrl, "/dashboard"));
       router.refresh();
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email.trim() || resendingVerification) return;
+
+    setResendingVerification(true);
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || "We couldn't send the verification email. Please try again shortly.");
+      }
+
+      toast.success(
+        "If your account still needs verification, a new link will be sent. Check your inbox.",
+      );
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setResendingVerification(false);
     }
   }
 
@@ -155,6 +194,32 @@ export function LoginContent() {
             New here? <Link href="/auth/signup">Create your account</Link>
           </div>
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
+          {searchParams.get("signup") === "account-exists" ? (
+            <div className="signup-login-notice" role="status">
+              <strong>Couldn't complete sign-up?</strong>
+              <p>If you already have an account, try signing in with this email.</p>
+              <p>
+                Don't remember your password? Try the{" "}
+                <Link href={`/auth/forgot-password?email=${encodeURIComponent(email)}`}>
+                  Forgot Password
+                </Link>{" "}
+                option.
+              </p>
+            </div>
+          ) : null}
+          {loginErrorCode === "email-not-verified" ? (
+            <div className="auth-alert" role="alert">
+              <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={handleResendVerification}
+                disabled={!email.trim() || resendingVerification}
+              >
+                {resendingVerification ? "Sending..." : "Resend verification email"}
+              </button>
+            </div>
+          ) : null}
           <div className="auth-fields">
             <label className="field">
               <span>Email</span>
@@ -169,7 +234,12 @@ export function LoginContent() {
               />
             </label>
           </div>
-          <button className="btn-primary" type="button" onClick={handleLogin}>
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={handleLogin}
+            disabled={loading || googleLoading}
+          >
             {loading ? "Signing in..." : "Sign In"}
           </button>
           <div className="auth-divider">or</div>

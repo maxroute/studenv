@@ -41,23 +41,22 @@ export default function SignupPage() {
     try {
       setLoading(true);
       const signupData = parsed.data;
-      await apiFetcher("/api/auth/signup", {
-        method: "POST",
-        body: JSON.stringify(signupData),
-      });
+      const result = await apiFetcher<{ outcome: "created" | "verification_required" | "existing_verified" }>(
+        "/api/auth/signup",
+        {
+          method: "POST",
+          body: JSON.stringify(signupData),
+        },
+      );
 
-      // Automatically sign in
-      const result = await signIn("credentials", {
-        email: signupData.email,
-        password: signupData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        throw new Error(result.error);
+      if (result.outcome === "existing_verified") {
+        router.push(
+          `/auth/login?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
+        );
+        return;
       }
 
-      router.push(`/auth/onboarding?email=${encodeURIComponent(signupData.email)}`);
+      router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {

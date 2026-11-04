@@ -9,7 +9,7 @@ function getTransport() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
-    return null;
+    throw new Error("SMTP is not configured. Email delivery is unavailable.");
   }
 
   return nodemailer.createTransport({
@@ -17,34 +17,39 @@ function getTransport() {
     port,
     secure: port === 465,
     auth: { user, pass },
+    // Never let a stalled SMTP connection hold a signup request open.
+    connectionTimeout: 5_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 8_000,
   });
 }
 
 async function deliver(options: nodemailer.SendMailOptions) {
   const transport = getTransport();
-
-  if (!transport) {
-    console.warn("SMTP is not configured. Skipping email send.", options.subject);
-    return;
-  }
-
   await transport.sendMail({
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
     ...options,
   });
 }
 
-export async function sendVerificationEmail(email: string, token: string) {
-  const url = `${appUrl}/auth/verify-email?token=${token}`;
+export async function sendVerificationEmail(email: string, token: string, baseUrl = appUrl) {
+  const url = `${baseUrl.replace(/\/$/, "")}/auth/verify-email?token=${encodeURIComponent(token)}`;
 
   await deliver({
     to: email,
     subject: "Verify your Studenv account",
-    text: `Welcome to Studenv. Verify your account: ${url}`,
-    html: `<p>Welcome to <strong>Studenv</strong>.</p><p><a href="${url}">Verify your account</a></p>`,
+    text: [
+      "Welcome to Studenv!",
+      "",
+      "Please verify your email address using this link:",
+      url,
+      "",
+      "This link expires in 1 hour.",
+      "If you did not sign up for Studenv, you can ignore this message. No action is needed.",
+    ].join("\n"),
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#202124;max-width:560px;margin:0 auto;padding:24px"><h2>Welcome to Studenv!</h2><p>We're glad you're here. Verify your email address to finish setting up your account.</p><p style="margin:28px 0"><a href="${url}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Verify email</a></p><p>This verification link expires in <strong>1 hour</strong>.</p><p>If you did not sign up for Studenv, you can ignore this message. No action is needed.</p></div>`,
   });
 }
-
 export async function sendPasswordResetEmail(email: string, token: string) {
   const url = `${appUrl}/auth/reset-password?token=${token}`;
 

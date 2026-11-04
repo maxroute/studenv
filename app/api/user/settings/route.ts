@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 
 import crypto from "crypto";
+import { hashToken } from "@/lib/security/crypto";
 import { sendVerificationEmail } from "@/lib/services/email.service";
 
 const settingsSchema = z.object({
@@ -95,12 +96,15 @@ export async function PATCH(req: Request) {
         emailUpdateData = {
           email,
           emailVerified: null,
-          emailVerifyToken: token,
+          emailVerifyToken: hashToken(token),
+          emailVerifyExpiry: new Date(Date.now() + 60 * 60 * 1000),
         };
-        // Send verification email asynchronously
-        sendVerificationEmail(email, token).catch(console.error);
+        emailUpdateData.__verificationToken = token;
       }
     }
+
+    const verificationToken = emailUpdateData.__verificationToken as string | undefined;
+    delete emailUpdateData.__verificationToken;
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
@@ -111,6 +115,15 @@ export async function PATCH(req: Request) {
         ...emailUpdateData,
       },
     });
+
+    if (verificationToken && email) {
+      try {
+        await sendVerificationEmail(email, verificationToken);
+      } catch (error) {
+        console.error("[SETTINGS_EMAIL_VERIFICATION]", error);
+        return new NextResponse("Email was updated, but the verification email could not be sent. Please contact support.", { status: 503 });
+      }
+    }
 
     return NextResponse.json(updatedUser);
   } catch (error) {

@@ -1,6 +1,6 @@
 import type { Adapter, AdapterUser } from "@auth/core/adapters";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import type { Provider } from "next-auth/providers";
@@ -193,6 +193,14 @@ declare module "next-auth/jwt" {
   }
 }
 
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email-not-verified";
+}
+
+class AccountTemporarilyLockedError extends CredentialsSignin {
+  code = "account-temporarily-locked";
+}
+
 const providers: Provider[] = [
   Credentials({
     name: "Credentials",
@@ -236,7 +244,23 @@ const providers: Provider[] = [
           isEmailVerified: user.emailVerified,
         };
       } catch (error) {
-        console.error("[authorize] login failed:", error);
+        const status =
+          error && typeof error === "object" && "status" in error
+            ? Number(error.status)
+            : 0;
+
+        if (status === 403) {
+          throw new EmailNotVerifiedError();
+        }
+
+        if (status === 429) {
+          throw new AccountTemporarilyLockedError();
+        }
+
+        if (status !== 401) {
+          console.error("[authorize] login failed:", error);
+        }
+
         return null;
       }
     },
@@ -281,8 +305,34 @@ const { handlers, auth: originalAuth, signIn, signOut } = NextAuth({
         token.isEmailVerified = Boolean(user.isEmailVerified);
       }
 
-      if (trigger === "update" && session) {
-        return { ...token, ...session.user };
+      if (trigger === "update" && session?.user) {
+        // Session updates originate in the browser. Only accept profile fields;
+        // identity and authorization claims must remain server-controlled.
+        const profile = session.user as {
+          name?: unknown;
+          username?: unknown;
+          bio?: unknown;
+          avatarUrl?: unknown;
+        };
+
+        if (typeof profile.name === "string") {
+          token.name = profile.name;
+        }
+
+        if (typeof profile.username === "string" || profile.username === null) {
+          token.username = profile.username;
+        }
+
+        if (typeof profile.bio === "string" || profile.bio === null) {
+          token.bio = profile.bio;
+        }
+
+        if (
+          typeof profile.avatarUrl === "string" ||
+          profile.avatarUrl === null
+        ) {
+          token.avatarUrl = profile.avatarUrl;
+        }
       }
 
       return token;

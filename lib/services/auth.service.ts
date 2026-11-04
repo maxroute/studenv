@@ -120,13 +120,25 @@ function publicAuthResponse(user: Awaited<ReturnType<typeof userRepository.findB
 export async function signup(
   input: SignupInput,
   context?: { ip?: string | null; userAgent?: string | null },
+  appUrl?: string,
 ) {
   const existing = await userRepository.findByEmail(input.email);
 
   if (existing) {
-    return {
-      message: "If that email can be used, check your inbox for the next step.",
-    };
+    // Never replace an existing account's password or profile during signup.
+    // A verified account should go straight to sign-in, not email verification.
+    if (existing.emailVerified) {
+      return { outcome: "existing_verified" as const };
+    }
+
+    // Existing unverified accounts stay on the verification flow.
+    try {
+      await resendVerificationEmailForUser(existing, appUrl);
+    } catch (deliveryError) {
+      console.error("Could not resend verification during duplicate signup:", deliveryError);
+    }
+
+    return { outcome: "verification_required" as const };
   }
 
   const username = await generateUniqueUsername(
@@ -138,16 +150,21 @@ export async function signup(
     ...input, 
     passwordHash, 
     username,
-    emailVerified: new Date() 
+    emailVerified: null 
   });
   const verificationToken = generateResetToken();
 
-  await userRepository.storeVerificationToken(user.id, verificationToken.hashed);
-  try {
-    await sendVerificationEmail(user.email, verificationToken.raw);
-  } catch (err) {
+  await userRepository.storeVerificationToken(
+    user.id,
+    verificationToken.hashed,
+    verificationToken.expiresAt,
+  );
+  await sendVerificationEmail(user.email, verificationToken.raw, appUrl).catch(async (err) => {
+    // Keep the public signup response identical if SMTP delivery fails.
+    // The user can safely request another link from the confirmation page.
+    await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
     console.error("Failed to send verification email:", err);
-  }
+  });
   await auditLog({
     userId: user.id,
     action: "SIGNUP",
@@ -157,9 +174,7 @@ export async function signup(
     userAgent: context?.userAgent,
   });
 
-  return {
-    message: "Check your email to verify your account.",
-  };
+  return { outcome: "created" as const };
 }
 
 export async function login(
@@ -168,16 +183,6 @@ export async function login(
 ) {
   const user = await userRepository.findByEmailForAuth(input.email);
   const userId = user?.id ?? `anon:${input.email.toLowerCase()}`;
-  const locked =
-    (user?.lockedUntil && user.lockedUntil > new Date()) ||
-    (context?.ip ? await isAccountLocked(userId, context.ip) : false);
-
-  if (locked) {
-    const error = new Error("Account temporarily locked. Try again later.");
-    Object.assign(error, { status: 429 });
-    throw error;
-  }
-
   const valid = await verifyPassword(input.password, user?.passwordHash);
 
   if (!user || !valid) {
@@ -195,14 +200,23 @@ export async function login(
     throw error;
   }
 
-  // Temporarily disabled for development verification
-  /*
+  // Only reveal lock status after the password is correct. This avoids
+  // exposing account state to someone who only knows an email address.
+  const locked =
+    (user.lockedUntil && user.lockedUntil > new Date()) ||
+    (context?.ip ? await isAccountLocked(userId, context.ip) : false);
+
+  if (locked) {
+    const error = new Error("Too many unsuccessful sign-in attempts. Please try again later.");
+    Object.assign(error, { status: 429 });
+    throw error;
+  }
+
   if (!user.emailVerified) {
-    const error = new Error("Verify your email before signing in.");
+    const error = new Error("Please verify your email before signing in.");
     Object.assign(error, { status: 403 });
     throw error;
   }
-  */
 
   await resetLoginAttempts(user.id, context?.ip ?? "unknown");
   await userRepository.updateLoginState(user.id, {
@@ -292,6 +306,63 @@ export async function resetPassword(
   return updated;
 }
 
+const genericVerificationResponse = {
+  message: "If your account needs verification, a link will be sent. If you requested one recently, wait a minute before trying again.",
+};
+
+type VerificationUser = NonNullable<
+  Awaited<ReturnType<typeof userRepository.findByEmail>>
+>;
+
+async function resendVerificationEmailForUser(
+  user: VerificationUser | null,
+  appUrl?: string,
+) {
+  // Keep the response generic so callers cannot discover registered addresses.
+  if (!user || user.emailVerified) {
+    return genericVerificationResponse;
+  }
+
+  const now = new Date();
+  const cooldownMs = 60 * 1000;
+  const lastSentAt = user.emailVerifySentAt;
+
+  if (lastSentAt && now.getTime() - lastSentAt.getTime() < cooldownMs) {
+    return genericVerificationResponse;
+  }
+
+  const verificationToken = generateResetToken();
+  const claimed = await userRepository.claimVerificationResend(
+    user.id,
+    verificationToken.hashed,
+    verificationToken.expiresAt,
+    now,
+    new Date(now.getTime() - cooldownMs),
+  );
+
+  if (claimed.count === 0) {
+    return genericVerificationResponse;
+  }
+
+  try {
+    await sendVerificationEmail(user.email, verificationToken.raw, appUrl);
+  } catch (deliveryError) {
+    await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
+    console.error("Failed to resend verification email:", deliveryError);
+    const error = new Error("We couldn't send the verification email. Please try again shortly.");
+    Object.assign(error, { status: 503 });
+    throw error;
+  }
+
+  return genericVerificationResponse;
+}
+
+export async function resendVerificationEmail(email: string, appUrl?: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await userRepository.findByEmail(normalizedEmail);
+  return resendVerificationEmailForUser(user, appUrl);
+}
+
 export async function verifyEmail(
   rawToken: string,
   context?: { ip?: string | null; userAgent?: string | null },
@@ -339,6 +410,7 @@ export async function updateProfile(
   userId: string,
   input: UpdateProfileInput,
   context?: { ip?: string | null; userAgent?: string | null },
+  appUrl?: string,
 ) {
   const sanitized = sanitizeProfileInput(input);
   const conflict = await userRepository.findByUsername(
@@ -352,14 +424,47 @@ export async function updateProfile(
     throw error;
   }
 
-  const user = await userRepository.updateProfile(userId, {
-    ...input,
-    name: sanitized.name ?? input.name,
-    username: sanitized.username ?? input.username,
-    bio: sanitized.bio,
-    avatarUrl: sanitized.avatarUrl,
-    email: input.email.toLowerCase(),
-  });
+  const currentUser = await userRepository.findById(userId);
+  if (!currentUser) {
+    const error = new Error("User not found.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
+
+  const emailChanged = currentUser.email.toLowerCase() !== input.email.toLowerCase();
+  const verificationToken = emailChanged ? generateResetToken() : null;
+  const sentAt = new Date();
+
+  const user = await userRepository.updateProfile(
+    userId,
+    {
+      ...input,
+      name: sanitized.name ?? input.name,
+      username: sanitized.username ?? input.username,
+      bio: sanitized.bio,
+      avatarUrl: sanitized.avatarUrl,
+      email: input.email.toLowerCase(),
+    },
+    verificationToken
+      ? {
+          hashedToken: verificationToken.hashed,
+          expiresAt: verificationToken.expiresAt,
+          sentAt,
+        }
+      : undefined,
+  );
+
+  if (verificationToken) {
+    try {
+      await sendVerificationEmail(user.email, verificationToken.raw, appUrl);
+    } catch (deliveryError) {
+      await userRepository.clearVerificationSentAt(userId, verificationToken.hashed);
+      console.error("Failed to send email-change verification:", deliveryError);
+      const error = new Error("Your email was changed, but the verification email could not be sent. Use Resend verification email in Account settings.");
+      Object.assign(error, { status: 503 });
+      throw error;
+    }
+  }
 
   await auditLog({
     userId,

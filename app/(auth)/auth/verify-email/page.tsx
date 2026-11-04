@@ -8,15 +8,26 @@ import { apiFetcher } from "@/lib/client/fetcher";
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const email = searchParams.get("email");
+  const initialEmail = searchParams.get("email") ?? "";
+  const [email, setEmail] = useState(initialEmail);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
     token ? "loading" : "idle",
   );
   const [message, setMessage] = useState(
-    email
-      ? `We sent a verification link to ${email}.`
-      : "Check your inbox for the verification link.",
+    initialEmail
+      ? "If this address can be used to create an account, we’ll send a verification link. If you already have a Studenv account, sign in with your existing password or reset it. Creating an account again never changes your existing password or profile."
+      : "Enter your email address to request a verification link.",
   );
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (!countdown) return;
+    const timer = window.setInterval(() => {
+      setCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [countdown]);
 
   useEffect(() => {
     if (!token) return;
@@ -24,13 +35,35 @@ function VerifyEmailContent() {
       try {
         await apiFetcher(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
         setStatus("done");
-        setMessage("Your email is verified. You can sign in now.");
+        setMessage("Your email has been verified successfully. You can now sign in to your account.");
       } catch (error) {
         setStatus("error");
-        setMessage((error as Error).message);
+        setMessage((error as Error).message || "This verification link is invalid or has expired. You can request a new one below.");
       }
     })();
   }, [token]);
+
+  async function handleResend() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || resending || countdown > 0) return;
+
+    setResending(true);
+    try {
+      await apiFetcher("/api/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      setMessage("If this address belongs to an account that needs verification, a link will be sent. If you requested one recently, wait 60 seconds before trying again. If you already have an account, sign in or reset your password.");
+      setCountdown(60);
+    } catch (error) {
+      const apiError = error as Error & { details?: { retryAfter?: number } };
+      const wait = apiError.details?.retryAfter;
+      if (wait) setCountdown(wait);
+      setMessage(apiError.message || "We couldn't send the email. Please try again shortly.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   return (
     <div className="simple-auth-page">
@@ -38,8 +71,40 @@ function VerifyEmailContent() {
         <div className="auth-title">
           Verify your <em>email</em>
         </div>
-        <p className="auth-sub">{status === "loading" ? "Verifying..." : message}</p>
-        <Link className="btn-primary" href="/auth/login">
+        <p className="auth-sub verify-email-message">{status === "loading" ? "Verifying your email address..." : message}</p>
+        {status !== "done" ? (
+          <div className="auth-fields">
+            <label className="field">
+              <span>Email address</span>
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <p className="field-hint verify-email-instructions">
+              If you receive a verification email, open its link. Check your Spam or Junk folder if it isn't in your inbox.
+            </p>
+            <p className="field-hint verify-email-instructions">
+              Verification links expire after 1 hour.
+            </p>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={handleResend}
+              disabled={!email.trim() || resending || countdown > 0}
+            >
+              {resending
+                ? "Sending..."
+                : countdown > 0
+                  ? `Resend available in ${countdown}s`
+                  : "Resend verification email"}
+            </button>
+          </div>
+        ) : null}
+        <Link className="btn-primary verify-email-signin" href="/auth/login">
           Go to Sign In
         </Link>
       </div>

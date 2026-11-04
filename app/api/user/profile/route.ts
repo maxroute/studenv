@@ -33,6 +33,7 @@ export async function PUT(request: NextRequest) {
       user.id,
       body,
       getRequestContext(request),
+      request.nextUrl.origin,
     );
     return apiSuccess(profile);
   } catch (error) {

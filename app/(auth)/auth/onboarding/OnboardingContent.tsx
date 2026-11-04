@@ -128,13 +128,16 @@ export function OnboardingContent({ initialProfile }: OnboardingContentProps) {
         />
       </div>
 
-      <div className="onboard-steps" aria-hidden="true">
+      <div className="onboard-progress" aria-label={`Profile completion: ${completionCount} of 3 fields completed`}>
+        <div className="onboard-progress-label">{completionCount} of 3 completed</div>
+        <div className="onboard-steps" aria-hidden="true">
         {[0, 1, 2].map((index) => (
           <span
             key={index}
             className={`step-dot ${index < completionCount ? "done" : ""}`}
           />
         ))}
+        </div>
       </div>
 
       <div className="onboard-card">
