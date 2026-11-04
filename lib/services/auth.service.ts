@@ -331,7 +331,7 @@ export async function resendVerificationEmail(email: string, appUrl?: string) {
   }
 
   try {
-    await sendVerificationEmail(user.email, verificationToken.raw);
+    await sendVerificationEmail(user.email, verificationToken.raw, appUrl);
   } catch (deliveryError) {
     await userRepository.clearVerificationSentAt(user.id, verificationToken.hashed);
     console.error("Failed to resend verification email:", deliveryError);
@@ -436,7 +436,7 @@ export async function updateProfile(
 
   if (verificationToken) {
     try {
-      await sendVerificationEmail(user.email, verificationToken.raw);
+      await sendVerificationEmail(user.email, verificationToken.raw, appUrl);
     } catch (deliveryError) {
       await userRepository.clearVerificationSentAt(userId, verificationToken.hashed);
       console.error("Failed to send email-change verification:", deliveryError);
