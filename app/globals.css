@@ -6599,3 +6599,14 @@ textarea {
 .auth-sub a:focus-visible {
   color: #ffd080;
 }
+
+
+/* Give the verification notice on sign-in clear separation between copy and action. */
+.auth-alert-verification p {
+  margin: 0 0 12px;
+}
+
+.auth-alert-verification .btn-primary {
+  display: inline-flex;
+  margin-top: 2px;
+}

@@ -14,9 +14,7 @@ function VerifyEmailContent() {
     token ? "loading" : "idle",
   );
   const [message, setMessage] = useState(
-    initialEmail
-      ? "If this address can be used to create an account, we’ll send a verification link. If you already have a Studenv account, sign in with your existing password or reset it. Creating an account again never changes your existing password or profile."
-      : "Enter your email address to request a verification link.",
+    "Enter your email to receive a verification link.",
   );
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -53,7 +51,7 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If this address belongs to an account that needs verification, a link will be sent. If you requested one recently, wait 60 seconds before trying again. If you already have an account, sign in or reset your password.");
+      setMessage("If your account needs verification, we'll send a new link.");
       setCountdown(60);
     } catch (error) {
       const apiError = error as Error & { details?: { retryAfter?: number } };
@@ -85,10 +83,7 @@ function VerifyEmailContent() {
               />
             </label>
             <p className="field-hint verify-email-instructions">
-              If you receive a verification email, open its link. Check your Spam or Junk folder if it isn't in your inbox.
-            </p>
-            <p className="field-hint verify-email-instructions">
-              Verification links expire after 1 hour.
+              Check your inbox or spam folder for the verification link.
             </p>
             <button
               className="btn-primary"

@@ -163,8 +163,8 @@ export function SigninContent() {
             </div>
           ) : null}
           {signinErrorCode === "email-not-verified" ? (
-            <div className="auth-alert" role="alert">
-              <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
+            <div className="auth-alert auth-alert-verification" role="alert">
+              <p>Please verify your email before signing in. Check your inbox or spam folder.</p>
               <button
                 className="btn-primary"
                 type="button"
