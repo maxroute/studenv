@@ -46,7 +46,28 @@ export default function SignupPage() {
         body: JSON.stringify(signupData),
       });
 
-      router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
+      // Authenticate with the submitted credentials rather than guessing
+      // whether the email already belongs to an account. This keeps the
+      // signup response generic and avoids account enumeration.
+      const result = await signIn("credentials", {
+        email: signupData.email,
+        password: signupData.password,
+        redirect: false,
+      });
+
+      if (!result || result.error) {
+        if (result?.code === "email-not-verified") {
+          router.push(`/auth/verify-email?email=${encodeURIComponent(signupData.email)}`);
+          return;
+        }
+
+        router.push(
+          `/auth/login?signupAttempt=1&email=${encodeURIComponent(signupData.email)}`,
+        );
+        return;
+      }
+
+      router.push("/dashboard");
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
