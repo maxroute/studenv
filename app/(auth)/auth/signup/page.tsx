@@ -19,6 +19,8 @@ export default function SignupPage() {
     confirmPassword: "",
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const strength = useMemo(() => {
     let score = 0;
@@ -185,17 +187,32 @@ export default function SignupPage() {
             </label>
             <label className="field">
               <span>Password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                maxLength={128}
-                required
-                value={form.password}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, password: event.target.value }))
-                }
-              />
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, password: event.target.value }))
+                  }
+                />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.5 10 7-.4 1-1.3 2.2-2.6 3.3M6.2 6.2C3.8 7.6 2.4 10 2 12c1 2.5 4.8 7 10 7 1.1 0 2.1-.2 3-.5" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              </div>
               <div className="pwd-strength">
                 <div
                   className="pwd-strength-fill"
@@ -209,17 +226,32 @@ export default function SignupPage() {
             </label>
             <label className="field">
               <span>Confirm password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                maxLength={128}
-                required
-                value={form.confirmPassword}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, confirmPassword: event.target.value }))
-                }
-              />
+              <div className="password-input-wrap">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  value={form.confirmPassword}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, confirmPassword: event.target.value }))
+                  }
+                />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  aria-pressed={showConfirmPassword}
+                >
+                  {showConfirmPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.5 10 7-.4 1-1.3 2.2-2.6 3.3M6.2 6.2C3.8 7.6 2.4 10 2 12c1 2.5 4.8 7 10 7 1.1 0 2.1-.2 3-.5" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              </div>
             </label>
           </div>
           <button
