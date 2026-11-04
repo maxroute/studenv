@@ -222,31 +222,30 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
-              <div className="password-guide" aria-live="polite">
-                <div className="password-guide-heading">Password requirements</div>
-                <ul className="password-requirements">
-                  {passwordRequirements.map((requirement) => (
-                    <li
-                      className={requirement.met ? "password-requirement met" : "password-requirement"}
-                      key={requirement.label}
-                    >
-                      <span className="password-requirement-check" aria-hidden="true">
-                        {requirement.met ? "✓" : "○"}
-                      </span>
-                      <span>{requirement.label}</span>
-                      {requirement.detail && (
-                        <span className="password-requirement-detail">{requirement.detail}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <div className="password-strength-row">
+              {form.password.length > 0 && (
+                <div className="password-guide" aria-live="polite">
+                  <div className="password-guide-header">
+                    <span className="password-guide-heading">Password requirements</span>
+                    <span className="password-strength-label">{strengthLabel}</span>
+                  </div>
+                  <ul className="password-requirements">
+                    {passwordRequirements.map((requirement) => (
+                      <li
+                        className={requirement.met ? "password-requirement met" : "password-requirement"}
+                        key={requirement.label}
+                      >
+                        <span className="password-requirement-check" aria-hidden="true">
+                          {requirement.met ? "✓" : "○"}
+                        </span>
+                        <span>{requirement.label}{requirement.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
                   <div className="password-strength-track" aria-label={`Password strength: ${strengthLabel}`}>
                     <span style={{ width: `${strength * 25}%` }} />
                   </div>
-                  <span className="password-strength-label">{strengthLabel}</span>
                 </div>
-              </div>
+              )}
             </div>
             <div className="field">
               <label htmlFor="signup-confirm-password">Confirm password</label>
