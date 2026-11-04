@@ -271,7 +271,7 @@ export function LoginContent() {
               </button>
             )}
           </div>
-          <div className="auth-sub" style={{ marginTop: "1rem", fontSize: "11px", opacity: 0.6 }}>
+          <div className="auth-sub auth-browser-hint" style={{ fontSize: "11px", opacity: 0.6 }}>
             Brave user? If login fails, try disabling Shields or allowing cookies.
           </div>
           <div className="auth-sub">
