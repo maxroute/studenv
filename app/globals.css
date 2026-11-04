@@ -6504,3 +6504,93 @@ textarea {
   flex: 0 0 17px;
   pointer-events: none;
 }
+
+
+/* Live password creation guide */
+.password-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 2px;
+}
+
+.password-guide-heading {
+  color: var(--muted);
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.password-requirements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.password-requirement {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted2);
+  font-size: 11px;
+  line-height: 1.4;
+  transition: color 0.15s ease;
+}
+
+.password-requirement.met {
+  color: var(--amber);
+}
+
+.password-requirement-check {
+  flex: 0 0 13px;
+  color: var(--muted2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.password-requirement.met .password-requirement-check {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.password-requirement-detail {
+  color: inherit;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.password-strength-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.password-strength-track {
+  height: 3px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border2);
+}
+
+.password-strength-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--amber);
+  transition: width 0.18s ease;
+}
+
+.password-strength-label {
+  min-width: 36px;
+  color: var(--amber);
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 9px;
+  text-align: right;
+  text-transform: uppercase;
+}
