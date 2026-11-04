@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { publishAuthSyncEvent } from "@/lib/auth/auth-sync";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -32,6 +33,7 @@ function VerifyEmailContent() {
     void (async () => {
       try {
         await apiFetcher(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
+        publishAuthSyncEvent("email-verified");
         setStatus("done");
         setMessage("Your email has been verified successfully. You can now sign in to your account.");
       } catch (error) {

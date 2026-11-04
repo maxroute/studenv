@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { publishAuthSyncEvent } from "@/lib/auth/auth-sync";
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
@@ -22,6 +23,7 @@ function ResetPasswordContent() {
         method: "POST",
         body: JSON.stringify({ token, password, confirmPassword }),
       });
+      publishAuthSyncEvent("password-reset");
       setDone(true);
       toast.success("Password reset complete.");
     } catch (error) {

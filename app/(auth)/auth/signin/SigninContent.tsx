@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { getAuthErrorMessage } from "@/lib/auth/error-message";
 import { toLocalAppPath } from "@/lib/auth/local-redirect";
 import { BrandLockup } from "@/components/ui/brand-logo";
+import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
 
 export function SigninContent() {
   const router = useRouter();
@@ -24,6 +25,18 @@ export function SigninContent() {
     () => getAuthErrorMessage(authError),
     [authError],
   );
+
+  useEffect(() => subscribeToAuthSync((event) => {
+    if (event === "email-verified") {
+      setLoginErrorCode(null);
+      toast.success("Email verified. You can sign in now.");
+    }
+
+    if (event === "password-reset") {
+      setPassword("");
+      toast.success("Password reset in another tab. Sign in with your new password.");
+    }
+  }), []);
 
   useEffect(() => {
     if (authErrorMessage) {

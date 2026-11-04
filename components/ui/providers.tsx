@@ -6,6 +6,18 @@ import { useEffect, type PropsWithChildren } from "react";
 import type { Session } from "next-auth";
 import { SWRConfig } from "swr";
 import { useRouter } from "next/navigation";
+import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
+
+function AuthCrossTabSync() {
+  const router = useRouter();
+
+  useEffect(() => subscribeToAuthSync(() => {
+    // Re-fetch server-rendered state after an auth action completes in another tab.
+    router.refresh();
+  }), [router]);
+
+  return null;
+}
 
 function MobileAppInitializer() {
   const router = useRouter();
@@ -84,6 +96,7 @@ export function Providers({ children, session }: PropsWithChildren<{ session?: S
       refetchOnWindowFocus={false}
       refetchWhenOffline={false}
     >
+      <AuthCrossTabSync />
       <MobileAppInitializer />
       <SWRConfig
         value={{
