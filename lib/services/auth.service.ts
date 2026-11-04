@@ -406,14 +406,46 @@ export async function updateProfile(
     throw error;
   }
 
-  const user = await userRepository.updateProfile(userId, {
-    ...input,
-    name: sanitized.name ?? input.name,
-    username: sanitized.username ?? input.username,
-    bio: sanitized.bio,
-    avatarUrl: sanitized.avatarUrl,
-    email: input.email.toLowerCase(),
-  });
+  const currentUser = await userRepository.findById(userId);
+  if (!currentUser) {
+    const error = new Error("User not found.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
+
+  const emailChanged = currentUser.email.toLowerCase() !== input.email.toLowerCase();
+  const verificationToken = emailChanged ? generateResetToken() : null;
+  const sentAt = new Date();
+
+  const user = await userRepository.updateProfile(
+    userId,
+    {
+      ...input,
+      name: sanitized.name ?? input.name,
+      username: sanitized.username ?? input.username,
+      bio: sanitized.bio,
+      avatarUrl: sanitized.avatarUrl,
+      email: input.email.toLowerCase(),
+    },
+    verificationToken
+      ? {
+          hashedToken: verificationToken.hashed,
+          expiresAt: verificationToken.expiresAt,
+          sentAt,
+        }
+      : undefined,
+  );
+
+  if (verificationToken) {
+    try {
+      await sendVerificationEmail(user.email, verificationToken.raw);
+    } catch (deliveryError) {
+      console.error("Failed to send email-change verification:", deliveryError);
+      const error = new Error("Your email was changed, but the verification email could not be sent. Use Resend verification email in Account settings.");
+      Object.assign(error, { status: 503 });
+      throw error;
+    }
+  }
 
   await auditLog({
     userId,
