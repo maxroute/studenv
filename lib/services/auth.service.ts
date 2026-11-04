@@ -175,16 +175,6 @@ export async function login(
 ) {
   const user = await userRepository.findByEmailForAuth(input.email);
   const userId = user?.id ?? `anon:${input.email.toLowerCase()}`;
-  const locked =
-    (user?.lockedUntil && user.lockedUntil > new Date()) ||
-    (context?.ip ? await isAccountLocked(userId, context.ip) : false);
-
-  if (locked) {
-    const error = new Error("Account temporarily locked. Try again later.");
-    Object.assign(error, { status: 429 });
-    throw error;
-  }
-
   const valid = await verifyPassword(input.password, user?.passwordHash);
 
   if (!user || !valid) {
@@ -199,6 +189,18 @@ export async function login(
 
     const error = new Error("Invalid email or password.");
     Object.assign(error, { status: 401 });
+    throw error;
+  }
+
+  // Only reveal lock status after the password is correct. This avoids
+  // exposing account state to someone who only knows an email address.
+  const locked =
+    (user.lockedUntil && user.lockedUntil > new Date()) ||
+    (context?.ip ? await isAccountLocked(userId, context.ip) : false);
+
+  if (locked) {
+    const error = new Error("Too many unsuccessful sign-in attempts. Please try again later.");
+    Object.assign(error, { status: 429 });
     throw error;
   }
 
