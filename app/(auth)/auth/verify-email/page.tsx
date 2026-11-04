@@ -11,15 +11,15 @@ function VerifyEmailContent() {
   const token = searchParams.get("token");
   const initialEmail = searchParams.get("email") ?? "";
   const [email, setEmail] = useState(initialEmail);
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
-    token ? "loading" : "idle",
-  );
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState(
-    "Enter your email to receive a verification link.",
+    token
+      ? "Click below to verify your email address."
+      : "Enter your email to receive a verification link.",
   );
   const [resending, setResending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const verificationAttemptedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!countdown) return;
@@ -29,22 +29,26 @@ function VerifyEmailContent() {
     return () => window.clearInterval(timer);
   }, [countdown]);
 
-  useEffect(() => {
-    if (!token || verificationAttemptedFor.current === token) return;
-    verificationAttemptedFor.current = token;
+  async function handleVerify() {
+    if (!token || verifying || status === "done") return;
 
-    void (async () => {
-      try {
-        await apiFetcher(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
-        publishAuthSyncEvent("email-verified");
-        setStatus("done");
-        setMessage("Your email has been verified successfully. You can now sign in to your account.");
-      } catch (error) {
-        setStatus("error");
-        setMessage((error as Error).message || "This verification link is invalid or has expired. You can request a new one below.");
-      }
-    })();
-  }, [token]);
+    setVerifying(true);
+    setStatus("loading");
+    try {
+      await apiFetcher("/api/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      });
+      publishAuthSyncEvent("email-verified");
+      setStatus("done");
+      setMessage("Your email has been verified. You can sign in now.");
+    } catch (error) {
+      setStatus("error");
+      setMessage((error as Error).message || "This verification link is invalid or expired.");
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   async function handleResend() {
     const normalizedEmail = email.trim();
@@ -74,8 +78,22 @@ function VerifyEmailContent() {
         <div className="auth-title">
           Verify your <em>email</em>
         </div>
-        <p className="auth-sub verify-email-message">{status === "loading" ? "Verifying your email address..." : message}</p>
-        {status !== "done" ? (
+        <p className="auth-sub verify-email-message">
+          {status === "loading" ? "Verifying your email address..." : message}
+        </p>
+
+        {status !== "done" && token && status !== "error" ? (
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={handleVerify}
+            disabled={verifying}
+          >
+            {verifying ? "Verifying..." : "Verify email address"}
+          </button>
+        ) : null}
+
+        {status !== "done" && (!token || status === "error") ? (
           <div className="auth-fields">
             <label className="field">
               <span>Email address</span>
@@ -104,14 +122,20 @@ function VerifyEmailContent() {
             </button>
           </div>
         ) : null}
-        <Link className="btn-primary verify-email-signin" href="/auth/signin" target="_self">
-          Go to Sign In
-        </Link>
+
+        {status === "done" ? (
+          <Link className="btn-primary verify-email-signin" href="/auth/signin" target="_self">
+            Go to Sign In
+          </Link>
+        ) : (
+          <Link className="verify-email-signin" href="/auth/signin" target="_self">
+            Back to Sign In
+          </Link>
+        )}
       </div>
     </div>
   );
 }
-
 export default function VerifyEmailPage() {
   return (
     <Suspense fallback={<div className="simple-auth-page" />}>
