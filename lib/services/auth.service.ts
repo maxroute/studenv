@@ -126,20 +126,19 @@ export async function signup(
 
   if (existing) {
     // Never replace an existing account's password or profile during signup.
-    // For an unverified account, safely resend the verification link subject
-    // to the same server-enforced cooldown. Verified accounts receive no link.
-    // The public response remains identical either way.
+    // A verified account should go straight to sign-in, not email verification.
+    if (existing.emailVerified) {
+      return { outcome: "existing_verified" as const };
+    }
+
+    // Existing unverified accounts stay on the verification flow.
     try {
       await resendVerificationEmailForUser(existing, appUrl);
     } catch (deliveryError) {
-      // Do not expose account existence through a different public status or
-      // message when delivery fails for an existing address.
       console.error("Could not resend verification during duplicate signup:", deliveryError);
     }
 
-    return {
-      message: "If this address can be used to create an account, we’ll send the next steps. If you already have a Studenv account, sign in or reset your password.",
-    };
+    return { outcome: "verification_required" as const };
   }
 
   const username = await generateUniqueUsername(
@@ -175,9 +174,7 @@ export async function signup(
     userAgent: context?.userAgent,
   });
 
-  return {
-    message: "If this address can be used to create an account, we’ll send the next steps. If you already have a Studenv account, sign in or reset your password.",
-  };
+  return { outcome: "created" as const };
 }
 
 export async function login(
