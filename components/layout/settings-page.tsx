@@ -176,7 +176,12 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
     try {
       await apiFetcher("/api/user/profile", {
         method: "PUT",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formData.name,
+          username: formData.username,
+          bio: formData.bio,
+          email: formData.email,
+        }),
       });
       toast.success("Profile updated!");
       onRefresh();
