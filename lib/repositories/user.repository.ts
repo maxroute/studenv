@@ -141,6 +141,13 @@ export async function claimVerificationResend(
   });
 }
 
+export async function clearVerificationSentAt(userId: string, hashedToken: string) {
+  return prisma.user.updateMany({
+    where: { id: userId, emailVerifyToken: hashedToken },
+    data: { emailVerifySentAt: null },
+  });
+}
+
 export async function storePasswordResetToken(
   userId: string,
   hashedToken: string,
