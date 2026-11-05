@@ -39,7 +39,7 @@ export async function GET(
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to load asset" },
+      { error: "Asset could not be loaded. Please try again shortly." },
       { status: error.status || 500 },
     );
   }
