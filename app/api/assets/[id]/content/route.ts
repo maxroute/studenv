@@ -195,7 +195,7 @@ export async function GET(
     return NextResponse.json({ error: "No media content available" }, { status: 404 });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to load media content" },
+      { error: "Media content could not be loaded. Please try again shortly." },
       { status: error.status || 500 },
     );
   }
