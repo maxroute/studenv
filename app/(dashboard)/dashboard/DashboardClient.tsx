@@ -61,13 +61,13 @@ function DashboardSkeleton() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-28 rounded-[10px] bg-[var(--surface)] border border-[var(--border)]"
+                className="h-28 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]"
               ></div>
             ))}
           </section>
           <aside className="space-y-4">
             <div className="h-4 w-20 bg-white/5 rounded"></div>
-            <div className="h-64 rounded-[14px] bg-[var(--surface)] border border-[var(--border)]"></div>
+            <div className="h-64 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]"></div>
           </aside>
         </div>
         <div aria-hidden="true" style={{ height: 40 }} />
@@ -140,7 +140,7 @@ export function DashboardClient() {
 
           <Link
             href="/dashboard/focus"
-            className="dashboard-focus-cta inline-flex items-center justify-center gap-2 rounded-[8px] bg-[var(--amber)] px-4 py-2.5 text-[13px] text-white transition hover:opacity-85"
+            className="dashboard-focus-cta inline-flex items-center justify-center gap-2 rounded-[8px] bg-[var(--amber)] px-4 py-2.5 text-[13px] text-[#0e0e0e] transition hover:opacity-85"
           >
             <PlayCircle className="h-4.5 w-4.5" />
             Start Focus Session
