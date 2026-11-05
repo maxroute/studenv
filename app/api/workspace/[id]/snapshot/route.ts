@@ -26,6 +26,7 @@ export async function POST(
       version: snapshot.version,
     });
   } catch (error: any) {
+    console.error("[workspace.snapshot] Failed to save snapshot:", error);
     return NextResponse.json(
       { error: "The workspace snapshot could not be saved. Please try again." },
       { status: error.status || 500 }
