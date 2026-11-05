@@ -2302,11 +2302,16 @@ textarea {
 
 .app-shell {
   display: grid;
+  height: 100vh;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+/* Shelf keeps its shell fixed while only the item grid scrolls. */
+.app-shell.shelf-shell {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
-  grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: 52px minmax(0, 1fr);
 }
 
 .topbar {
@@ -2773,13 +2778,11 @@ textarea {
 
 .app-main {
   min-width: 0;
-  min-height: 0;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
 }
 
-/* The Shelf owns its internal scroll regions instead of scrolling as a page. */
 .app-main.shelf-scroll-layout {
+  min-height: 0;
   height: 100%;
   overflow: hidden;
 }
@@ -2788,9 +2791,12 @@ textarea {
   display: grid;
   height: 100%;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.shelf-shell .dashboard-shell {
   min-height: 0;
   overflow: hidden;
-  grid-template-columns: minmax(0, 1fr) 300px;
 }
 
 .dashboard-home-hero {
@@ -2819,15 +2825,20 @@ textarea {
 .main {
   display: flex;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   background: var(--bg);
 }
 
+.shelf-shell .main {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 .main-header {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -3060,14 +3071,17 @@ textarea {
 
 .cards-grid {
   display: grid;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
   gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   align-content: start;
   padding: 20px 24px;
+}
+
+.shelf-shell .cards-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .cards-grid.list-view {
@@ -3392,12 +3406,15 @@ textarea {
 }
 
 .detail {
-  min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+.shelf-shell .detail {
+  min-height: 0;
 }
 
 .detail-close-btn {
