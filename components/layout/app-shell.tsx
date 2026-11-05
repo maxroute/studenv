@@ -1,7 +1,7 @@
 "use client";
 
 import type { PropsWithChildren } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { VideoPlayerOverlay } from "@/components/items/video-player-overlay";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -19,6 +19,16 @@ type AppShellProps = PropsWithChildren<{
 export function AppShell({ user, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isShelfRoute = usePathname() === "/shelf";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("shelf-scroll-locked", isShelfRoute);
+    document.body.classList.toggle("shelf-scroll-locked", isShelfRoute);
+
+    return () => {
+      document.documentElement.classList.remove("shelf-scroll-locked");
+      document.body.classList.remove("shelf-scroll-locked");
+    };
+  }, [isShelfRoute]);
 
   return (
     <div className={`app-shell${isShelfRoute ? " shelf-shell" : ""}`}>
