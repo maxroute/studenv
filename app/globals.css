@@ -31,6 +31,7 @@
 html,
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -325,7 +326,9 @@ textarea {
   left: 50%;
   width: min(1320px, calc(100vw - 48px));
   height: calc(100vh - 48px);
+  height: calc(100dvh - 48px);
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 390px);
   padding: 24px;
   border-radius: 30px;
@@ -417,6 +420,7 @@ textarea {
   flex: 1 1 auto;
   overflow: hidden;
   min-height: min(70vh, 760px);
+  min-height: min(70dvh, 760px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   background:
@@ -437,6 +441,7 @@ textarea {
 
 .playback-card.expanded .playback-stage-frame {
   min-height: clamp(320px, 54vh, 720px);
+  min-height: clamp(320px, 54dvh, 720px);
 }
 
 .playback-finish-kicker {
@@ -2192,6 +2197,7 @@ textarea {
 .simple-auth-page {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
   padding: 24px;
@@ -2210,6 +2216,7 @@ textarea {
 .onboard-wrap {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
   padding: 24px;
@@ -2303,6 +2310,7 @@ textarea {
 .app-shell {
   display: grid;
   height: 100vh;
+  height: 100dvh;
   grid-template-columns: 220px minmax(0, 1fr);
   grid-template-rows: 52px minmax(0, 1fr);
 }
@@ -5067,7 +5075,9 @@ textarea {
     top: 16px;
     width: min(1320px, calc(100vw - 32px));
     height: calc(100vh - 32px);
+    height: calc(100dvh - 32px);
     max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
     grid-template-columns: 1fr;
     gap: 18px;
     padding: 18px;
@@ -5075,6 +5085,7 @@ textarea {
 
   .playback-stage-frame {
     min-height: 48vh;
+    min-height: 48dvh;
   }
 
   .playback-card.expanded .playback-stage-column {
@@ -5286,7 +5297,9 @@ textarea {
     right: 8px;
     width: auto;
     height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
     max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
     padding: 16px;
     transform: none;
   }
@@ -5369,6 +5382,7 @@ textarea {
 
   .playback-stage-frame {
     min-height: 36vh;
+    min-height: 36dvh;
   }
 
   .playback-finish-card h3 {
