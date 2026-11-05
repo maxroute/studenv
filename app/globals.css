@@ -6618,3 +6618,53 @@ textarea {
   display: inline-flex;
   margin-top: 2px;
 }
+
+/* Shelf scroll ownership: keep the viewport shell fixed and scroll only the item grid. */
+.app-shell.shelf-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+html.shelf-scroll-locked,
+body.shelf-scroll-locked {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.app-main.shelf-scroll-layout {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shelf-shell .dashboard-shell {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shelf-shell .main {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shelf-shell .main-header {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.shelf-shell .cards-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  grid-auto-rows: max-content;
+}
+
+.shelf-shell .detail {
+  min-height: 0;
+}
+
