@@ -17,7 +17,7 @@ function VerifyEmailContent() {
     token
       ? "Click below to verify your email address."
       : initialEmail
-        ? "We sent a verification link to " + initialEmail + ". Check your inbox and spam folder. The link expires in 1 hour."
+        ? "If your account still needs verification, check " + initialEmail + " for a verification link. Check your spam folder too. Links expire after 1 hour; if you requested one recently, your previous link may still be active."
         : "Enter the email address you used to create your account to request a new verification link.",
   );
   const [resending, setResending] = useState(false);
