@@ -6685,3 +6685,51 @@ body.shelf-scroll-locked {
   min-height: 0;
 }
 
+
+
+/* Dashboard visual alignment option B: Shelf-inspired styling, original page layout retained. */
+.dashboard-home {
+  color: var(--text);
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+.dashboard-home-title {
+  letter-spacing: -0.035em;
+}
+
+.dashboard-stat-card,
+.dashboard-session-card,
+.dashboard-up-next-card {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
+}
+
+.dashboard-stat-card {
+  border-radius: 12px;
+}
+
+.dashboard-session-card {
+  border-radius: 8px;
+}
+
+.dashboard-up-next-card {
+  border-radius: 12px;
+}
+
+.dashboard-home .dashboard-focus-cta,
+.dashboard-up-next-card > a {
+  border-radius: 6px;
+  background: var(--amber);
+  color: #0e0e0e;
+}
+
+.dashboard-home .dashboard-focus-cta:hover,
+.dashboard-up-next-card > a:hover {
+  filter: brightness(0.95);
+}
+
+.dashboard-home section > div:first-child,
+.dashboard-home aside > div:first-child {
+  font-family: var(--font-dm-mono), monospace;
+}
