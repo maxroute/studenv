@@ -9,6 +9,7 @@ import { getAuthErrorMessage } from "@/lib/auth/error-message";
 import { toLocalAppPath } from "@/lib/auth/local-redirect";
 import { BrandLockup } from "@/components/ui/brand-logo";
 import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
+import { apiFetcher } from "@/lib/client/fetcher";
 
 export function SigninContent() {
   const router = useRouter();
@@ -92,28 +93,26 @@ export function SigninContent() {
 
     setResendingVerification(true);
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      await apiFetcher("/api/auth/resend-verification", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || "We couldn't send the verification email. Please try again shortly.");
-      }
-
       setVerificationResendCooldown(60);
       toast.success(
-        "If your account needs verification, we will send a link. Recent requests may take a minute.",
+        "If this account needs verification, a new link will be sent. Check your inbox and spam folder; recent requests may take a minute.",
       );
     } catch (error) {
-      toast.error((error as Error).message);
+      const apiError = error as Error & { details?: { reset?: number } };
+      const resetAt = apiError.details?.reset;
+      if (resetAt) {
+        setVerificationResendCooldown(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)));
+      }
+      toast.error(apiError.message || "We could not process the request. Please try again shortly.");
     } finally {
       setResendingVerification(false);
     }
   }
-
   return (
     <div className="auth-wrap">
       <div className="auth-left">

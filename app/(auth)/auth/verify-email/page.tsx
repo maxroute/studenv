@@ -16,7 +16,9 @@ function VerifyEmailContent() {
   const [message, setMessage] = useState(
     token
       ? "Click below to verify your email address."
-      : "Enter your email to receive a verification link.",
+      : initialEmail
+        ? "We sent a verification link to " + initialEmail + ". Check your inbox and spam folder. The link expires in 1 hour."
+        : "Enter the email address you used to create your account to request a new verification link.",
   );
   const [resending, setResending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -82,13 +84,13 @@ function VerifyEmailContent() {
         method: "POST",
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      setMessage("If your account needs verification, we'll send a new link.");
+      setMessage("If this address belongs to an unverified account, a new verification link will be sent. Check your inbox and spam folder. If you requested a link recently, wait for the cooldown to finish.");
       setCountdown(60);
     } catch (error) {
-      const apiError = error as Error & { details?: { retryAfter?: number } };
-      const wait = apiError.details?.retryAfter;
-      if (wait) setCountdown(wait);
-      setMessage(apiError.message || "We couldn't send the email. Please try again shortly.");
+      const apiError = error as Error & { details?: { reset?: number } };
+      const resetAt = apiError.details?.reset;
+      if (resetAt) setCountdown(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)));
+      setMessage(apiError.message || "We could not process your request. Please try again shortly.");
     } finally {
       setResending(false);
     }
@@ -98,7 +100,7 @@ function VerifyEmailContent() {
     <div className="simple-auth-page">
       <div className="simple-auth-card">
         <div className="auth-title">
-          Verify your <em>email</em>
+          {status === "error" ? <>Link <em>expired</em></> : <>Verify your <em>email</em></>}
         </div>
         <p className="auth-sub verify-email-message">
           {status === "loading" ? "Verifying your email address..." : message}
@@ -122,13 +124,16 @@ function VerifyEmailContent() {
               <input
                 type="email"
                 autoComplete="email"
+                required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@example.com"
               />
             </label>
             <p className="field-hint verify-email-instructions">
-              Enter your email to request another link. Check your inbox or spam folder.
+              {status === "error"
+                ? "This link is no longer valid. Enter the same email address you used to create your account, and we will help you request a fresh link."
+                : "Enter your email to request another link. Check your inbox or spam folder."}
             </p>
             <button
               className="btn-primary"
@@ -150,7 +155,7 @@ function VerifyEmailContent() {
             Go to Sign In
           </Link>
         ) : (
-          <Link className="verify-email-signin" href="/auth/signin" target="_self">
+          <Link className="verify-email-signin" href={email ? "/auth/signin?email=" + encodeURIComponent(email) : "/auth/signin"} target="_self">
             Back to Sign In
           </Link>
         )}
