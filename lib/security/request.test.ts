@@ -28,6 +28,30 @@ test("unexpected server exceptions return a generic response", (t) => {
   assert.equal(result.details, undefined);
 });
 
+test("Next.js dynamic usage signals are not logged as application failures", (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const result = getErrorResponse(
+    Object.assign(new Error("Dynamic server usage: Route /api/assets used headers"), {
+      digest: "DYNAMIC_SERVER_USAGE",
+    }),
+  );
+
+  assert.equal(result.status, 500);
+  assert.equal(result.message, "Something went wrong. Please try again shortly.");
+  assert.equal(result.details, undefined);
+  assert.equal(log.mock.callCount(), 0);
+});
+
+test("unknown server errors are still logged", (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const error = new Error("Unexpected service failure");
+
+  getErrorResponse(error);
+
+  assert.equal(log.mock.callCount(), 1);
+  assert.equal(log.mock.calls[0].arguments[1], error);
+});
+
 test("known validation errors retain safe field-level feedback", () => {
   const result = getErrorResponse(
     new ValidationHttpError("Validation failed.", 400, {
