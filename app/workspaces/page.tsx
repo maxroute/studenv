@@ -7,7 +7,7 @@ export default async function WorkspaceIndexPage() {
   const session = await auth();
   
   if (!session?.user?.id) {
-    redirect("/auth/login");
+    redirect("/auth/signin");
   }
   
   const latestWorkspace = await prisma.workspace.findFirst({

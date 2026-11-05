@@ -57,7 +57,8 @@ export async function processIngestion(jobId: string) {
     await assetService.updateAssetStatus(assetId, "ready");
 
   } catch (error: any) {
-    await jobService.failJob(jobId, error.message);
+    console.error("[ingest] Background job failed:", error);
+    await jobService.failJob(jobId, "Processing failed. Please try again.");
     await assetService.updateAssetStatus(assetId, "failed");
   }
 }

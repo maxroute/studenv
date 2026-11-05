@@ -42,7 +42,7 @@ export default function SignupPage() {
       });
 
       if (loginRes?.error) {
-        router.push("/login?registered=true");
+        router.push("/auth/signin?registered=true");
       } else {
         router.push("/dashboard");
       }
@@ -51,10 +51,6 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function doGoogleLogin() {
-    await signIn("google", { callbackUrl: "/dashboard" });
   }
 
   return (
@@ -109,7 +105,7 @@ export default function SignupPage() {
             <div className="auth-title">Create your <em>vault.</em></div>
             <div className="auth-sub" style={{ marginTop: "8px" }}>
               Already have an account?{" "}
-              <Link href="/login" style={{ color: "var(--amber)", textDecoration: "none" }}>
+              <Link href="/auth/signin" style={{ color: "var(--amber)", textDecoration: "none" }}>
                 Sign in
               </Link>
             </div>
@@ -156,9 +152,6 @@ export default function SignupPage() {
 
           <div className="auth-divider">or sign up with</div>
           <div className="social-btns">
-            <button type="button" className="social-btn" onClick={doGoogleLogin}>
-              <span className="social-icon">G</span> Google
-            </button>
             <button type="button" className="social-btn">
               <span className="social-icon">𝕏</span> Twitter/X
             </button>

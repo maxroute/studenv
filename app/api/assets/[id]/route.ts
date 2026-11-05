@@ -38,8 +38,9 @@ export async function GET(
       contentUrl,
     });
   } catch (error: any) {
+    console.error("[assets.get] Failed to load asset:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load asset" },
+      { error: "Asset could not be loaded. Please try again shortly." },
       { status: error.status || 500 },
     );
   }

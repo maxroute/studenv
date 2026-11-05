@@ -26,6 +26,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("[AI Ingest Error]", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "We could not process this source right now. Please try again shortly." }, { status: 500 });
   }
 }

@@ -25,7 +25,7 @@ export async function GET(
       status: job.status,
       jobType: job.jobType,
       targetRevisionId: job.targetRevisionId,
-      errorMessage: job.errorMessage,
+      errorMessage: job.status === "failed" ? "Export failed. Please try again." : null,
     });
   } catch (error) {
     const err = getErrorResponse(error);

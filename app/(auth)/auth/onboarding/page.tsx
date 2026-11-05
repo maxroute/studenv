@@ -12,7 +12,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const session = await auth();
 
   if (!session?.user?.id) {
-    redirect("/auth/login?callbackUrl=/auth/onboarding");
+    redirect("/auth/signin?callbackUrl=/auth/onboarding");
   }
 
   const emailParam = searchParams?.email;

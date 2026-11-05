@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (process.env.NODE_ENV !== "development") {
+    return new NextResponse(null, { status: 404 });
+  }
   try {
     console.log("Programmatic dev-db-generate triggered with scheduled process exit.");
     
@@ -28,7 +31,7 @@ export async function GET() {
     console.error("Scheduled generation trigger failed:", error);
     return NextResponse.json({
       success: false,
-      error: error?.message || "Unknown error occurred"
+      error: "Client generation could not be scheduled."
     }, { status: 500 });
   }
 }

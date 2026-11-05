@@ -81,6 +81,6 @@ export async function GET(
     return NextResponse.json({ results });
   } catch (error: any) {
     console.error("Search API error", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Workspace search is temporarily unavailable. Please try again." }, { status: 500 });
   }
 }

@@ -36,6 +36,6 @@ export async function POST(
     return NextResponse.json({ jobId: job.id, status: job.status });
   } catch (error: any) {
     console.error("Export API error", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "The export could not be started. Please try again shortly." }, { status: 500 });
   }
 }

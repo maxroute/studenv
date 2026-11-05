@@ -1568,11 +1568,6 @@ textarea {
   animation: spin 0.9s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .auth-wrap {
   display: grid;
@@ -2112,7 +2107,7 @@ textarea {
   line-height: 1.5;
 }
 
-.signup-login-notice {
+.signup-signin-notice {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface2);
@@ -2121,20 +2116,20 @@ textarea {
   line-height: 1.6;
 }
 
-.signup-login-notice strong {
+.signup-signin-notice strong {
   display: block;
   margin-bottom: 5px;
   font-size: 14px;
   font-weight: 650;
 }
 
-.signup-login-notice p {
+.signup-signin-notice p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.signup-login-notice a {
+.signup-signin-notice a {
   color: var(--text);
   font-weight: 600;
   text-decoration: underline;
@@ -2180,56 +2175,10 @@ textarea {
   color: var(--text);
 }
 
-.social-btn-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.social-btn-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.social-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border2);
-  border-top-color: var(--amber);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.social-btn-cancel {
-  width: 100%;
-  border: 1px solid rgba(224, 90, 75, 0.3);
-  border-radius: 6px;
-  background: rgba(224, 90, 75, 0.08);
-  padding: 8px 16px;
-  color: #f6b1a6;
-  font-size: 13px;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.social-btn-cancel:hover {
-  border-color: rgba(224, 90, 75, 0.5);
-  background: rgba(224, 90, 75, 0.15);
-  color: #ffd4cc;
 }
 
 .simple-auth-page {
@@ -5232,6 +5181,41 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  /* Match sign-up horizontal sizing while fitting sign-in into the mobile viewport. */
+  .auth-wrap:not(.auth-wrap-signup) {
+    position: fixed;
+    inset: 0;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-right {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: clamp(12px, 2.5dvh, 20px) clamp(24px, 11.2vw, 44px);
+  }
+
+  .auth-right-signup {
+    padding-right: clamp(24px, 11.2vw, 44px);
+    padding-left: clamp(24px, 11.2vw, 44px);
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-form {
+    gap: clamp(8px, 1.35dvh, 12px);
+  }
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-fields {
+    gap: clamp(8px, 1.2dvh, 10px);
+  }
+
+
+  .auth-wrap:not(.auth-wrap-signup) .auth-divider {
+    line-height: 1;
+  }
+
   .auth-wrap,
   .interest-grid,
   .field-row,
@@ -6407,4 +6391,222 @@ textarea {
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+
+/* Password visibility controls shared by sign-in and sign-up. */
+.password-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrap input {
+  padding-right: 44px;
+}
+
+ .password-visibility-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 9px;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  opacity: 0.8;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.password-visibility-toggle:hover,
+.password-visibility-toggle:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.password-visibility-toggle:focus-visible {
+  box-shadow: 0 0 0 2px var(--amber);
+}
+
+.password-visibility-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-visibility-toggle svg {
+  display: block;
+  flex: 0 0 17px;
+  pointer-events: none;
+}
+
+
+/* Live password creation guide */
+.password-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 3px;
+}
+
+.password-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.password-guide-heading {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.password-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.password-requirement {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.password-requirement.met {
+  color: var(--amber);
+}
+
+.password-requirement-check {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.password-requirement.met .password-requirement-check {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.password-strength-label {
+  flex: 0 0 auto;
+  color: var(--amber);
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 10px;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.password-strength-track {
+  display: flex;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border2);
+}
+
+.password-strength-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--amber);
+  transition: width 0.18s ease;
+}
+
+
+/* Keep signup password guidance layout stable against shared form styles. */
+.auth-form-signup .field .password-guide-header {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.auth-form-signup .field .password-guide-heading {
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-width: 0;
+  color: var(--text) !important;
+  font-family: var(--font-dm-sans), sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.auth-form-signup .field .password-strength-label {
+  display: block !important;
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  color: var(--amber) !important;
+  text-align: right !important;
+}
+
+.auth-form-signup .field ul.password-requirements {
+  display: flex !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 7px !important;
+  grid-template-columns: none !important;
+}
+
+.auth-form-signup .field ul.password-requirements > li.password-requirement {
+  display: flex !important;
+  width: 100% !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+
+
+/* Auth cross-links use the accent by default and brighten on hover. */
+.auth-sub a {
+  color: var(--amber);
+}
+
+.auth-sub a:hover,
+.auth-sub a:focus-visible {
+  color: #ffd080;
+}
+
+
+/* Give the verification notice on sign-in clear separation between copy and action. */
+.auth-alert-verification p {
+  margin: 0 0 12px;
+}
+
+.auth-alert-verification .btn-primary {
+  display: inline-flex;
+  margin-top: 2px;
 }

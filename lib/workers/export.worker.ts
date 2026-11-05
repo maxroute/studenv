@@ -73,7 +73,7 @@ export async function processPdfSaveBack(jobId: string) {
   } catch (error: any) {
     console.error("Export error", error);
     await exportService.updateJobStatus(jobId, "failed" as ExportJobStatus, {
-      errorMessage: error.message,
+      errorMessage: "Export failed. Please try again." ,
     });
   }
 }

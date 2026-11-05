@@ -97,6 +97,7 @@ function createLimiter(limit: number, duration: `${number} s` | `${number} m` | 
 
 export const authRateLimiter = createLimiter(5, "15 m");
 export const passwordResetLimiter = createLimiter(3, "1 h");
+export const verificationResendLimiter = createLimiter(5, "15 m");
 export const apiRateLimiter = createLimiter(100, "1 m");
 export const searchRateLimiter = createLimiter(30, "1 m");
 export const extractRateLimiter = createLimiter(20, "1 m");

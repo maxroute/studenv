@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (process.env.NODE_ENV !== "development") {
+    return new NextResponse(null, { status: 404 });
+  }
   try {
     const sessions = await prisma.focusSession.findMany({
       orderBy: { createdAt: "desc" },
@@ -16,7 +19,7 @@ export async function GET() {
   } catch (error: any) {
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: "Database diagnostic failed."
     }, { status: 500 });
   }
 }

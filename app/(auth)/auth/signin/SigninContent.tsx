@@ -8,16 +8,19 @@ import toast from "react-hot-toast";
 import { getAuthErrorMessage } from "@/lib/auth/error-message";
 import { toLocalAppPath } from "@/lib/auth/local-redirect";
 import { BrandLockup } from "@/components/ui/brand-logo";
+import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
+import { apiFetcher } from "@/lib/client/fetcher";
 
-export function LoginContent() {
+export function SigninContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [loginErrorCode, setLoginErrorCode] = useState<string | null>(null);
+  const [signinErrorCode, setLoginErrorCode] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationResendCooldown, setVerificationResendCooldown] = useState(0);
   const callbackUrl = toLocalAppPath(searchParams.get("callbackUrl"), "/dashboard");
   const authError = searchParams.get("error");
   const authErrorMessage = useMemo(
@@ -25,25 +28,33 @@ export function LoginContent() {
     [authError],
   );
 
+  useEffect(() => subscribeToAuthSync((event) => {
+    if (event === "email-verified") {
+      setLoginErrorCode(null);
+      toast.success("Email verified. You can sign in now.");
+    }
+
+    if (event === "password-reset") {
+      setPassword("");
+      toast.success("Password reset in another tab. Sign in with your new password.");
+    }
+  }), []);
+
+  useEffect(() => {
+    if (verificationResendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setVerificationResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [verificationResendCooldown]);
+
   useEffect(() => {
     if (authErrorMessage) {
       toast.error(authErrorMessage);
     }
   }, [authErrorMessage]);
 
-  useEffect(() => {
-    const isDesktop =
-      typeof window !== "undefined" &&
-      (window.navigator.userAgent.includes("Electron") ||
-        document.documentElement.dataset.desktopApp === "true");
-
-    if (!isDesktop && searchParams.get("desktopSignIn") === "true") {
-      setGoogleLoading(true);
-      void signIn("google", { callbackUrl: "/auth/desktop-callback" });
-    }
-  }, [searchParams]);
-
-  async function handleLogin() {
+  async function handleSignin() {
     try {
       setLoading(true);
       const result = await signIn("credentials", {
@@ -78,64 +89,30 @@ export function LoginContent() {
   }
 
   async function handleResendVerification() {
-    if (!email.trim() || resendingVerification) return;
+    if (!email.trim() || resendingVerification || verificationResendCooldown > 0) return;
 
     setResendingVerification(true);
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      await apiFetcher("/api/auth/resend-verification", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || "We couldn't send the verification email. Please try again shortly.");
-      }
-
+      setVerificationResendCooldown(60);
       toast.success(
-        "If your account still needs verification, a new link will be sent. Check your inbox.",
+        "If this account needs verification, a new link will be sent. Check your inbox and spam folder; recent requests may take a minute.",
       );
     } catch (error) {
-      toast.error((error as Error).message);
+      const apiError = error as Error & { details?: { reset?: number } };
+      const resetAt = apiError.details?.reset;
+      if (resetAt) {
+        setVerificationResendCooldown(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)));
+      }
+      toast.error(apiError.message || "We could not process the request. Please try again shortly.");
     } finally {
       setResendingVerification(false);
     }
   }
-
-  function handleGoogleSignIn() {
-    setGoogleLoading(true);
-    const isDesktop =
-      typeof window !== "undefined" &&
-      (window.navigator.userAgent.includes("Electron") ||
-        document.documentElement.dataset.desktopApp === "true");
-
-    const isMobileApp =
-      typeof window !== "undefined" &&
-      (window as any).Capacitor;
-
-    if (isMobileApp) {
-      const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/login?desktopSignIn=true`;
-      const Browser = (window as any).Capacitor?.Plugins?.Browser;
-      if (Browser) {
-        Browser.open({ url: loginUrl });
-      } else {
-        window.open(loginUrl, "_blank");
-      }
-    } else if (isDesktop) {
-      const websiteUrl = window.location.origin;
-      const loginUrl = `${websiteUrl}/auth/login?desktopSignIn=true`;
-      window.open(loginUrl, "_blank");
-    } else {
-      void signIn("google", { callbackUrl: toLocalAppPath(callbackUrl, "/dashboard") });
-    }
-  }
-
-  function cancelGoogleSignIn() {
-    setGoogleLoading(false);
-  }
-
   return (
     <div className="auth-wrap">
       <div className="auth-left">
@@ -193,9 +170,19 @@ export function LoginContent() {
           <div className="auth-sub">
             New here? <Link href="/auth/signup">Create your account</Link>
           </div>
+          {searchParams.get("verified") === "1" ? (
+            <div className="auth-success" role="status">
+              Your email has been verified. You can now sign in.
+            </div>
+          ) : null}
+          {searchParams.get("reset") === "1" ? (
+            <div className="auth-success" role="status">
+              Your password has been reset. Sign in with your new password.
+            </div>
+          ) : null}
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
           {searchParams.get("signup") === "account-exists" ? (
-            <div className="signup-login-notice" role="status">
+            <div className="signup-signin-notice" role="status">
               <strong>Couldn't complete sign-up?</strong>
               <p>If you already have an account, try signing in with this email.</p>
               <p>
@@ -207,16 +194,16 @@ export function LoginContent() {
               </p>
             </div>
           ) : null}
-          {loginErrorCode === "email-not-verified" ? (
-            <div className="auth-alert" role="alert">
-              <p>Please verify your email before signing in. Check your inbox, including your Spam or Junk folder.</p>
+          {signinErrorCode === "email-not-verified" ? (
+            <div className="auth-alert auth-alert-verification" role="alert">
+              <p>Please verify your email before signing in. Check your inbox or spam folder.</p>
               <button
                 className="btn-primary"
                 type="button"
                 onClick={handleResendVerification}
-                disabled={!email.trim() || resendingVerification}
+                disabled={!email.trim() || resendingVerification || verificationResendCooldown > 0}
               >
-                {resendingVerification ? "Sending..." : "Resend verification email"}
+                {resendingVerification ? "Sending..." : verificationResendCooldown > 0 ? `Try again in ${verificationResendCooldown}s` : "Resend verification email"}
               </button>
             </div>
           ) : null}
@@ -225,55 +212,40 @@ export function LoginContent() {
               <span>Email</span>
               <input value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
+            <div className="field">
+              <label htmlFor="signin-password">Password</label>
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="signin-password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.5 10 7-.4 1-1.3 2.2-2.6 3.3M6.2 6.2C3.8 7.6 2.4 10 2 12c1 2.5 4.8 7 10 7 1.1 0 2.1-.2 3-.5" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
           <button
             className="btn-primary"
             type="button"
-            onClick={handleLogin}
-            disabled={loading || googleLoading}
+            onClick={handleSignin}
+            disabled={loading}
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
-          <div className="auth-divider">or</div>
-          <div className="social-btns">
-            {googleLoading ? (
-              <div className="social-btn-group">
-                <button
-                  className="social-btn social-btn-loading"
-                  type="button"
-                  disabled
-                >
-                  <span className="social-spinner" /> Connecting to Google...
-                </button>
-                <button
-                  className="social-btn-cancel"
-                  type="button"
-                  onClick={cancelGoogleSignIn}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                className="social-btn"
-                type="button"
-                onClick={handleGoogleSignIn}
-              >
-                Continue with Google
-              </button>
-            )}
-          </div>
-          <div className="auth-sub" style={{ marginTop: "1rem", fontSize: "11px", opacity: 0.6 }}>
-            Brave user? If login fails, try disabling Shields or allowing cookies.
-          </div>
           <div className="auth-sub">
             <Link href="/auth/forgot-password">Forgot password?</Link>
           </div>

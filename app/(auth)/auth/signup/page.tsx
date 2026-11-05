@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
@@ -19,15 +18,25 @@ export default function SignupPage() {
     confirmPassword: "",
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const strength = useMemo(() => {
-    let score = 0;
-    if (form.password.length >= 8) score += 1;
-    if (/[A-Z]/.test(form.password)) score += 1;
-    if (/[0-9]/.test(form.password)) score += 1;
-    if (/[^A-Za-z0-9]/.test(form.password)) score += 1;
-    return score;
-  }, [form.password]);
+  const passwordRequirements = useMemo(
+    () => [
+      { label: "At least 8 characters", detail: "", met: form.password.length >= 8 },
+      { label: "Uppercase", detail: "(A–Z)", met: /[A-Z]/.test(form.password) },
+      { label: "Number", detail: "(0–9)", met: /[0-9]/.test(form.password) },
+      {
+        label: "Special character",
+        detail: "(!@#$...)",
+        met: /[^A-Za-z0-9\s]/.test(form.password),
+      },
+    ],
+    [form.password],
+  );
+
+  const strength = passwordRequirements.filter((requirement) => requirement.met).length;
+  const strengthLabel = strength <= 1 ? "Weak" : strength <= 3 ? "Fair" : "Strong";
 
   async function handleSignup() {
     if (loading) return;
@@ -51,7 +60,7 @@ export default function SignupPage() {
 
       if (result.outcome === "existing_verified") {
         router.push(
-          `/auth/login?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
+          `/auth/signin?email=${encodeURIComponent(signupData.email)}&signup=account-exists`,
         );
         return;
       }
@@ -144,7 +153,7 @@ export default function SignupPage() {
             Create your <em>account</em>
           </div>
           <div className="auth-sub">
-            Already have one? <Link href="/auth/login">Sign in</Link>
+            Already have one? <Link href="/auth/signin">Sign in</Link>
           </div>
           <div className="auth-fields">
             <div className="field-row">
@@ -183,44 +192,111 @@ export default function SignupPage() {
                 }
               />
             </label>
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                maxLength={128}
-                required
-                value={form.password}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, password: event.target.value }))
-                }
-              />
-              <div className="pwd-strength">
-                <div
-                  className="pwd-strength-fill"
-                  style={{
-                    width: `${strength * 25}%`,
-                    background:
-                      strength < 2 ? "#e05a4b" : strength < 4 ? "#f5a623" : "#5abf7a",
-                  }}
+            <div className="field">
+              <label htmlFor="signup-password">Password</label>
+              <div className="password-input-wrap">
+                <input
+                  id="signup-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, password: event.target.value }))
+                  }
                 />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.5 10 7-.4 1-1.3 2.2-2.6 3.3M6.2 6.2C3.8 7.6 2.4 10 2 12c1 2.5 4.8 7 10 7 1.1 0 2.1-.2 3-.5" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
               </div>
-            </label>
-            <label className="field">
-              <span>Confirm password</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                maxLength={128}
-                required
-                value={form.confirmPassword}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, confirmPassword: event.target.value }))
-                }
-              />
-            </label>
+              {form.password.length > 0 && (
+                <div className="password-guide" aria-live="polite">
+                  <div
+                    className="password-guide-header"
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <span className="password-guide-heading">Password requirements</span>
+                    <span className="password-strength-label">{strengthLabel}</span>
+                  </div>
+                  <ul
+                    className="password-requirements"
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "7px",
+                      margin: 0,
+                      padding: 0,
+                      listStyle: "none",
+                    }}
+                  >
+                    {passwordRequirements.map((requirement) => (
+                      <li
+                        className={requirement.met ? "password-requirement met" : "password-requirement"}
+                        key={requirement.label}
+                      >
+                        <span className="password-requirement-check" aria-hidden="true">
+                          {requirement.met ? "✓" : "○"}
+                        </span>
+                        <span>{requirement.label}{requirement.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="password-strength-track" aria-label={`Password strength: ${strengthLabel}`}>
+                    <span style={{ width: `${strength * 25}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="field">
+              <label htmlFor="signup-confirm-password">Confirm password</label>
+              <div className="password-input-wrap">
+                <input
+                  id="signup-confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  value={form.confirmPassword}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, confirmPassword: event.target.value }))
+                  }
+                />
+                <button
+                  className="password-visibility-toggle"
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  aria-pressed={showConfirmPassword}
+                >
+                  {showConfirmPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.5 10 7-.4 1-1.3 2.2-2.6 3.3M6.2 6.2C3.8 7.6 2.4 10 2 12c1 2.5 4.8 7 10 7 1.1 0 2.1-.2 3-.5" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
           <button
             className="btn-primary"
@@ -230,12 +306,6 @@ export default function SignupPage() {
           >
             {loading ? "Creating..." : "Create Account"}
           </button>
-          <div className="auth-divider">or</div>
-          <div className="social-btns">
-            <button className="social-btn" type="button" onClick={() => signIn("google")}>
-              Continue with Google
-            </button>
-          </div>
         </div>
       </div>
     </div>
