@@ -30,6 +30,15 @@ function isSensitiveErrorMessage(message: string) {
   );
 }
 
+function isNextDynamicUsageError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+
+  return (
+    "digest" in error &&
+    (error as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE"
+  );
+}
+
 export function getErrorResponse(error: unknown) {
   const err =
     error && typeof error === "object"
@@ -63,7 +72,12 @@ export function getErrorResponse(error: unknown) {
       (message.length > 0 && !isSensitiveErrorMessage(message)));
 
   if (!isKnownClientError) {
-    console.error("[api] Request failed:", error);
+    // Next.js uses this exact digest for expected request-time dynamic usage
+    // during static-generation checks. It is control flow, not an app failure.
+    if (!isNextDynamicUsageError(error)) {
+      console.error("[api] Request failed:", error);
+    }
+
     return {
       message: PUBLIC_SERVER_ERROR,
       status: status >= 500 ? status : 500,
