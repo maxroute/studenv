@@ -64,7 +64,7 @@ function DashboardLayoutFrame({
 
   return (
     <div
-      className="dashboard-app-root flex h-screen min-h-0 w-full overflow-hidden bg-[#0e0e0b] text-[#e4dfcf]"
+      className="dashboard-app-root flex h-screen min-h-0 w-full overflow-hidden bg-[var(--bg)] text-[var(--text)]"
       style={{ height: "100dvh" }}
     >
       {/* Mobile Backdrop */}
@@ -106,7 +106,7 @@ function DashboardLayoutFrame({
 
         {/* Main Content */}
         <main
-          className="flex min-w-0 flex-1 flex-col bg-[#0e0e0b] min-h-0 overflow-y-auto overscroll-y-contain"
+          className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] min-h-0 overflow-y-auto overscroll-y-contain"
           style={pathname === "/dashboard" ? { paddingBottom: 112 } : undefined}
         >
           {showTransition ? (
