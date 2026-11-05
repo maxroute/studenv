@@ -6,24 +6,36 @@ export async function apiFetcher<T>(input: RequestInfo, init?: RequestInit) {
       ...(init?.headers ?? {}),
     },
   });
-  const json = (await response.json()) as {
-    ok: boolean;
-    data?: T;
-    error?: string;
-    details?: {
-      issues?: Array<{
-        path?: string;
-        message?: string;
-      }>;
-    };
-  };
 
-  if (!response.ok || !json.ok) {
-    const firstIssue = json.details?.issues?.find((issue) => issue.message?.trim());
-    const error = new Error(firstIssue?.message ?? json.error ?? "Request failed.");
+  const json = (await response.json().catch(() => null)) as
+    | {
+        ok?: boolean;
+        data?: T;
+        error?: string;
+        details?: {
+          issues?: Array<{
+            path?: string;
+            message?: string;
+          }>;
+          reset?: number;
+        };
+      }
+    | null;
+
+  if (!response.ok || !json?.ok) {
+    const status = response.status;
+    const firstIssue = json?.details?.issues?.find((issue) => issue.message?.trim());
+    const serverFailure = status >= 500;
+    const message = serverFailure
+      ? "Something went wrong. Please try again shortly."
+      : firstIssue?.message ??
+        json?.error ??
+        "We couldn't complete that request. Please try again.";
+
+    const error = new Error(message);
     Object.assign(error, {
-      status: response.status,
-      details: json.details,
+      status,
+      details: serverFailure ? undefined : json?.details,
     });
     throw error;
   }
