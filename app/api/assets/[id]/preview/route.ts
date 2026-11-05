@@ -98,7 +98,7 @@ export async function GET(
     }
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to preview asset" },
+      { error: "A preview could not be generated for this asset." },
       { status: error.status || 500 },
     );
   }
