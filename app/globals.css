@@ -6661,6 +6661,7 @@ body.shelf-scroll-locked {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  grid-auto-rows: max-content;
 }
 
 .shelf-shell .detail {
