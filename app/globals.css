@@ -6598,14 +6598,17 @@ textarea {
 }
 
 
-/* Auth cross-links use the accent by default and brighten on hover. */
 .auth-sub a {
-  color: var(--amber);
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 0.18s ease;
 }
 
 .auth-sub a:hover,
 .auth-sub a:focus-visible {
-  color: #ffd080;
+  color: var(--amber);
+  outline: none;
 }
 
 
