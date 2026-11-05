@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {\n  if (process.env.NODE_ENV !== "development") {\n    return new NextResponse(null, { status: 404 });\n  }
+export async function GET() {
+  if (process.env.NODE_ENV !== "development") {
+    return new NextResponse(null, { status: 404 });
+  }
   try {
     const sessions = await prisma.focusSession.findMany({
       orderBy: { createdAt: "desc" },
