@@ -3,7 +3,8 @@ import test from "node:test";
 import { getErrorResponse } from "./request";
 import { ValidationHttpError } from "./validate";
 
-test("database connection errors never expose provider details", () => {
+test("database connection errors never expose provider details", (t) => {
+  t.mock.method(console, "error", () => {});
   const result = getErrorResponse(
     Object.assign(
       new Error('Authentication failed for user "app_user" at ep-example.neon.tech'),
@@ -16,7 +17,8 @@ test("database connection errors never expose provider details", () => {
   assert.equal(result.details, undefined);
 });
 
-test("unexpected server exceptions return a generic response", () => {
+test("unexpected server exceptions return a generic response", (t) => {
+  t.mock.method(console, "error", () => {});
   const result = getErrorResponse(
     new Error("PrismaClientInitializationError: connection string contains credentials"),
   );
