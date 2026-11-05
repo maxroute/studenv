@@ -4,13 +4,13 @@ import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET() {\n  if (process.env.NODE_ENV !== "development") {\n    return new NextResponse(null, { status: 404 });\n  }
   try {
     console.log("Programmatic dev-db-push test GET query...");
     
     // Try running a database query to see if schema works
     const testSession = await prisma.focusSession.findFirst().catch((err) => {
-      return { error: err.message };
+      return { error: "Database query failed." };
     });
     
     // Run db push with skip-generate to avoid file locking on Prisma generate
@@ -18,7 +18,7 @@ export async function GET() {
     try {
       dbPushOutput = execSync("npx prisma db push --skip-generate --accept-data-loss", { encoding: "utf8" });
     } catch (e: any) {
-      dbPushOutput = `error: ${e.message} / stderr: ${e.stderr}`;
+      dbPushOutput = "Database schema push failed.";
     }
 
     // Try query again after push
@@ -36,7 +36,7 @@ export async function GET() {
     console.error("Programmatic check failed:", error);
     return NextResponse.json({
       success: false,
-      error: error?.message || "Unknown error occurred",
+      error: "Database diagnostic failed.",
     }, { status: 500 });
   }
 }
