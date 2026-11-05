@@ -167,12 +167,12 @@ function DashboardRouteTransition({ href }: { href: string }) {
           </div>
           <div className="grid items-start gap-6 lg:grid-cols-[1fr_320px]">
             <div className="space-y-6">
-              <div className="h-64 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
+              <div className="h-64 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="h-48 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
-                <div className="h-48 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
+                <div className="h-48 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
+                <div className="h-48 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
               </div>
-              <div className="h-56 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
+              <div className="h-56 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
             </div>
             <aside className="hidden h-80 rounded-[18px] border border-white/[0.05] bg-[#161614] lg:block" />
           </div>
