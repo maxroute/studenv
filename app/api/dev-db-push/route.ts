@@ -23,7 +23,7 @@ export async function GET() {\n  if (process.env.NODE_ENV !== "development") {\n
 
     // Try query again after push
     const testSessionAfter = await prisma.focusSession.findFirst().catch((err) => {
-      return { error: err.message };
+      return { error: "Database query failed." };
     });
 
     return NextResponse.json({
