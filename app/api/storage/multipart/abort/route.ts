@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
         if (typeof body.sessionToken !== "string") {
             return NextResponse.json(
                 { success: false, error: "Invalid upload session." },
-                { status: 400 },
+                { status: 500 },
             );
         }
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
             {
                 success: false,
-                error: error instanceof Error ? error.message : "Could not cancel upload.",
+                error: "Could not cancel this upload. Please try again."
             },
             { status: 400 },
         );
