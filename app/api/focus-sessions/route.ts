@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("POST /api/focus-sessions error:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to record session" },
-      { status: error?.message?.includes("Invalid") ? 400 : 500 },
+      { error: "Could not record your focus session. Please try again." },
+      { status: 500 },
     );
   }
 }
