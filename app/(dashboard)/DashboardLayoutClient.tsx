@@ -64,7 +64,7 @@ function DashboardLayoutFrame({
 
   return (
     <div
-      className="dashboard-app-root flex h-screen min-h-0 w-full overflow-hidden bg-[#0e0e0b] text-[#e4dfcf]"
+      className="dashboard-app-root flex h-screen min-h-0 w-full overflow-hidden bg-[var(--bg)] text-[var(--text)]"
       style={{ height: "100dvh" }}
     >
       {/* Mobile Backdrop */}
@@ -86,10 +86,10 @@ function DashboardLayoutFrame({
 
       <div className="flex min-w-0 flex-1 flex-col min-h-0">
         {/* Top Mobile Bar */}
-        <header className="flex h-14 items-center border-b border-white/[0.065] bg-[#141410] px-4 md:hidden shrink-0">
+        <header className="flex h-14 items-center border-b border-[var(--border)] bg-[var(--surface)] px-4 md:hidden shrink-0">
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-md text-[#9c9788] hover:bg-white/[0.04]"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--surface2)]"
           >
             <Menu className="h-6 w-6" />
           </button>
@@ -97,7 +97,7 @@ function DashboardLayoutFrame({
             <BrandLockup
               height={22}
               imageClassName="dashboard-brand-mark"
-              textClassName="text-[16px] font-semibold text-[#c97d0c]"
+              textClassName="text-[16px] font-semibold text-[var(--amber)]"
               variant="badge"
               width={22}
             />
@@ -106,7 +106,7 @@ function DashboardLayoutFrame({
 
         {/* Main Content */}
         <main
-          className="flex min-w-0 flex-1 flex-col bg-[#0e0e0b] min-h-0 overflow-y-auto overscroll-y-contain"
+          className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] min-h-0 overflow-y-auto overscroll-y-contain"
           style={pathname === "/dashboard" ? { paddingBottom: 112 } : undefined}
         >
           {showTransition ? (
@@ -167,12 +167,12 @@ function DashboardRouteTransition({ href }: { href: string }) {
           </div>
           <div className="grid items-start gap-6 lg:grid-cols-[1fr_320px]">
             <div className="space-y-6">
-              <div className="h-64 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
+              <div className="h-64 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="h-48 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
-                <div className="h-48 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
+                <div className="h-48 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
+                <div className="h-48 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
               </div>
-              <div className="h-56 rounded-[18px] border border-white/[0.065] bg-[#141410]" />
+              <div className="h-56 rounded-[18px] border border-[var(--border)] bg-[var(--surface)]" />
             </div>
             <aside className="hidden h-80 rounded-[18px] border border-white/[0.05] bg-[#161614] lg:block" />
           </div>
