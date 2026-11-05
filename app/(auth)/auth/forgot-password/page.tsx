@@ -1,14 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+
+  useEffect(() => subscribeToAuthSync((event) => {
+    if (event === "password-reset") {
+      router.replace("/auth/signin?reset=1");
+      router.refresh();
+    }
+  }), [router]);
 
   async function handleSubmit() {
     if (sending) return;

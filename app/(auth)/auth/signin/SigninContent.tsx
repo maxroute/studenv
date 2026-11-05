@@ -176,6 +176,11 @@ export function SigninContent() {
               Your email has been verified. You can now sign in.
             </div>
           ) : null}
+          {searchParams.get("reset") === "1" ? (
+            <div className="auth-success" role="status">
+              Your password has been reset. Sign in with your new password.
+            </div>
+          ) : null}
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
           {searchParams.get("signup") === "account-exists" ? (
             <div className="signup-signin-notice" role="status">
