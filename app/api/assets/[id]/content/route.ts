@@ -194,6 +194,7 @@ export async function GET(
 
     return NextResponse.json({ error: "No media content available" }, { status: 404 });
   } catch (error: any) {
+    console.error("[assets.content] Failed to load media content:", error);
     return NextResponse.json(
       { error: "Media content could not be loaded. Please try again shortly." },
       { status: error.status || 500 },
