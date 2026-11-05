@@ -62,11 +62,14 @@ export function apiError(
   details?: unknown,
   init?: ResponseInit,
 ) {
+  const isServerError = status >= 500;
   const response = NextResponse.json(
     {
       ok: false,
-      error: message,
-      details,
+      error: isServerError
+        ? "Something went wrong. Please try again shortly."
+        : message,
+      details: isServerError ? undefined : details,
     },
     { status, ...init },
   );
