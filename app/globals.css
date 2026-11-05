@@ -2307,23 +2307,6 @@ textarea {
   grid-template-rows: 52px minmax(0, 1fr);
 }
 
-/* Shelf keeps its shell fixed while only the item grid scrolls. */
-.app-shell.shelf-shell {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-  grid-template-rows: 52px minmax(0, 1fr);
-}
-
-/* The Shelf is a viewport app: the document must not become a second scroller. */
-html.shelf-scroll-locked,
-body.shelf-scroll-locked {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
 .topbar {
   grid-column: 1 / -1;
   display: flex;
@@ -2791,22 +2774,11 @@ body.shelf-scroll-locked {
   overflow-y: auto;
 }
 
-.app-main.shelf-scroll-layout {
-  min-height: 0;
-  height: auto;
-  overflow: hidden;
-}
-
 .dashboard-shell {
   display: grid;
   height: 100%;
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) 300px;
-}
-
-.shelf-shell .dashboard-shell {
-  min-height: 0;
-  overflow: hidden;
 }
 
 .dashboard-home-hero {
@@ -2838,17 +2810,6 @@ body.shelf-scroll-locked {
   flex-direction: column;
   overflow-y: auto;
   background: var(--bg);
-}
-
-.shelf-shell .main {
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.shelf-shell .main-header {
-  position: relative;
-  flex: 0 0 auto;
 }
 
 .main-header {
@@ -3090,13 +3051,6 @@ body.shelf-scroll-locked {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   align-content: start;
   padding: 20px 24px;
-}
-
-.shelf-shell .cards-grid {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
 }
 
 .cards-grid.list-view {
@@ -3426,10 +3380,6 @@ body.shelf-scroll-locked {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-}
-
-.shelf-shell .detail {
-  min-height: 0;
 }
 
 .detail-close-btn {
@@ -5239,11 +5189,6 @@ body.shelf-scroll-locked {
 }
 
 @media (max-width: 760px) {
-  .app-shell.shelf-shell .topbar {
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
   /* Match sign-up horizontal sizing while fitting sign-in into the mobile viewport. */
   .auth-wrap:not(.auth-wrap-signup) {
     position: fixed;
@@ -6673,3 +6618,52 @@ body.shelf-scroll-locked {
   display: inline-flex;
   margin-top: 2px;
 }
+
+/* Shelf scroll ownership: keep the viewport shell fixed and scroll only the item grid. */
+.app-shell.shelf-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+html.shelf-scroll-locked,
+body.shelf-scroll-locked {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.app-main.shelf-scroll-layout {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shelf-shell .dashboard-shell {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shelf-shell .main {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shelf-shell .main-header {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.shelf-shell .cards-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.shelf-shell .detail {
+  min-height: 0;
+}
+
