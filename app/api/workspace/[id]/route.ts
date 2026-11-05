@@ -46,7 +46,7 @@ export async function GET(
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to load workspace" },
+      { error: "Workspace could not be loaded. Please try again shortly." },
       { status: error.status || 500 }
     );
   }
@@ -77,7 +77,7 @@ export async function PATCH(
   } catch (error: any) {
     console.warn("Workspace API rename warning:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to edit workspace" },
+      { error: "Workspace could not be updated. Please try again shortly." },
       { status: error.status || 500 }
     );
   }
