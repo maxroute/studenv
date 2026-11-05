@@ -97,6 +97,7 @@ export async function GET(
       clearTimeout(timeout);
     }
   } catch (error: any) {
+    console.error("[assets.preview] Failed to generate asset preview:", error);
     return NextResponse.json(
       { error: "A preview could not be generated for this asset." },
       { status: error.status || 500 },
