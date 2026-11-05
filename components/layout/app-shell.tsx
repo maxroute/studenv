@@ -24,7 +24,9 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className={`app-shell${isShelfRoute ? " shelf-shell" : ""}`}>
       <Topbar user={user} onOpenSidebar={() => setSidebarOpen(true)} />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className={`app-main${isShelfRoute ? " shelf-scroll-layout" : ""}`}>{children}</div>
+      <div className={`app-main${isShelfRoute ? " shelf-scroll-layout" : ""}`}>
+        {children}
+      </div>
       <VideoPlayerOverlay />
     </div>
   );
