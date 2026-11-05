@@ -171,6 +171,11 @@ export function SigninContent() {
           <div className="auth-sub">
             New here? <Link href="/auth/signup">Create your account</Link>
           </div>
+          {searchParams.get("verified") === "1" ? (
+            <div className="auth-success" role="status">
+              Your email has been verified. You can now sign in.
+            </div>
+          ) : null}
           {authErrorMessage ? <div className="auth-alert">{authErrorMessage}</div> : null}
           {searchParams.get("signup") === "account-exists" ? (
             <div className="signup-signin-notice" role="status">

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { apiFetcher } from "@/lib/client/fetcher";
 import { publishAuthSyncEvent } from "@/lib/auth/auth-sync";
 
 function VerifyEmailContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const initialEmail = searchParams.get("email") ?? "";
@@ -51,8 +52,10 @@ function VerifyEmailContent() {
       });
       verifiedToken.current = token;
       publishAuthSyncEvent("email-verified");
-      setStatus("done");
-      setMessage("Your email has been verified. You can sign in now.");
+      // Leave the one-time-token page after success. The sign-in page owns
+      // the durable success notice, so a remount cannot restore the old form.
+      router.replace("/auth/signin?verified=1");
+      router.refresh();
     } catch (error) {
       setStatus("error");
       setMessage((error as Error).message || "This verification link is invalid or expired.");
