@@ -2312,6 +2312,16 @@ textarea {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+/* The Shelf is a viewport app: the document must not become a second scroller. */
+html.shelf-scroll-locked,
+body.shelf-scroll-locked {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .topbar {
@@ -2783,7 +2793,7 @@ textarea {
 
 .app-main.shelf-scroll-layout {
   min-height: 0;
-  height: 100%;
+  height: auto;
   overflow: hidden;
 }
 
@@ -2834,6 +2844,11 @@ textarea {
   min-height: 0;
   height: 100%;
   overflow: hidden;
+}
+
+.shelf-shell .main-header {
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .main-header {
@@ -3078,7 +3093,7 @@ textarea {
 }
 
 .shelf-shell .cards-grid {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -5224,6 +5239,11 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  .app-shell.shelf-shell .topbar {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
   /* Match sign-up horizontal sizing while fitting sign-in into the mobile viewport. */
   .auth-wrap:not(.auth-wrap-signup) {
     position: fixed;
