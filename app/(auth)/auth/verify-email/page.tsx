@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { apiFetcher } from "@/lib/client/fetcher";
-import { publishAuthSyncEvent } from "@/lib/auth/auth-sync";
+import { publishAuthSyncEvent, subscribeToAuthSync } from "@/lib/auth/auth-sync";
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -23,6 +23,13 @@ function VerifyEmailContent() {
   const [countdown, setCountdown] = useState(0);
   const verificationInFlight = useRef(false);
   const verifiedToken = useRef<string | null>(null);
+
+  useEffect(() => subscribeToAuthSync((event) => {
+    if (event === "email-verified") {
+      router.replace("/auth/signin?verified=1");
+      router.refresh();
+    }
+  }), [router]);
 
   useEffect(() => {
     if (!countdown) return;
