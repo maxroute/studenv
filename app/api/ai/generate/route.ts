@@ -65,6 +65,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("[AI Generate Error]", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "AI generation is temporarily unavailable. Please try again shortly." }, { status: 500 });
   }
 }
