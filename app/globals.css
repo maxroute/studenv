@@ -42,6 +42,14 @@ body {
   overflow-y: auto;
 }
 
+/* Dashboard pages own their scroll area; prevent the document from
+   becoming a second, independently scrolling container. */
+html.dashboard-scroll-locked,
+body.dashboard-scroll-locked {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 a {
   color: inherit;
   text-decoration: none;

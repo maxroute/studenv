@@ -36,6 +36,18 @@ function DashboardLayoutFrame({
   const { pendingHref } = useDashboardNavigation();
   const showTransition = Boolean(pendingHref && pendingHref !== pathname);
 
+  // Keep the dashboard as the only scroll context. The shelf and other
+  // non-dashboard routes retain the document's normal scrolling behavior.
+  useEffect(() => {
+    document.documentElement.classList.add("dashboard-scroll-locked");
+    document.body.classList.add("dashboard-scroll-locked");
+
+    return () => {
+      document.documentElement.classList.remove("dashboard-scroll-locked");
+      document.body.classList.remove("dashboard-scroll-locked");
+    };
+  }, []);
+
   // Close sidebar on navigation
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -51,7 +63,10 @@ function DashboardLayoutFrame({
   }, [isSidebarOpen]);
 
   return (
-    <div className="flex h-screen w-full bg-[#0e0e0b] text-[#e4dfcf]">
+    <div
+      className="dashboard-app-root flex h-screen min-h-0 w-full overflow-hidden bg-[#0e0e0b] text-[#e4dfcf]"
+      style={{ height: "100dvh" }}
+    >
       {/* Mobile Backdrop */}
       {isSidebarOpen && (
         <div
@@ -91,7 +106,7 @@ function DashboardLayoutFrame({
 
         {/* Main Content */}
         <main
-          className="flex min-w-0 flex-1 flex-col bg-[#0e0e0b] min-h-0 overflow-y-auto"
+          className="flex min-w-0 flex-1 flex-col bg-[#0e0e0b] min-h-0 overflow-y-auto overscroll-y-contain"
           style={pathname === "/dashboard" ? { paddingBottom: 112 } : undefined}
         >
           {showTransition ? (
