@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET() {\n  if (process.env.NODE_ENV !== "development") {\n    return new NextResponse(null, { status: 404 });\n  }
   try {
     const sessions = await prisma.focusSession.findMany({
       orderBy: { createdAt: "desc" },
@@ -16,7 +16,7 @@ export async function GET() {
   } catch (error: any) {
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: "Database diagnostic failed."
     }, { status: 500 });
   }
 }
