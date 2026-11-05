@@ -2302,7 +2302,9 @@ textarea {
 
 .app-shell {
   display: grid;
-  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   grid-template-columns: 220px minmax(0, 1fr);
   grid-template-rows: 52px minmax(0, 1fr);
 }
@@ -2771,7 +2773,9 @@ textarea {
 
 .app-main {
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .dashboard-shell {
@@ -2807,8 +2811,8 @@ textarea {
 .main {
   display: flex;
   min-width: 0;
+  min-height: 100%;
   flex-direction: column;
-  overflow-y: auto;
   background: var(--bg);
 }
 
