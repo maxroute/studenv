@@ -1,0 +1,53 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { getErrorResponse } from "./request";
+import { ValidationHttpError } from "./validate";
+
+test("database connection errors never expose provider details", () => {
+  const result = getErrorResponse(
+    Object.assign(
+      new Error('Authentication failed for user "app_user" at ep-example.neon.tech'),
+      { status: 503, code: "P1000" },
+    ),
+  );
+
+  assert.equal(result.status, 503);
+  assert.equal(result.message, "Something went wrong. Please try again shortly.");
+  assert.equal(result.details, undefined);
+});
+
+test("unexpected server exceptions return a generic response", () => {
+  const result = getErrorResponse(
+    new Error("PrismaClientInitializationError: connection string contains credentials"),
+  );
+
+  assert.equal(result.status, 500);
+  assert.equal(result.message, "Something went wrong. Please try again shortly.");
+  assert.equal(result.details, undefined);
+});
+
+test("known validation errors retain safe field-level feedback", () => {
+  const result = getErrorResponse(
+    new ValidationHttpError("Validation failed.", 400, {
+      issues: [{ path: "email", message: "Enter a valid email address." }],
+    }),
+  );
+
+  assert.equal(result.status, 400);
+  assert.equal(result.message, "Validation failed.");
+  assert.deepEqual(result.details, {
+    issues: [{ path: "email", message: "Enter a valid email address." }],
+  });
+});
+
+test("rate-limit responses expose only the retry timestamp", () => {
+  const result = getErrorResponse(
+    Object.assign(new Error("Too many requests."), {
+      status: 429,
+      details: { reset: 123456789, remaining: 0, secret: "must-not-leak" },
+    }),
+  );
+
+  assert.equal(result.status, 429);
+  assert.deepEqual(result.details, { reset: 123456789 });
+});
