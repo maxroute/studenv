@@ -27,7 +27,7 @@ export async function POST(
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to save snapshot" },
+      { error: "The workspace snapshot could not be saved. Please try again." },
       { status: error.status || 500 }
     );
   }
