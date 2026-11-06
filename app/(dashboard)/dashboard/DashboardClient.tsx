@@ -170,15 +170,15 @@ export function DashboardClient() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
-          <section>
+          <section className="flex h-full flex-col">
             <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               <BookOpen className="h-3.5 w-3.5" />
               Recent Sessions
             </div>
 
-            <div className="space-y-2">
+            <div className="flex flex-1 flex-col gap-2">
               {recentSessions.length === 0 ? (
-                <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-[12px] leading-6 text-[var(--muted)]">
+                <div className="flex min-h-full flex-1 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-[12px] leading-6 text-[var(--muted)]">
                   No recent sessions found. Start adding items to your shelf!
                 </div>
               ) : (
@@ -213,12 +213,12 @@ export function DashboardClient() {
             </div>
           </section>
 
-          <aside>
+          <aside className="flex h-full flex-col">
             <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               Up Next
             </div>
 
-            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-center">
+            <div className="flex flex-1 flex-col justify-center rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-center">
               <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(74,191,181,0.12)] text-[var(--teal)]">
                 <BookOpen className="h-5.5 w-5.5" />
               </div>
