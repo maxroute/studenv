@@ -293,7 +293,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [selectedStickyId, setSelectedStickyId] = useState<string | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
-  const [stickyColor, setStickyColor] = useState(STICKY_NOTE_COLORS[0].value);
+  const [stickyColor, setStickyColor] = useState<string>(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
