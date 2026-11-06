@@ -27,7 +27,7 @@ const fetcher = async (url: string) => {
 
 function formatTotalHours(hours: number) {
   const safeHours = Number.isFinite(Number(hours)) ? Number(hours) : 0;
-  return `${safeHours.toFixed(1)}h`;
+  return `${safeHours.toFixed(1)} h`;
 }
 
 function DashboardSkeleton() {
