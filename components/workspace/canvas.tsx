@@ -1522,6 +1522,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         item={item as any}
                         isSelected={selectedStickyId === item.id}
                         isEditing={editingStickyId === item.id}
+                        onColorChange={(color) => {
+                          setStickyColor(color);
+                          useWorkspaceStore.getState().updateItemProps(item.id, { color });
+                        }}
                         onFinishEditing={() => setEditingStickyId(null)}
                       />
                     )}
@@ -1603,17 +1607,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
             <ShapeStyleToolbar />
 
-            {selectedStickyId && !editingStickyId && (
-              <div className="fixed top-20 left-[4.5rem] z-[1200] flex items-center gap-1.5 rounded-lg border bg-white px-2 py-2 shadow-lg" aria-label="Sticky note color">
-                {STICKY_NOTE_COLORS.map((color) => (
-                  <button key={color.value} type="button" onClick={() => {
-                    setStickyColor(color.value);
-                    useWorkspaceStore.getState().updateItemProps(selectedStickyId, { color: color.value });
-                  }} className={`h-5 w-5 rounded-full border border-black/10 ${items.find((item) => item.id === selectedStickyId)?.type === "sticky" && (items.find((item) => item.id === selectedStickyId) as any).props.color === color.value ? "ring-2 ring-slate-500 ring-offset-2" : ""}`} style={{ backgroundColor: color.value }} title={color.label} aria-label={color.label} />
-                ))}
-              </div>
-            )}
-
             {contextMenu && (
               <ShapeContextMenu
                 x={contextMenu.x}
@@ -1679,7 +1672,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   setSelectedStickyId(null);
                   setIsTextToolLocked(false);
                 }}
-                className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-amber-100 text-amber-700" : "hover:bg-slate-50 text-slate-400"}`}
+                className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Sticky Note — click the canvas to place"
               >
                 <StickyNote size={18} />
