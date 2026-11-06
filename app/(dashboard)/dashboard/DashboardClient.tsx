@@ -130,8 +130,8 @@ export function DashboardClient() {
       >
         <div className="dashboard-home-hero mb-8 flex gap-5">
           <div>
-            <h1 className="font-[family:var(--font-fraunces)] text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-[var(--text)] sm:text-[34px]">
-              Welcome back, <span className="font-[family:var(--font-fraunces)] font-semibold italic text-[var(--amber)]">{firstName}</span>
+            <h1 className="font-display text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-[var(--text)] sm:text-[34px]">
+              Welcome back, <span className="font-display font-semibold italic text-[var(--amber)]">{firstName}</span>
             </h1>
             <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">
               Ready to expand your shelf today?
@@ -160,8 +160,8 @@ export function DashboardClient() {
                 >
                   <Icon className="h-[17px] w-[17px]" />
                 </div>
-                <div className="font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)]">{stat.label}</div>
-                <div className="mt-1 font-[family:var(--font-dm-sans)] text-[28px] font-semibold leading-none tracking-[-0.035em] text-[var(--text)]">
+                <div className="font-mono text-[10px] tracking-[0.04em] text-[var(--muted)]">{stat.label}</div>
+                <div className="mt-1 font-body text-[28px] font-semibold leading-none tracking-[-0.035em] text-[var(--text)]">
                   {stat.value}
                 </div>
               </div>
@@ -171,7 +171,7 @@ export function DashboardClient() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
           <section>
-            <div className="mb-3 flex items-center gap-2 font-[family:var(--font-dm-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
+            <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               <BookOpen className="h-3.5 w-3.5" />
               Recent Sessions
             </div>
@@ -188,17 +188,17 @@ export function DashboardClient() {
                     className="cursor-pointer rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--border2)]"
                   >
                     <div className="mb-2 flex items-center justify-between gap-4">
-                      <span className="rounded-[5px] bg-white/[0.06] px-[9px] py-[2px] font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)] capitalize">
+                      <span className="rounded-[5px] bg-white/[0.06] px-[9px] py-[2px] font-mono text-[10px] tracking-[0.04em] text-[var(--muted)] capitalize">
                         {session.type}
                       </span>
-                      <span className="font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted2)]">
+                      <span className="font-mono text-[10px] tracking-[0.04em] text-[var(--muted2)]">
                         {new Date(session.createdAt).toLocaleDateString(
                           "en-US",
                           { month: "short", day: "numeric" },
                         )}
                       </span>
                     </div>
-                    <h2 className="mb-2 font-[family:var(--font-fraunces)] text-[17px] font-semibold leading-[1.24] tracking-[-0.01em] text-[var(--text)] line-clamp-1">
+                    <h2 className="mb-2 font-display text-[17px] font-semibold leading-[1.24] tracking-[-0.01em] text-[var(--text)] line-clamp-1">
                       {session.title}
                     </h2>
                     <div className="flex flex-wrap gap-3.5 text-[12px] leading-5 text-[var(--muted)]">
@@ -214,7 +214,7 @@ export function DashboardClient() {
           </section>
 
           <aside>
-            <div className="mb-3 font-[family:var(--font-dm-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
+            <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               Up Next
             </div>
 
@@ -222,7 +222,7 @@ export function DashboardClient() {
               <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(74,191,181,0.12)] text-[var(--teal)]">
                 <BookOpen className="h-5.5 w-5.5" />
               </div>
-              <h3 className="font-[family:var(--font-fraunces)] text-[17px] font-semibold leading-[1.24] tracking-[-0.01em] text-[var(--text)]">{upNext.title}</h3>
+              <h3 className="font-display text-[17px] font-semibold leading-[1.24] tracking-[-0.01em] text-[var(--text)]">{upNext.title}</h3>
               <p className="mx-auto mb-4 mt-2 max-w-[220px] text-[12px] leading-6 text-[var(--muted)]">
                 {upNext.description}
               </p>
