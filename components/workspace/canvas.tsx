@@ -1363,23 +1363,27 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setHoveredItemId((prev) => (prev === item.id ? null : prev));
                     }}
                     disableDragging={
-                      item.type === "free-text"
-                        ? editingFreeTextId === item.id
-                        : item.type === "drawing"
-                          ? false
-                          : isMigratedToSelectionOverlay(item.type)
-                            ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
-                            : undefined
+                      item.type === "sticky"
+                        ? editingStickyId === item.id
+                        : item.type === "free-text"
+                          ? editingFreeTextId === item.id
+                          : item.type === "drawing"
+                            ? false
+                            : isMigratedToSelectionOverlay(item.type)
+                              ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
+                              : undefined
                     }
                     enableResizing={
-                      item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
+                      item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
                         ? false
                         : undefined
                     }
-                    showConnectionHandle={item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
+                    showConnectionHandle={item.type !== "sticky" && item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
                     showDeleteButton={
-                      item.type === "free-text"
-                        ? selectedFreeTextId === item.id
+                      item.type === "sticky"
+                        ? selectedStickyId === item.id
+                        : item.type === "free-text"
+                          ? selectedFreeTextId === item.id
                         : item.type === "drawing"
                           ? selectedDrawingId === item.id
                           : item.type === "image"
