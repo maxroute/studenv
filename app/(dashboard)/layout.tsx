@@ -30,7 +30,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className={`${instrumentSans.variable} ${instrumentSerif.variable} font-sans`}>
+    <div className={`${instrumentSans.variable} ${instrumentSerif.variable}`}>
       <DashboardLayoutClient>{children}</DashboardLayoutClient>
     </div>
   );
