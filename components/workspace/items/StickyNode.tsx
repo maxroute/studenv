@@ -18,9 +18,10 @@ interface StickyNodeProps {
   isSelected: boolean;
   isEditing: boolean;
   onFinishEditing: () => void;
+  onColorChange: (color: string) => void;
 }
 
-export function StickyNode({ item, isSelected, isEditing, onFinishEditing }: StickyNodeProps) {
+export function StickyNode({ item, isSelected, isEditing, onFinishEditing, onColorChange }: StickyNodeProps) {
   const updateItemProps = useWorkspaceStore((state) => state.updateItemProps);
   const [draft, setDraft] = useState(item.props.text);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -44,18 +45,42 @@ export function StickyNode({ item, isSelected, isEditing, onFinishEditing }: Sti
   const color = item.props.color || STICKY_NOTE_COLORS[0].value;
 
   return (
-    <div
-      className="sticky-note-paper relative h-full w-full"
-      style={{
-        backgroundColor: color,
-        transform: "rotate(5deg)",
-        transformOrigin: "center center",
-        boxShadow: isSelected
-          ? "0 13px 24px rgba(40, 34, 20, 0.18), 0 3px 7px rgba(40, 34, 20, 0.10), 0 0 0 2px rgba(99, 102, 241, 0.65)"
-          : "0 10px 20px rgba(40, 34, 20, 0.14), 0 2px 5px rgba(40, 34, 20, 0.08)",
-        clipPath: "polygon(0 0, 100% 0, 100% 94%, 96% 100%, 0 100%)",
-      }}
-    >
+    <div className="relative h-full w-full">
+      {isSelected && !isEditing && (
+        <div
+          className="absolute left-1/2 top-0 z-40 flex -translate-x-1/2 -translate-y-[calc(100%+12px)] items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm"
+          aria-label="Sticky note color"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {STICKY_NOTE_COLORS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onColorChange(option.value);
+              }}
+              className={`h-5 w-5 shrink-0 rounded-full border border-black/10 transition-transform hover:scale-110 ${color === option.value ? "ring-2 ring-indigo-500 ring-offset-2" : ""}`}
+              style={{ backgroundColor: option.value }}
+              title={option.label}
+              aria-label={option.label}
+              aria-pressed={color === option.value}
+            />
+          ))}
+        </div>
+      )}
+      <div
+        className="sticky-note-paper relative h-full w-full"
+        style={{
+          backgroundColor: color,
+          transform: "rotate(5deg)",
+          transformOrigin: "center center",
+          boxShadow: isSelected
+            ? "0 13px 24px rgba(40, 34, 20, 0.18), 0 3px 7px rgba(40, 34, 20, 0.10), 0 0 0 2px rgba(99, 102, 241, 0.65)"
+            : "0 10px 20px rgba(40, 34, 20, 0.14), 0 2px 5px rgba(40, 34, 20, 0.08)",
+          clipPath: "polygon(0 0, 100% 0, 100% 96%, 98% 100%, 0 100%)",
+        }}
+      >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute bottom-0 right-0 h-7 w-7"
@@ -97,6 +122,7 @@ export function StickyNode({ item, isSelected, isEditing, onFinishEditing }: Sti
           {item.props.text || (isSelected ? <span className="text-slate-500/50"> </span> : null)}
         </div>
       )}
+      </div>
     </div>
   );
 }
