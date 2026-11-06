@@ -130,8 +130,8 @@ export function DashboardClient() {
       >
         <div className="dashboard-home-hero mb-8 flex gap-5">
           <div>
-            <h1 className="font-display text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-[var(--text)] sm:text-[34px]">
-              Welcome back, <span className="font-display font-semibold italic text-[var(--amber)]">{firstName}</span>
+            <h1 className="font-display text-[30px] font-semibold leading-[1.12] tracking-[0.01em] text-[var(--text)] sm:text-[34px]">
+              Welcome back, <span className="font-display font-semibold italic tracking-[0.02em] text-[var(--amber)]">{firstName.toUpperCase()}</span>
             </h1>
             <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">
               Ready to expand your shelf today?
@@ -161,7 +161,7 @@ export function DashboardClient() {
                   <Icon className="h-[17px] w-[17px]" />
                 </div>
                 <div className="font-mono text-[10px] tracking-[0.04em] text-[var(--muted)]">{stat.label}</div>
-                <div className="mt-1 font-body text-[28px] font-semibold leading-none tracking-[-0.035em] text-[var(--text)]">
+                <div className="mt-1 font-display text-[28px] font-medium leading-none tracking-[0.02em] text-[var(--text)]">
                   {stat.value}
                 </div>
               </div>
