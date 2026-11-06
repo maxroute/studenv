@@ -6,7 +6,6 @@ import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  BrainCircuit,
   CalendarCheck,
   LayoutDashboard,
   LogOut,
@@ -17,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { BrandLockup } from "@/components/ui/brand-logo";
+import { ShelfNavIcon } from "@/components/ui/shelf-nav-icon";
 import { useDashboardNavigation } from "./dashboard-navigation";
 
 const navSections = [
@@ -27,7 +27,7 @@ const navSections = [
   {
     label: "Learning",
     items: [
-      { name: "Shelf", href: "/shelf", icon: BrainCircuit },
+      { name: "Shelf", href: "/shelf", icon: ShelfNavIcon },
       { name: "Study Groups", href: "/dashboard/groups", icon: Users },
       { name: "Focus Mode", href: "/dashboard/focus", icon: Timer },
       { name: "Planner", href: "/dashboard/planner", icon: CalendarCheck },
