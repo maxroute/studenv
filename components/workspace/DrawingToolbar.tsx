@@ -67,6 +67,12 @@ export function DrawingToolbar({
     setCustomColor(color);
   }, [color]);
 
+  useEffect(() => {
+    if (activeTool === "eraser") {
+      setShowColors(false);
+    }
+  }, [activeTool]);
+
   return (
     <div className="drawing-toolbar">
       <style>{`
@@ -486,10 +492,12 @@ export function DrawingToolbar({
         )}
       </div>
 
-      <div className="dt-divider" />
+      {activeTool === "pen" && (
+        <>
+          <div className="dt-divider" />
 
-      {/* Color Picker */}
-      <div style={{ position: "relative" }}>
+          {/* Color Picker */}
+          <div style={{ position: "relative" }}>
         <button
           className="dt-active-color"
           onClick={() => {
@@ -548,7 +556,9 @@ export function DrawingToolbar({
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
       <div className="dt-divider" />
 
