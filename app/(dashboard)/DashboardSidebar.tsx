@@ -104,7 +104,7 @@ export function DashboardSidebar() {
       <nav className="flex flex-1 flex-col">
         {navSections.map((section) => (
           <div key={section.label} className="mt-3">
-            <div className="px-5 pb-1.5 font-[family:var(--font-dm-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
+            <div className="px-5 pb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               {section.label}
             </div>
 
