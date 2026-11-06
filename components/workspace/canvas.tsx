@@ -1185,8 +1185,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
                       ? `item-${crypto.randomUUID()}`
                       : `item-${Math.random().toString(36).slice(2, 11)}`;
-                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor }, {
-                      id, x, y, w: 220, h: 220, rotation: 0,
+                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
+                      id, x, y,
                       zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
                     });
                     if (note) updateItems([...items, note]);
