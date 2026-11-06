@@ -226,7 +226,7 @@ export function StudioItemComponent({
             ? "overflow-visible bg-transparent border-0 shadow-none"
             : "overflow-hidden bg-white border shadow-md rounded"
         }`}>
-          {!isConnecting && !isDrawingMode && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
+          {!isConnecting && !isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           {isConnecting && (
             <div 
               className="absolute inset-0 z-50 cursor-crosshair bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
