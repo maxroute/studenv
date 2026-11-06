@@ -1352,7 +1352,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     key={item.id}
                     item={item}
                     isConnecting={isConnecting}
-                    isDrawingMode={isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
+                    // Sticky notes own their text input; other tools must never disable their pointer events.
+                    isDrawingMode={item.type === "sticky" ? false : isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
                     canvasScale={viewport.zoom}
                     onPointerEnter={() => {
                       if (!isDrawing && !isConnecting && !isShapeToolActive && !isTextToolActive) {
@@ -1429,12 +1430,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
                       if (item.type === "sticky") {
+                        // Sticky-note editing is self-contained and must not inherit Text tool state.
+                        setActiveTool("select");
+                        setIsTextToolLocked(false);
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
                         useSelectionStore.getState().deselectAll();
+
                         if (selectedStickyId === item.id) {
                           setEditingStickyId(item.id);
                         } else {
