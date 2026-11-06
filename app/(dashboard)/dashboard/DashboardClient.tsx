@@ -130,8 +130,8 @@ export function DashboardClient() {
       >
         <div className="dashboard-home-hero mb-8 flex gap-5">
           <div>
-            <h1 className="font-[family:var(--font-fraunces)] text-[30px] font-semibold leading-[1.08] tracking-[-0.04em] text-[var(--text)] sm:text-[34px]">
-              Welcome back, {firstName}
+            <h1 className="font-[family:var(--font-dm-sans)] text-[30px] font-bold leading-[1.12] tracking-[-0.04em] text-[var(--text)] sm:text-[34px]">
+              Welcome back, <span className="font-[family:var(--font-fraunces)] font-semibold italic text-[var(--amber)]">{firstName}</span>
             </h1>
             <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">
               Ready to expand your shelf today?
@@ -161,7 +161,7 @@ export function DashboardClient() {
                   <Icon className="h-[17px] w-[17px]" />
                 </div>
                 <div className="font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)]">{stat.label}</div>
-                <div className="mt-1 font-[family:var(--font-fraunces)] text-[28px] font-semibold leading-none tracking-[-0.025em] text-[var(--text)]">
+                <div className="mt-1 font-[family:var(--font-dm-sans)] text-[28px] font-semibold leading-none tracking-[-0.035em] text-[var(--text)]">
                   {stat.value}
                 </div>
               </div>
@@ -198,10 +198,10 @@ export function DashboardClient() {
                         )}
                       </span>
                     </div>
-                    <h2 className="mb-2 font-[family:var(--font-fraunces)] text-[16px] font-medium text-[var(--text)] line-clamp-1">
+                    <h2 className="mb-2 font-[family:var(--font-fraunces)] text-[17px] font-semibold leading-[1.24] text-[var(--text)] line-clamp-1">
                       {session.title}
                     </h2>
-                    <div className="flex flex-wrap gap-3.5 font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)]">
+                    <div className="flex flex-wrap gap-3.5 text-[12px] leading-5 text-[var(--muted)]">
                       <span className="flex items-center gap-1.5">
                         <span className="h-1 w-1 rounded-full bg-[var(--amber)]" />
                         {session.summary}
@@ -222,7 +222,7 @@ export function DashboardClient() {
               <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(74,191,181,0.12)] text-[var(--teal)]">
                 <BookOpen className="h-5.5 w-5.5" />
               </div>
-              <h3 className="font-[family:var(--font-fraunces)] text-[19px] font-semibold tracking-[-0.02em] text-[var(--text)]">{upNext.title}</h3>
+              <h3 className="font-[family:var(--font-fraunces)] text-[17px] font-semibold leading-[1.24] text-[var(--text)]">{upNext.title}</h3>
               <p className="mx-auto mb-4 mt-2 max-w-[220px] text-[12px] leading-6 text-[var(--muted)]">
                 {upNext.description}
               </p>
