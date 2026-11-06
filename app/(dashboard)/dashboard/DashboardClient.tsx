@@ -32,7 +32,7 @@ function formatTotalHours(hours: number) {
 
 function DashboardSkeleton() {
   return (
-    <div className="min-h-full px-10 pb-28 pt-9 animate-pulse">
+    <div className="min-h-full px-5 pb-28 pt-7 animate-pulse sm:px-8 sm:pt-9 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <div className="dashboard-home-hero mb-8 flex flex-col gap-5">
           <div>
@@ -46,7 +46,7 @@ function DashboardSkeleton() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="rounded-[14px] border border-white/[0.065] bg-[#1b1b16] px-5 py-[18px]"
+              className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-[18px]"
             >
               <div className="mb-3 h-[34px] w-[34px] rounded-[9px] bg-white/5"></div>
               <div className="h-3 w-16 bg-white/5 rounded mb-2"></div>
@@ -61,13 +61,13 @@ function DashboardSkeleton() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-28 rounded-[10px] bg-[#1b1b16] border border-white/[0.065]"
+                className="h-28 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]"
               ></div>
             ))}
           </section>
           <aside className="space-y-4">
             <div className="h-4 w-20 bg-white/5 rounded"></div>
-            <div className="h-64 rounded-[14px] bg-[#1b1b16] border border-white/[0.065]"></div>
+            <div className="h-64 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]"></div>
           </aside>
         </div>
         <div aria-hidden="true" style={{ height: 40 }} />
@@ -87,7 +87,7 @@ export function DashboardClient() {
 
   if (error || !data) {
     return (
-      <div className="min-h-full px-10 py-9 flex items-center justify-center">
+      <div className="min-h-full px-5 py-7 flex items-center justify-center sm:px-8 sm:py-9 lg:px-10">
         <div className="flex flex-col items-center text-[#9c9788] gap-3">
           <AlertCircle className="w-8 h-8 text-red-500/50" />
           <p>Failed to load dashboard data. Please try again.</p>
@@ -121,7 +121,7 @@ export function DashboardClient() {
   ];
 
   return (
-    <div className="min-h-full px-10 pb-28 pt-9">
+    <div className="min-h-full px-5 pb-28 pt-7 sm:px-8 sm:pt-9 lg:px-10">
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
@@ -130,10 +130,10 @@ export function DashboardClient() {
       >
         <div className="dashboard-home-hero mb-8 flex gap-5">
           <div>
-            <h1 className="font-[family:var(--font-fraunces)] text-[32px] font-normal leading-none text-[#e4dfcf]">
+            <h1 className="font-[family:var(--font-fraunces)] text-[30px] font-semibold leading-[1.08] tracking-[-0.04em] text-[var(--text)] sm:text-[34px]">
               Welcome back, {firstName}
             </h1>
-            <p className="mt-2 text-[13px] text-[#9c9788]">
+            <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">
               Ready to expand your shelf today?
             </p>
           </div>
@@ -153,15 +153,15 @@ export function DashboardClient() {
             return (
               <div
                 key={stat.label}
-                className="rounded-[14px] border border-white/[0.065] bg-[#1b1b16] px-5 py-[18px]"
+                className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-[18px]"
               >
                 <div
                   className={`mb-3 flex h-[34px] w-[34px] items-center justify-center rounded-[9px] ${stat.iconClass}`}
                 >
                   <Icon className="h-[17px] w-[17px]" />
                 </div>
-                <div className="text-[11px] text-[#9c9788]">{stat.label}</div>
-                <div className="mt-1 font-[family:var(--font-fraunces)] text-[28px] font-normal leading-none text-[#e4dfcf]">
+                <div className="font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)]">{stat.label}</div>
+                <div className="mt-1 font-[family:var(--font-fraunces)] text-[28px] font-semibold leading-none tracking-[-0.025em] text-[var(--text)]">
                   {stat.value}
                 </div>
               </div>
@@ -171,39 +171,39 @@ export function DashboardClient() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
           <section>
-            <div className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.09em] text-[#5c5a52]">
+            <div className="mb-3 flex items-center gap-2 font-[family:var(--font-dm-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               <BookOpen className="h-3.5 w-3.5" />
               Recent Sessions
             </div>
 
             <div className="space-y-2">
               {recentSessions.length === 0 ? (
-                <div className="rounded-[10px] border border-white/[0.065] bg-[#1b1b16] px-4 py-8 text-center text-[12px] text-[#9c9788]">
+                <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-[12px] leading-6 text-[var(--muted)]">
                   No recent sessions found. Start adding items to your shelf!
                 </div>
               ) : (
                 recentSessions.map((session: any) => (
                   <div
                     key={session.id}
-                    className="cursor-pointer rounded-[10px] border border-white/[0.065] bg-[#1b1b16] px-4 py-3.5 transition hover:border-white/[0.1]"
+                    className="cursor-pointer rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--border2)]"
                   >
                     <div className="mb-2 flex items-center justify-between gap-4">
-                      <span className="rounded-[5px] bg-white/[0.06] px-[9px] py-[2px] text-[11px] text-[#9c9788] capitalize">
+                      <span className="rounded-[5px] bg-white/[0.06] px-[9px] py-[2px] font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)] capitalize">
                         {session.type}
                       </span>
-                      <span className="text-[11px] text-[#5c5a52]">
+                      <span className="font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted2)]">
                         {new Date(session.createdAt).toLocaleDateString(
                           "en-US",
                           { month: "short", day: "numeric" },
                         )}
                       </span>
                     </div>
-                    <h2 className="mb-2 text-[14px] text-[#e4dfcf] line-clamp-1">
+                    <h2 className="mb-2 font-[family:var(--font-fraunces)] text-[16px] font-medium text-[var(--text)] line-clamp-1">
                       {session.title}
                     </h2>
-                    <div className="flex flex-wrap gap-3.5 text-[11px] text-[#9c9788]">
+                    <div className="flex flex-wrap gap-3.5 font-[family:var(--font-dm-mono)] text-[10px] tracking-[0.04em] text-[var(--muted)]">
                       <span className="flex items-center gap-1.5">
-                        <span className="h-1 w-1 rounded-full bg-[#c97d0c]" />
+                        <span className="h-1 w-1 rounded-full bg-[var(--amber)]" />
                         {session.summary}
                       </span>
                     </div>
@@ -214,21 +214,21 @@ export function DashboardClient() {
           </section>
 
           <aside>
-            <div className="mb-3 text-[11px] uppercase tracking-[0.09em] text-[#5c5a52]">
+            <div className="mb-3 font-[family:var(--font-dm-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--muted2)]">
               Up Next
             </div>
 
-            <div className="rounded-[14px] border border-white/[0.065] bg-[#1b1b16] px-5 py-6 text-center">
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-center">
               <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(26,158,117,0.13)] text-[#1a9e75]">
                 <BookOpen className="h-5.5 w-5.5" />
               </div>
-              <h3 className="text-[15px] text-[#e4dfcf]">{upNext.title}</h3>
-              <p className="mx-auto mb-4 mt-1 max-w-[220px] text-[12px] leading-6 text-[#9c9788]">
+              <h3 className="font-[family:var(--font-fraunces)] text-[19px] font-semibold tracking-[-0.02em] text-[var(--text)]">{upNext.title}</h3>
+              <p className="mx-auto mb-4 mt-2 max-w-[220px] text-[12px] leading-6 text-[var(--muted)]">
                 {upNext.description}
               </p>
               <Link
                 href="/shelf"
-                className="inline-flex w-full items-center justify-center rounded-[8px] bg-[#1a9e75] px-4 py-2.5 text-[13px] text-white transition hover:bg-[#158f67]"
+                className="inline-flex w-full items-center justify-center rounded-[5px] bg-[var(--amber)] px-4 py-2.5 text-[13px] font-medium text-[#0e0e0e] transition hover:brightness-95"
               >
                 {upNext.actionLabel}
               </Link>
