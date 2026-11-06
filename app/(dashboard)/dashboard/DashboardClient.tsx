@@ -88,7 +88,7 @@ export function DashboardClient() {
   if (error || !data) {
     return (
       <div className="min-h-full px-5 py-7 flex items-center justify-center sm:px-8 sm:py-9 lg:px-10">
-        <div className="flex flex-col items-center text-[#9c9788] gap-3">
+        <div className="flex flex-col items-center text-[var(--muted)] gap-3">
           <AlertCircle className="w-8 h-8 text-red-500/50" />
           <p>Failed to load dashboard data. Please try again.</p>
         </div>
@@ -104,13 +104,13 @@ export function DashboardClient() {
       label: "Study streak",
       value: `${stats.streak} day${stats.streak === 1 ? "" : "s"}`,
       icon: Brain,
-      iconClass: "bg-[rgba(201,125,12,0.15)] text-[#c97d0c]",
+      iconClass: "bg-[var(--amber-glow)] text-[var(--amber)]",
     },
     {
       label: "Total XP",
       value: stats.totalXP.toLocaleString(),
       icon: Trophy,
-      iconClass: "bg-[rgba(26,158,117,0.15)] text-[#1a9e75]",
+      iconClass: "bg-[rgba(90,191,122,0.12)] text-[var(--green)]",
     },
     {
       label: "Total hours",
@@ -140,7 +140,7 @@ export function DashboardClient() {
 
           <Link
             href="/dashboard/focus"
-            className="dashboard-focus-cta inline-flex items-center justify-center gap-2 rounded-[8px] bg-[#c97d0c] px-4 py-2.5 text-[13px] text-white transition hover:bg-[#b56d09]"
+            className="dashboard-focus-cta inline-flex items-center justify-center gap-2 rounded-[5px] bg-[var(--amber)] px-4 py-2.5 text-[13px] font-medium text-[#0e0e0e] transition hover:brightness-95"
           >
             <PlayCircle className="h-4.5 w-4.5" />
             Start Focus Session
@@ -219,7 +219,7 @@ export function DashboardClient() {
             </div>
 
             <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-center">
-              <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(26,158,117,0.13)] text-[#1a9e75]">
+              <div className="mx-auto mb-4 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-[rgba(74,191,181,0.12)] text-[var(--teal)]">
                 <BookOpen className="h-5.5 w-5.5" />
               </div>
               <h3 className="font-[family:var(--font-fraunces)] text-[19px] font-semibold tracking-[-0.02em] text-[var(--text)]">{upNext.title}</h3>
