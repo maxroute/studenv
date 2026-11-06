@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Hand,
   ImagePlus,
+  StickyNote,
   Link2,
   Lock,
   Maximize2,
@@ -23,6 +24,7 @@ import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
 import { FreeTextNode } from "./items/FreeTextNode";
+import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { ConnectionsLayer } from "./ConnectionsLayer";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
@@ -198,6 +200,7 @@ type WorkspaceTool =
   | "highlighter"
   | "eraser"
   | "text"
+  | "sticky"
   | "connect"
   | ShapeKind;
 
@@ -220,6 +223,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const isConnecting = activeTool === "connect";
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
+  const isStickyToolActive = activeTool === "sticky";
   const isShapeToolActive = SHAPE_KINDS.includes(activeTool as any);
 
   // Mock setter wrappers using functional updaters.
@@ -287,6 +291,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [editingFreeTextId, setEditingFreeTextId] = useState<string | null>(null);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [selectedStickyId, setSelectedStickyId] = useState<string | null>(null);
+  const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  const [stickyColor, setStickyColor] = useState(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -1173,10 +1180,28 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     return;
                   }
 
+                  if (isStickyToolActive) {
+                    const { x, y } = screenToWorld(e.clientX, e.clientY);
+                    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                      ? `item-${crypto.randomUUID()}`
+                      : `item-${Math.random().toString(36).slice(2, 11)}`;
+                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor }, {
+                      id, x, y, w: 220, h: 220, rotation: 0,
+                      zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
+                    });
+                    if (note) updateItems([...items, note]);
+                    setSelectedStickyId(id);
+                    setEditingStickyId(id);
+                    setActiveTool("select");
+                    return;
+                  }
+
                   if (isTextToolActive || isShapeToolActive || isPanning) {
                     return;
                   }
 
+                  setSelectedStickyId(null);
+                  setEditingStickyId(null);
                   setSelectedFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedImageId(null);
@@ -1399,6 +1424,21 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
+                      if (item.type === "sticky") {
+                        setSelectedFreeTextId(null);
+                        setEditingFreeTextId(null);
+                        setSelectedDrawingId(null);
+                        setSelectedImageId(null);
+                        setSelectedShapeId(null);
+                        useSelectionStore.getState().deselectAll();
+                        if (selectedStickyId === item.id) {
+                          setEditingStickyId(item.id);
+                        } else {
+                          setSelectedStickyId(item.id);
+                          setEditingStickyId(null);
+                        }
+                        return;
+                      }
                       const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
 
                       const targetIds = [item.id];
@@ -1411,12 +1451,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       }
 
                       if (item.type === "free-text") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
                         useSelectionStore.getState().deselectAll();
                         handleFreeTextSelect(item.id);
                       } else if (item.type === "drawing") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
                         setIsTextToolActive(false);
@@ -1425,6 +1469,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         useSelectionStore.getState().deselectAll();
                         setSelectedDrawingId(item.id);
                       } else if (item.type === "shape" || item.type === "text" || item.type === "image") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
                         setIsTextToolActive(false);
@@ -1471,6 +1517,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "pdf-fragment" && <PdfFragment item={item} />}
                     {item.type === "video-anchor" && <VideoAnchor item={item} />}
                     {item.type === "text" && <TextNode item={item as any} />}
+                    {item.type === "sticky" && (
+                      <StickyNode
+                        item={item as any}
+                        isSelected={selectedStickyId === item.id}
+                        isEditing={editingStickyId === item.id}
+                        onFinishEditing={() => setEditingStickyId(null)}
+                      />
+                    )}
                     {item.type === "free-text" && (
                       <FreeTextNode
                         item={item as any}
@@ -1549,6 +1603,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
             <ShapeStyleToolbar />
 
+            {selectedStickyId && !editingStickyId && (
+              <div className="fixed top-20 left-[4.5rem] z-[1200] flex items-center gap-1.5 rounded-lg border bg-white px-2 py-2 shadow-lg" aria-label="Sticky note color">
+                {STICKY_NOTE_COLORS.map((color) => (
+                  <button key={color.value} type="button" onClick={() => {
+                    setStickyColor(color.value);
+                    useWorkspaceStore.getState().updateItemProps(selectedStickyId, { color: color.value });
+                  }} className={`h-5 w-5 rounded-full border border-black/10 ${items.find((item) => item.id === selectedStickyId)?.type === "sticky" && (items.find((item) => item.id === selectedStickyId) as any).props.color === color.value ? "ring-2 ring-slate-500 ring-offset-2" : ""}`} style={{ backgroundColor: color.value }} title={color.label} aria-label={color.label} />
+                ))}
+              </div>
+            )}
+
             {contextMenu && (
               <ShapeContextMenu
                 x={contextMenu.x}
@@ -1607,6 +1672,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
+              <button
+                onClick={() => {
+                  setActiveTool(activeTool === "sticky" ? "select" : "sticky");
+                  setEditingStickyId(null);
+                  setSelectedStickyId(null);
+                  setIsTextToolLocked(false);
+                }}
+                className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-amber-100 text-amber-700" : "hover:bg-slate-50 text-slate-400"}`}
+                title="Sticky Note — click the canvas to place"
+              >
+                <StickyNote size={18} />
+              </button>
               <button
                 onClick={() => activateTextTool(false)}
                 onDoubleClick={() => activateTextTool(true)}
