@@ -1172,10 +1172,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     return;
                   }
 
-                  if (editingFreeTextId) {
+                  if (editingFreeTextId || editingStickyId) {
                     const activeElement = document.activeElement;
                     if (activeElement instanceof HTMLTextAreaElement) {
                       activeElement.blur();
+                    } else {
+                      setEditingFreeTextId(null);
+                      setEditingStickyId(null);
                     }
                     return;
                   }
