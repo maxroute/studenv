@@ -1390,7 +1390,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       item.type === "sticky"
                         ? editingStickyId === item.id
                         : item.type === "free-text"
-                          ? editingFreeTextId === item.id
+                          ? editingFreeTextId === item.id || selectedFreeTextId !== item.id
                           : item.type === "drawing"
                             ? false
                             : isMigratedToSelectionOverlay(item.type)
