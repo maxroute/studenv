@@ -26,6 +26,7 @@ export interface ActiveSession {
   expectedEndAt: number;
   pausedAt: number | null;
   taskId: string | null;
+  courseNodeId: string | null;
 }
 
 export interface CompletionEvent {
@@ -35,6 +36,8 @@ export interface CompletionEvent {
   startedAt: string;
   timestamp: number;
   taskId: string | null;
+  courseNodeId: string | null;
+  status: "completed" | "interrupted";
 }
 
 // ─── Persistable subset ──────────────────────────────────────
@@ -48,6 +51,7 @@ export interface FocusTimerPersist {
   autoStartBreaks: boolean;
   autoStartFocus: boolean;
   taskId: string | null;
+  courseNodeId: string | null;
 }
 
 // ─── Store interface ─────────────────────────────────────────
@@ -62,6 +66,7 @@ export interface FocusTimerState extends FocusTimerPersist {
   resumeTimer: () => void;
   toggleTimer: () => void;
   resetTimer: () => void;
+  finishTimer: () => void;
   skipSession: () => void;
   switchType: (type: SessionType) => void;
   tick: () => void;
@@ -74,6 +79,7 @@ export interface FocusTimerState extends FocusTimerPersist {
   setFocusCycleCount: (v: number) => void;
   setSelectedType: (type: SessionType) => void;
   setTaskId: (id: string | null) => void;
+  setCourseNodeId: (id: string | null) => void;
   hydrate: (state: Partial<FocusTimerPersist>) => void;
   getTimeLeft: () => number;
 }
@@ -100,6 +106,7 @@ function saveCurrentState(s: any) {
     autoStartBreaks: s.autoStartBreaks,
     autoStartFocus: s.autoStartFocus,
     taskId: s.taskId,
+    courseNodeId: s.courseNodeId,
   });
 }
 
@@ -155,6 +162,7 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
   pendingCompletion: null,
   _hydrated: false,
   taskId: null,
+  courseNodeId: null,
 
   // ─── Hydrate from localStorage ───────────────────────────
   hydrate: (incoming) => {
@@ -187,6 +195,7 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
       autoStartBreaks: incoming.autoStartBreaks ?? state.autoStartBreaks,
       autoStartFocus: incoming.autoStartFocus ?? state.autoStartFocus,
       taskId: incoming.taskId ?? state.taskId,
+      courseNodeId: incoming.courseNodeId ?? state.courseNodeId,
       _hydrated: true,
     });
   },
@@ -196,7 +205,7 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
 
   // ─── Start a new session ─────────────────────────────────
   startTimer: () => {
-    const { selectedType, durations, goal, taskId } = get();
+    const { selectedType, durations, goal, taskId, courseNodeId } = get();
     const durationMs = durations[selectedType] * 60 * 1000;
     const now = Date.now();
     const sessionGoal =
@@ -213,6 +222,7 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
       expectedEndAt: now + durationMs,
       pausedAt: null,
       taskId: selectedType === "focus" ? taskId : null,
+      courseNodeId: selectedType === "focus" ? courseNodeId : null,
     };
 
     set({
@@ -280,6 +290,31 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
     saveCurrentState(get());
   },
 
+  finishTimer: () => {
+    const { activeSession, durations, selectedType, pendingCompletion } = get();
+    if (!activeSession) return;
+    const elapsedMs = Math.min(
+      activeSession.durationMs,
+      Math.max(0, activeSession.durationMs - computeTimeLeft(activeSession) * 1000),
+    );
+    if (elapsedMs > 0 && !pendingCompletion) {
+      set({
+        pendingCompletion: {
+          type: activeSession.type,
+          durationMs: elapsedMs,
+          goal: activeSession.goal,
+          startedAt: new Date(activeSession.startedAt).toISOString(),
+          timestamp: Date.now(),
+          taskId: activeSession.taskId,
+          courseNodeId: activeSession.courseNodeId,
+          status: "interrupted",
+        },
+      });
+    }
+    set({ activeSession: null, displayTimeLeft: durations[selectedType] * 60, sessionGoal: "" });
+    saveCurrentState(get());
+  },
+
   // ─── Skip to next mode ───────────────────────────────────
   skipSession: () => {
     const { selectedType, durations, focusCycleCount } = get();
@@ -332,6 +367,8 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
         startedAt: new Date(activeSession.startedAt).toISOString(),
         timestamp: Date.now(),
         taskId: activeSession.taskId,
+        courseNodeId: activeSession.courseNodeId,
+        status: "completed",
       };
 
       const wasType = activeSession.type;
@@ -416,6 +453,11 @@ export const useFocusStore = create<FocusTimerState>((set, get) => ({
 
   setTaskId: (taskId) => {
     set({ taskId });
+    saveCurrentState(get());
+  },
+
+  setCourseNodeId: (courseNodeId) => {
+    set({ courseNodeId });
     saveCurrentState(get());
   },
 }));

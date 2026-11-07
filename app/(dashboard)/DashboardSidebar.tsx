@@ -7,9 +7,12 @@ import { signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarCheck,
+  ChartColumn,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Settings,
+  Sparkles,
   Timer,
   Trophy,
   User,
@@ -28,9 +31,12 @@ const navSections = [
     label: "Learning",
     items: [
       { name: "Shelf", href: "/shelf", icon: ShelfNavIcon },
+      { name: "My Learning", href: "/learning", icon: GraduationCap },
+      { name: "Rangan", href: "/rangan", icon: Sparkles },
       { name: "Study Groups", href: "/dashboard/groups", icon: Users },
       { name: "Focus Mode", href: "/dashboard/focus", icon: Timer },
       { name: "Planner", href: "/dashboard/planner", icon: CalendarCheck },
+      { name: "Progress", href: "/learning/progress", icon: ChartColumn },
       { name: "Achievements", href: "/dashboard/achievements", icon: Trophy },
     ],
   },

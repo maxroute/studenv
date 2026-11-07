@@ -65,6 +65,7 @@ model User {
   workspaces          Workspace[]
   quizAttempts        QuizAttempt[]
   focusSessions       FocusSession[]
+  courses             Course[]
   ownedStudyGroups    StudyGroup[]      @relation("StudyGroupOwner")
   studyGroupMembers   StudyGroupMember[]
   studyGroupJoinRequests StudyGroupJoinRequest[]
@@ -125,11 +126,13 @@ model Item {
   status      ItemStatus            @default(unread)
   starred     Boolean               @default(false)
   sourceHost  String?
+  courseNodeId String?
   searchVector Unsupported("tsvector")? @map("search_vector")
   user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   itemTags        ItemTag[]
   collectionItems CollectionItem[]
   mediaAsset      MediaAsset?
+  courseNode      CourseNode?           @relation(fields: [courseNodeId], references: [id], onDelete: SetNull)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -138,6 +141,52 @@ model Item {
   @@index([userId, type])
   @@index([userId, starred])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([courseNodeId])
+}
+
+enum CourseNodeType {
+  subject
+  topic
+  lecture
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String   @db.VarChar(200)
+  providerName String   @db.VarChar(100)
+  courseUrl    String   @db.VarChar(2000)
+  description  String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes CourseNode[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+model CourseNode {
+  id          String         @id @default(cuid())
+  courseId    String
+  parentId    String?
+  type        CourseNodeType
+  title       String         @db.VarChar(250)
+  originalUrl String?        @db.VarChar(2000)
+  sortOrder   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  course        Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parent        CourseNode?    @relation("CourseNodeTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children      CourseNode[]   @relation("CourseNodeTree")
+  items         Item[]
+  focusSessions FocusSession[]
+  tasks         Task[]
+
+  @@index([courseId, sortOrder])
+  @@index([parentId, sortOrder])
+  @@index([courseId, type])
 }
 
 model Collection {
@@ -468,12 +517,15 @@ model FocusSession {
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId          String?
   task            Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  courseNodeId    String?
+  courseNode      CourseNode? @relation(fields: [courseNodeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([userId, status])
   @@index([userId, createdAt])
   @@index([userId, type, status])
   @@index([taskId])
+  @@index([courseNodeId, status, createdAt])
 }
 
 enum StudyGroupPrivacy {
@@ -586,12 +638,15 @@ model Task {
   icon                String?        @db.VarChar(50)
   order               Int            @default(0)
   notes               String?        @db.Text
+  courseNodeId        String?
 
   user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   focusSessions       FocusSession[]
+  courseNode          CourseNode?    @relation(fields: [courseNodeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([userId, status])
   @@index([userId, dueDate])
   @@index([userId, order])
+  @@index([courseNodeId])
 }

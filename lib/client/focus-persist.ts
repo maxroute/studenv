@@ -9,6 +9,7 @@ export async function persistSessionToServer(session: {
   goal?: string;
   startedAt?: string;
   taskId?: string | null;
+  courseNodeId?: string | null;
 }): Promise<boolean> {
   try {
     const res = await fetch("/api/focus-sessions", {
