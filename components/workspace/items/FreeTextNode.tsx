@@ -184,9 +184,14 @@ export function FreeTextNode({
             userSelect: "none",
           }}
           onPointerDown={(e) => {
+            // Let react-rnd handle its drag gesture, but don't bubble into
+            // the canvas selection handler.
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
             e.stopPropagation();
 
-            // First click selects; the next click on the selected text edits.
+            // Clicks without a drag select first, then enter edit mode.
             if (isSelected) {
               onStartEditing?.();
             } else {
