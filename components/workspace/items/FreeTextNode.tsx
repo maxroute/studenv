@@ -148,8 +148,8 @@ export function FreeTextNode({
           onChange={(e) => setEditText(e.target.value)}
           onBlur={() => finishEditing(true)}
           onPointerDown={(e) => {
+            // Keep the editor mounted when the user clicks to reposition the caret.
             e.stopPropagation();
-            onSelect?.();
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
@@ -185,11 +185,13 @@ export function FreeTextNode({
           }}
           onPointerDown={(e) => {
             e.stopPropagation();
-            onSelect?.();
-          }}
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            onStartEditing?.();
+
+            // First click selects; the next click on the selected text edits.
+            if (isSelected) {
+              onStartEditing?.();
+            } else {
+              onSelect?.();
+            }
           }}
         >
           {item.props.text}
