@@ -38,6 +38,7 @@ export async function listTasks(userId: string) {
 }
 
 export async function createTask(userId: string, data: any) {
+  await ensureCourseNodeOwnership(userId, data.courseNodeId);
   return prisma.$transaction(async (tx) => {
     const maxOrder = await tx.task.aggregate({ where: { userId }, _max: { order: true } });
     return tx.task.create({
@@ -53,6 +54,10 @@ export async function updateTask(userId: string, taskId: string, data: any) {
 
   if (!existingTask || existingTask.userId !== userId) {
     throw new Error("Task not found or unauthorized");
+  }
+
+  if (data.courseNodeId !== undefined) {
+    await ensureCourseNodeOwnership(userId, data.courseNodeId);
   }
 
   const updatedStatus = data.status;
@@ -102,6 +107,7 @@ export async function updateTask(userId: string, taskId: string, data: any) {
           color: updatedTask.color,
           icon: updatedTask.icon,
           notes: updatedTask.notes,
+          courseNodeId: updatedTask.courseNodeId,
           order: nextOrder,
         },
       });
@@ -111,6 +117,19 @@ export async function updateTask(userId: string, taskId: string, data: any) {
   }
 
   return updatedTask;
+}
+
+async function ensureCourseNodeOwnership(userId: string, courseNodeId?: string | null) {
+  if (!courseNodeId) return;
+  const node = await prisma.courseNode.findFirst({
+    where: { id: courseNodeId, course: { userId } },
+    select: { id: true },
+  });
+  if (!node) {
+    const error = new Error("Learning node not found.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
 }
 
 export async function deleteTask(userId: string, taskId: string) {

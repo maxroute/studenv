@@ -136,24 +136,42 @@ export function FocusSessionManager() {
     if (completionProcessed.current) return;
     completionProcessed.current = true;
 
-    // Play alert sound
-    playCompletionAlert();
+    if (pendingCompletion.status === "completed") playCompletionAlert();
 
     // Persist to server
     void persistSessionToServer({
       type: pendingCompletion.type,
       durationMs: pendingCompletion.durationMs,
-      status: "completed",
+      status: pendingCompletion.status,
       goal: pendingCompletion.goal,
       startedAt: pendingCompletion.startedAt,
       taskId: pendingCompletion.taskId,
-    }).then(() => {
+      courseNodeId: pendingCompletion.courseNodeId,
+    }).then((persisted) => {
+      if (!persisted) {
+        toast.error("Study session is queued locally and will retry syncing.");
+        return;
+      }
       void mutate("/api/analytics");
       void mutate("/api/dashboard");
       void mutate("/api/planner/tasks");
 
+      if (pendingCompletion.status === "interrupted") {
+        toast.success("Study session saved.");
+      } else if (pendingCompletion.type === "focus") {
+        const state = useFocusStore.getState();
+        const nextIsLong = state.selectedType === "longBreak";
+        toast.success(
+          nextIsLong
+            ? "Focus block complete. Time for a long break."
+            : "Focus block complete. Take a short break.",
+        );
+      } else {
+        toast.success("Break complete. You're ready for the next focus session.");
+      }
+
       // Check if task estimated duration is reached
-      if (pendingCompletion.type === "focus" && pendingCompletion.taskId && tasks) {
+      if (pendingCompletion.status === "completed" && pendingCompletion.type === "focus" && pendingCompletion.taskId && tasks) {
         const task = tasks.find((t) => t.id === pendingCompletion.taskId);
         if (task && task.estimatedDuration) {
           const estimatedMs = task.estimatedDuration * 60 * 1000;
@@ -168,25 +186,12 @@ export function FocusSessionManager() {
       }
     });
 
-    // Toast notification
     const wasType = pendingCompletion.type;
-    if (wasType === "focus") {
-      const state = useFocusStore.getState();
-      const nextIsLong = state.selectedType === "longBreak";
-      toast.success(
-        nextIsLong
-          ? "Focus block complete. Time for a long break."
-          : "Focus block complete. Take a short break.",
-      );
-    } else {
-      toast.success("Break complete. You're ready for the next focus session.");
-    }
-
     // Auto-start next session if configured
     const state = useFocusStore.getState();
-    if (wasType === "focus" && state.autoStartBreaks) {
+    if (pendingCompletion.status === "completed" && wasType === "focus" && state.autoStartBreaks) {
       setTimeout(() => useFocusStore.getState().startTimer(), 50);
-    } else if (wasType !== "focus" && state.autoStartFocus) {
+    } else if (pendingCompletion.status === "completed" && wasType !== "focus" && state.autoStartFocus) {
       setTimeout(() => useFocusStore.getState().startTimer(), 50);
     }
 

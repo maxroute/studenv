@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type, durationMs, status, goal, startedAt, taskId } = body;
+    const { type, durationMs, status, goal, startedAt, taskId, courseNodeId } = body;
 
     // Validate required fields
     if (!type || !durationMs || !status) {
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       goal: goal ?? null,
       startedAt: startedAt ?? null,
       taskId: taskId ?? null,
+      courseNodeId: courseNodeId ?? null,
     });
 
     return NextResponse.json({

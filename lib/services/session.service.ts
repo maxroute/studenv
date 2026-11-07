@@ -11,6 +11,7 @@ export interface RecordSessionInput {
   goal?: string | null;
   startedAt?: string | null; // ISO string
   taskId?: string | null;
+  courseNodeId?: string | null;
 }
 
 export interface MigrationSessionInput {
@@ -65,9 +66,31 @@ export async function recordSession(
   const now = new Date();
   const taskId = input.taskId ?? null;
 
+  if (taskId) {
+    const ownedTask = await prisma.task.findFirst({ where: { id: taskId, userId: input.userId }, select: { id: true } });
+    if (!ownedTask) {
+      const ownershipError = new Error("Task not found.");
+      Object.assign(ownershipError, { status: 404 });
+      throw ownershipError;
+    }
+  }
+
+  const courseNodeId = input.courseNodeId ?? null;
+  if (courseNodeId) {
+    const ownedNode = await prisma.courseNode.findFirst({
+      where: { id: courseNodeId, course: { userId: input.userId } },
+      select: { id: true },
+    });
+    if (!ownedNode) {
+      const ownershipError = new Error("Learning node not found.");
+      Object.assign(ownershipError, { status: 404 });
+      throw ownershipError;
+    }
+  }
+
   await prisma.$executeRaw`
-    INSERT INTO "FocusSession" ("id", "userId", "type", "durationMs", "status", "goal", "startedAt", "createdAt", "taskId")
-    VALUES (${id}, ${input.userId}, ${input.type}, ${input.durationMs}, ${input.status}, ${goal}, ${startedAt}, ${now}, ${taskId})
+    INSERT INTO "FocusSession" ("id", "userId", "type", "durationMs", "status", "goal", "startedAt", "createdAt", "taskId", "courseNodeId")
+    VALUES (${id}, ${input.userId}, ${input.type}, ${input.durationMs}, ${input.status}, ${goal}, ${startedAt}, ${now}, ${taskId}, ${courseNodeId})
   `;
 
   // Update user's lastStudyDate (for quick reference, not for streak calc)

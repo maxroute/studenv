@@ -3,6 +3,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const apiKey = process.env.GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(apiKey);
 
+export function isAiConfigured() {
+  return Boolean(apiKey.trim());
+}
+
 export async function generateSummary(text: string): Promise<string> {
   if (!text) return "No content to summarize.";
   

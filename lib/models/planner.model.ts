@@ -13,6 +13,7 @@ const resourceIdSchema = z
   );
 
 const baseTaskSchema = z.object({
+  courseNodeId: resourceIdSchema.optional().nullable(),
   title: z.string().trim().min(1, "Title is required.").max(500),
   description: z.string().trim().max(2000).optional().nullable(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
