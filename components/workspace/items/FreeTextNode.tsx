@@ -209,17 +209,41 @@ export function FreeTextNode({
               suppressClickRef.current = true;
             }
           }}
-          onPointerUp={() => {
+          onPointerUp={(e) => {
+            const start = pointerStartRef.current;
             pointerStartRef.current = null;
+
+            // Mobile browsers do not always deliver the synthesized click
+            // consistently after a touch gesture handled by a drag library.
+            // Resolve a stationary touch directly on pointer-up instead.
+            if (e.pointerType === "touch" && start) {
+              const distance = Math.hypot(
+                e.clientX - start.x,
+                e.clientY - start.y,
+              );
+
+              if (distance <= 5 && !suppressClickRef.current) {
+                e.stopPropagation();
+                suppressClickRef.current = true;
+
+                if (isSelected) {
+                  onStartEditing?.();
+                } else {
+                  onSelect?.();
+                }
+                return;
+              }
+            }
           }}
           onPointerCancel={() => {
             pointerStartRef.current = null;
+            suppressClickRef.current = false;
           }}
           onClick={(e) => {
             e.stopPropagation();
 
-            // A drag completion can also emit click. Never enter edit mode
-            // after moving; keep the selected object ready for another drag.
+            // Ignore the synthetic click after touch pointer-up, and ignore
+            // clicks generated at the end of a drag.
             if (suppressClickRef.current) {
               suppressClickRef.current = false;
               return;
