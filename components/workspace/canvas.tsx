@@ -1172,17 +1172,31 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     return;
                   }
 
-                  if (editingFreeTextId || editingStickyId) {
+                  if (editingStickyId) {
                     const activeElement = document.activeElement;
+
+                    if (activeElement instanceof HTMLTextAreaElement) {
+                      activeElement.blur();
+                    } else {
+                      setEditingStickyId(null);
+                    }
+
+                    // Exit editing and deselect the sticky note in the same click.
+                    setSelectedStickyId(null);
+                    return;
+                  }
+
+                  if (editingFreeTextId) {
+                    const activeElement = document.activeElement;
+
                     if (activeElement instanceof HTMLTextAreaElement) {
                       activeElement.blur();
                     } else {
                       setEditingFreeTextId(null);
-                      setEditingStickyId(null);
                     }
+
                     return;
                   }
-
                   if (isStickyToolActive) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1291,7 +1305,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 {isTextToolActive && !isDrawing && !editingFreeTextId && (
                   <div
-                    className="absolute inset-0 z-[10000]"
+                    className="absolute inset-0 z-[0]"
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
@@ -1388,13 +1402,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? selectedStickyId === item.id
                         : item.type === "free-text"
                           ? selectedFreeTextId === item.id
-                        : item.type === "drawing"
-                          ? selectedDrawingId === item.id
-                          : item.type === "image"
-                            ? selectedImageId === item.id
-                            : isMigratedToSelectionOverlay(item.type)
-                              ? selectedIds.includes(item.id)
-                              : true
+                          : item.type === "drawing"
+                            ? selectedDrawingId === item.id
+                            : item.type === "image"
+                              ? selectedImageId === item.id
+                              : isMigratedToSelectionOverlay(item.type)
+                                ? selectedIds.includes(item.id)
+                                : true
                     }
                     passThrough={item.type === "drawing"}
                     showRotateButton={
@@ -1693,10 +1707,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onClick={() => activateTextTool(false)}
                 onDoubleClick={() => activateTextTool(true)}
                 className={`relative p-2 rounded-md transition-colors ${isTextToolActive
-                    ? isTextToolLocked
-                      ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
-                      : "bg-indigo-50 text-indigo-600"
-                    : "hover:bg-slate-50 text-slate-400"
+                  ? isTextToolLocked
+                    ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
+                    : "bg-indigo-50 text-indigo-600"
+                  : "hover:bg-slate-50 text-slate-400"
                   }`}
                 title="Text Tool (T) - Double-click to lock"
               >
