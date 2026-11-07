@@ -270,6 +270,10 @@ export function StudioItemComponent({
 
         {!isDrawingMode && showDeleteButton && !isLocked && (
           <button
+            onPointerDown={(e) => {
+              // Keep delete clicks from reaching canvas/item selection handlers.
+              e.stopPropagation();
+            }}
             onClick={(e) => {
               e.stopPropagation();
               removeItem(item.id);
