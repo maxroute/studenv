@@ -1189,10 +1189,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   if (editingFreeTextId) {
                     const activeElement = document.activeElement;
 
+                    // Blur first so FreeTextNode commits its draft, then deselect
+                    // in this same outside click instead of requiring a second click.
                     if (activeElement instanceof HTMLTextAreaElement) {
                       activeElement.blur();
-                    } else {
-                      setEditingFreeTextId(null);
+                    }
+
+                    setEditingFreeTextId(null);
+                    setSelectedFreeTextId(null);
+                    if (!isTextToolLocked) {
+                      setIsTextToolActive(false);
                     }
 
                     return;
