@@ -1145,6 +1145,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           disabled: isDrawing,
           wheelPanning: true,
           allowLeftClickPan: isPanning,
+          // A text item's drag handle owns single-touch gestures. This keeps
+          // the canvas from starting a pan before the text can select/edit/move.
+          excluded: ["drag-handle"],
         }}
         pinch={{ disabled: isDrawing }}
         wheel={{
