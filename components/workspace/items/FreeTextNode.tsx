@@ -184,6 +184,10 @@ export function FreeTextNode({
           style={{
             ...sharedStyle,
             userSelect: "none",
+            // Let React Rnd receive touch drags instead of the browser treating
+            // the gesture as page scrolling or native text interaction.
+            touchAction: "none",
+            WebkitTouchCallout: "none",
           }}
           onPointerDown={(e) => {
             // Track whether this gesture becomes a drag. React Rnd handles
