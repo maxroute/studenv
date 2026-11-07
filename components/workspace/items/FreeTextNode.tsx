@@ -32,6 +32,8 @@ export function FreeTextNode({
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   useEffect(() => {
     setEditText(item.props.text ?? "");
@@ -184,14 +186,41 @@ export function FreeTextNode({
             userSelect: "none",
           }}
           onPointerDown={(e) => {
-            // Let react-rnd handle its drag gesture, but don't bubble into
-            // the canvas selection handler.
+            // Track whether this gesture becomes a drag. React Rnd handles
+            // the actual movement; this only distinguishes drag from click.
+            pointerStartRef.current = { x: e.clientX, y: e.clientY };
+            suppressClickRef.current = false;
             e.stopPropagation();
+          }}
+          onPointerMove={(e) => {
+            const start = pointerStartRef.current;
+            if (!start) return;
+
+            const distance = Math.hypot(
+              e.clientX - start.x,
+              e.clientY - start.y
+            );
+
+            if (distance > 5) {
+              suppressClickRef.current = true;
+            }
+          }}
+          onPointerUp={() => {
+            pointerStartRef.current = null;
+          }}
+          onPointerCancel={() => {
+            pointerStartRef.current = null;
           }}
           onClick={(e) => {
             e.stopPropagation();
 
-            // Clicks without a drag select first, then enter edit mode.
+            // A drag completion can also emit click. Never enter edit mode
+            // after moving; keep the selected object ready for another drag.
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              return;
+            }
+
             if (isSelected) {
               onStartEditing?.();
             } else {
