@@ -53,8 +53,21 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
   const [transformState, setTransformState] = useState<TransformState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filter selected items that are migrated to this overlay
-  const selectedItems = items.filter((item) => selectedIds.includes(item.id) && isMigratedToSelectionOverlay(item.type));
+  // Keep individual object handles for migrated items, while deriving one
+  // shared axis-aligned boundary from every selected workspace object.
+  const allSelectedItems = items.filter((item) => selectedIds.includes(item.id));
+  const selectedItems = allSelectedItems.filter((item) => isMigratedToSelectionOverlay(item.type));
+  const selectionBounds = allSelectedItems.length > 1
+    ? allSelectedItems.reduce(
+        (bounds, item) => ({
+          left: Math.min(bounds.left, item.x),
+          top: Math.min(bounds.top, item.y),
+          right: Math.max(bounds.right, item.x + item.w),
+          bottom: Math.max(bounds.bottom, item.y + item.h),
+        }),
+        { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
+      )
+    : null;
   const hoveredItem = hoveredItemId ? items.find((i) => i.id === hoveredItemId) : null;
 
   // Handle pointer down on a resize handle
@@ -241,6 +254,19 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
 
   return (
     <div ref={containerRef} className="absolute inset-0 pointer-events-none z-[1100]">
+      {selectionBounds && (
+        <div
+          aria-label={`${allSelectedItems.length} objects selected`}
+          className="absolute border-2 border-[#f5a623] border-dashed rounded-sm"
+          style={{
+            left: selectionBounds.left,
+            top: selectionBounds.top,
+            width: Math.max(1, selectionBounds.right - selectionBounds.left),
+            height: Math.max(1, selectionBounds.bottom - selectionBounds.top),
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {/* SVG Hover Outline */}
       {hoveredItem && !selectedIds.includes(hoveredItem.id) && !('locked' in hoveredItem.props && hoveredItem.props.locked) && isMigratedToSelectionOverlay(hoveredItem.type) && (
         <div
