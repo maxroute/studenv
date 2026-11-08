@@ -41,7 +41,7 @@ import {
 import { ImageNode } from "./items/ImageNode";
 import { ShapeNode } from "./items/ShapeNode";
 import { ShapeCreationOverlay } from "./shapes/ShapeCreationOverlay";
-import { ShapeToolButton } from "./shapes/ShapeToolButton";
+import { ShapeToolButton, ShapeToolIcon } from "./shapes/ShapeToolButton";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
@@ -1852,7 +1852,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur"
               >
-                {isPanning ? <Hand size={19} /> : isDrawing ? <Pencil size={19} /> : isTextToolActive ? <Type size={19} /> : isStickyToolActive ? <StickyNote size={19} /> : isConnecting ? <Link2 size={19} /> : isShapeToolActive ? <Maximize2 size={19} /> : <MousePointer2 size={19} />}
+                {isPanning ? <Hand size={19} /> : isDrawing ? <Pencil size={19} /> : isTextToolActive ? <Type size={19} /> : isStickyToolActive ? <StickyNote size={19} /> : isConnecting ? <Link2 size={19} /> : isShapeToolActive ? <ShapeToolIcon kind={activeShapeKind} size={19} /> : <MousePointer2 size={19} />}
                 <span className={`absolute ml-7 mt-7 h-2 w-2 rounded-full border border-white ${activeTool === "select" ? "bg-indigo-500" : "bg-amber-500"}`} />
               </button>
 
