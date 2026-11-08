@@ -163,14 +163,6 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
-export const ConnectionSchema = z.object({
-  id: z.string().min(1),
-  fromId: z.string().min(1),
-  toId: z.string().min(1),
-  label: z.string().optional(),
-  color: z.string().optional(),
-});
-
 export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   TextNodeSchema,
   FreeTextNodeSchema,
@@ -188,12 +180,10 @@ export const WorkspaceSceneSchema = z.object({
   format: z.literal(WORKSPACE_SCENE_FORMAT),
   version: z.literal(WORKSPACE_SCENE_VERSION),
   items: z.array(WorkspaceNodeSchema),
-  connections: z.array(ConnectionSchema).default([]),
   workspaceAssetIds: z.array(z.string().min(1)).default([]),
   viewport: WorkspaceViewportSchema,
 });
 
-export type Connection = z.infer<typeof ConnectionSchema>;
 export type WorkspaceViewport = z.infer<typeof WorkspaceViewportSchema>;
 export type PdfCrop = z.infer<typeof PdfCropSchema>;
 export type TextNode = z.infer<typeof TextNodeSchema>;
@@ -520,12 +510,6 @@ export function parseWorkspaceScene(value: unknown): WorkspaceScene {
     ? record.items.map(parseWorkspaceNode).filter(Boolean)
     : [];
   
-  const connections = Array.isArray(record?.connections)
-    ? record.connections.map((c: any) => {
-        const p = ConnectionSchema.safeParse(c);
-        return p.success ? p.data : null;
-      }).filter(Boolean) as Connection[]
-    : [];
   const workspaceAssetIds = Array.isArray(record?.workspaceAssetIds)
     ? record.workspaceAssetIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
@@ -534,7 +518,6 @@ export function parseWorkspaceScene(value: unknown): WorkspaceScene {
     format: WORKSPACE_SCENE_FORMAT,
     version: WORKSPACE_SCENE_VERSION,
     items,
-    connections,
     workspaceAssetIds,
     viewport: coerceViewport(record?.viewport),
   });
@@ -553,20 +536,19 @@ export function parseWorkspaceSceneJson(sceneJson?: string | null): WorkspaceSce
 }
 
 export function createWorkspaceScene(
-  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "connections" | "workspaceAssetIds">>,
+  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "workspaceAssetIds">>,
 ) {
   return WorkspaceSceneSchema.parse({
     format: WORKSPACE_SCENE_FORMAT,
     version: WORKSPACE_SCENE_VERSION,
     items: input?.items ?? [],
-    connections: input?.connections ?? [],
     workspaceAssetIds: input?.workspaceAssetIds ?? [],
     viewport: input?.viewport ?? DEFAULT_WORKSPACE_VIEWPORT,
   });
 }
 
 export function serializeWorkspaceScene(
-  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "connections" | "workspaceAssetIds">>,
+  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "workspaceAssetIds">>,
 ) {
   return JSON.stringify(createWorkspaceScene(input));
 }
