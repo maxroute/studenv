@@ -366,7 +366,26 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
           onPointerMove={handleGroupDragMove}
           onPointerUp={handleGroupDragEnd}
           onPointerCancel={handleGroupDragEnd}
-        />
+        >
+          {baseHandles.map((handle) => (
+            <div
+              key={`group-handle-${handle}`}
+              className="absolute rounded-full border border-[#f5a623] bg-white shadow-sm"
+              style={{
+                width: handleSize,
+                height: handleSize,
+                zIndex: 12,
+                cursor: getRotatedCursor(handle, 0),
+                pointerEvents: "auto",
+                ...handleStyles[handle],
+              }}
+              onPointerDown={(event) => handleResizeStart(event, allSelectedItems[0].id, handle)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            />
+          ))}
+        </div>
       )}
       {/* SVG Hover Outline */}
       {hoveredItem && !selectedIds.includes(hoveredItem.id) && !('locked' in hoveredItem.props && hoveredItem.props.locked) && isMigratedToSelectionOverlay(hoveredItem.type) && (
@@ -539,7 +558,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
             />
 
             {/* Resize Handles (Hidden if locked) */}
-            {!isLocked &&
+            {selectedIds.length === 1 && !isLocked &&
               baseHandles.map((hType) => (
                 <div
                   key={hType}
