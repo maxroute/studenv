@@ -290,6 +290,9 @@ export function StudioItemComponent({
         onPointerDown={onPointerDown}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
+        data-workspace-item="true"
+        data-workspace-item-id={item.id}
+        data-workspace-item-type={item.type}
         data-drawing-id={item.type === "drawing" ? item.id : undefined}
         data-image-id={item.type === "image" ? item.id : undefined}
         data-shape-id={item.type === "shape" ? item.id : undefined}
