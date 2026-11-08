@@ -70,30 +70,6 @@ interface WorkspaceState {
 }
 
 
-function traceFreeTextPositionChanges(
-  source: string,
-  before: StudioItem[],
-  after: StudioItem[],
-) {
-  const previous = new Map(
-    before.filter((item) => item.type === "free-text").map((item) => [item.id, item]),
-  );
-
-  for (const item of after) {
-    if (item.type !== "free-text") continue;
-    const oldItem = previous.get(item.id);
-    if (!oldItem || (oldItem.x === item.x && oldItem.y === item.y)) continue;
-
-    console.groupCollapsed(
-      `[FreeText position trace] ${source}: ${item.id} ${oldItem.x},${oldItem.y} → ${item.x},${item.y}`,
-    );
-    console.log("before", { x: oldItem.x, y: oldItem.y });
-    console.log("after", { x: item.x, y: item.y });
-    console.trace("Position write stack");
-    console.groupEnd();
-  }
-}
-
 function clearLegacyWorkspaceCache() {
   if (typeof window === "undefined") return;
 
@@ -180,7 +156,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     updateItems: (items: StudioItem[]) => {
-      traceFreeTextPositionChanges("updateItems", get().items, items);
       set({ items, isDirty: true });
     },
 
@@ -234,15 +209,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     updateItem: (id: string, updates: StudioItemUpdate) => {
       const { items } = get();
-      if (updates.x !== undefined || updates.y !== undefined) {
-        const target = items.find((item) => item.id === id && item.type === "free-text");
-        if (target && (target.x !== updates.x && updates.x !== undefined || target.y !== updates.y && updates.y !== undefined)) {
-          console.groupCollapsed(`[FreeText position trace] updateItem: ${id}`);
-          console.log("before", { x: target.x, y: target.y }, "updates", updates);
-          console.trace("Position write stack");
-          console.groupEnd();
-        }
-      }
       set({
         items: items.map((item: StudioItem) => {
           if (item.id !== id) return item;
@@ -297,15 +263,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     batchUpdateItems: (updates) => {
       const { items } = get();
-      for (const update of updates) {
-        const target = items.find((item) => item.id === update.id && item.type === "free-text");
-        if (target && (update.changes.x !== undefined && target.x !== update.changes.x || update.changes.y !== undefined && target.y !== update.changes.y)) {
-          console.groupCollapsed(`[FreeText position trace] batchUpdateItems: ${target.id}`);
-          console.log("before", { x: target.x, y: target.y }, "changes", update.changes);
-          console.trace("Position write stack");
-          console.groupEnd();
-        }
-      }
       const updateMap = new Map(updates.map(u => [u.id, u]));
       set({
         items: items.map((item: StudioItem) => {
