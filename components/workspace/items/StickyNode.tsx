@@ -212,7 +212,7 @@ export function StickyNode({
           /* Display text */
           <div
             ref={displayRef}
-            className={`${patrickHand.className} relative z-10 h-full w-full overflow-hidden whitespace-pre-wrap break-words p-5 text-slate-800`}
+            className={`${patrickHand.className} drag-handle relative z-10 h-full w-full overflow-hidden whitespace-pre-wrap break-words p-5 text-slate-800 cursor-move`}
             style={textStyle}
           >
             {item.props.text || (
