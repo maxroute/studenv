@@ -56,6 +56,16 @@ export function StudioItemComponent({
   const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const rotationStartRef = useRef<{
+    centerX: number;
+    centerY: number;
+    startAngle: number;
+    lastAngle: number;
+    accumulatedDelta: number;
+    startRotation: number;
+  } | null>(null);
+  const onRotateChangeRef = useRef(onRotateChange);
+  onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const dragMovedRef = useRef(false);
 
@@ -74,32 +84,43 @@ export function StudioItemComponent({
     if (!isRotating) return;
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (!rootRef.current || !onRotateChange) {
-        return;
-      }
+      const start = rotationStartRef.current;
+      const onRotate = onRotateChangeRef.current;
+      if (!start || !onRotate) return;
 
-      const rect = rootRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const angle = Math.atan2(event.clientY - centerY, event.clientX - centerX);
-      const degrees = (angle * 180) / Math.PI + 90;
-      const normalized = (degrees + 360) % 360;
+      const angle = Math.atan2(
+        event.clientY - start.centerY,
+        event.clientX - start.centerX
+      );
 
-      onRotateChange(normalized);
+      // Track the shortest angular delta between consecutive pointer events.
+      // This avoids 0°/360° wraparound jumps and direction reversals.
+      const delta = Math.atan2(
+        Math.sin(angle - start.lastAngle),
+        Math.cos(angle - start.lastAngle)
+      );
+      start.accumulatedDelta += delta;
+      start.lastAngle = angle;
+
+      const degrees = start.startRotation + (start.accumulatedDelta * 180) / Math.PI;
+      onRotate(((degrees % 360) + 360) % 360);
     };
 
     const handlePointerUp = () => {
+      rotationStartRef.current = null;
       setIsRotating(false);
     };
 
     document.addEventListener("pointermove", handlePointerMove, true);
     document.addEventListener("pointerup", handlePointerUp, true);
+    document.addEventListener("pointercancel", handlePointerUp, true);
 
     return () => {
       document.removeEventListener("pointermove", handlePointerMove, true);
       document.removeEventListener("pointerup", handlePointerUp, true);
+      document.removeEventListener("pointercancel", handlePointerUp, true);
     };
-  }, [isRotating, onRotateChange]);
+  }, [isRotating]);
 
   return (
     <Rnd
@@ -298,6 +319,19 @@ export function StudioItemComponent({
               onPointerDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
+                const rect = rootRef.current?.getBoundingClientRect();
+                if (!rect) return;
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                rotationStartRef.current = {
+                  centerX,
+                  centerY,
+                  startAngle,
+                  lastAngle: startAngle,
+                  accumulatedDelta: 0,
+                  startRotation: item.rotation ?? 0,
+                };
                 setIsRotating(true);
               }}
               className={`pointer-events-auto absolute -top-[25px] left-1/2 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
