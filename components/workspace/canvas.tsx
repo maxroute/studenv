@@ -1723,6 +1723,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 activeShapeKind={activeShapeKind}
                 isActive={isShapeToolActive}
                 onSelectShapeKind={handleSelectShapeKind}
+                onOpen={() => handleSelectShapeKind(activeShapeKind)}
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
