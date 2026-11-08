@@ -361,6 +361,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
   const syncTimerRef = useRef<number | null>(null);
+  const ignoreNextTextPointerUpRef = useRef(false);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
@@ -1003,6 +1004,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
       e.preventDefault();
+
+      // An outside press that exits text editing can reveal the full-canvas
+      // Text overlay before this same gesture's pointer-up. Consume that
+      // pointer-up so it cannot create a new text item at the dismissal point.
+      if (ignoreNextTextPointerUpRef.current) {
+        ignoreNextTextPointerUpRef.current = false;
+        return;
+      }
+
       const { x, y } = screenToWorld(e.clientX, e.clientY);
       const nextId =
         typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1178,6 +1188,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     !(e.target instanceof Element &&
                       e.target.closest("[data-free-text-root]"))
                   ) {
+                    // The same physical press must not become a text-create
+                    // gesture if the Text overlay mounts before pointer-up.
+                    ignoreNextTextPointerUpRef.current = true;
                     e.preventDefault();
                     e.stopPropagation();
 
