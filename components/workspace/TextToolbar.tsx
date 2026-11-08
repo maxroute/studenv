@@ -40,7 +40,7 @@ export function TextToolbar({ color, onColorChange, fontSize, onFontSizeChange }
         ))}
       </div>
 
-      <div className="h-6 w-px bg-white/10" />
+      <div className="h-5 w-px shrink-0 bg-white/10 sm:h-6" />
 
       <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-white/5 px-1 py-0.5 sm:gap-2 sm:px-2 sm:py-1">
         <button
@@ -53,7 +53,7 @@ export function TextToolbar({ color, onColorChange, fontSize, onFontSizeChange }
         <span className="min-w-9 text-center text-xs font-semibold text-white sm:min-w-12 sm:text-sm">{fontSize}px</span>
         <button
           onClick={() => onFontSizeChange(Math.min(MAX_SIZE, fontSize + 2))}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:h-8 sm:w-8"
           title="Larger text"
         >
           <Plus size={14} />
