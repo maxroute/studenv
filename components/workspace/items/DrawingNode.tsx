@@ -34,8 +34,7 @@ export function DrawingNode({ item, isSelected = false, onSelect }: DrawingNodeP
           strokeLinecap="round"
           strokeLinejoin="round"
           pointerEvents="visibleStroke"
-          onPointerDown={(event) => {
-            event.stopPropagation();
+          onPointerDown={() => {
             onSelect?.();
           }}
         />
