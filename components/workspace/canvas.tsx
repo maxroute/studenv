@@ -1854,7 +1854,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   aria-label="Open tools"
                   aria-expanded={false}
                   onClick={() => setMobileToolbarOpen(true)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 transition-colors"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-lg transition-colors hover:bg-slate-50"
                 >
                   {isPanning
                     ? <Hand size={20} />
