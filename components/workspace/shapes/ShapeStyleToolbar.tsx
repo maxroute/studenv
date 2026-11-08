@@ -39,7 +39,7 @@ const VIEWPORT_PADDING = 8;
 export function ShapeStyleToolbar() {
   const { selectedIds } = useSelectionStore();
   const { items, viewport, updateItemProps, removeItems } = useWorkspaceStore();
-  const [activeTab, setActiveTab] = useState<"fill" | "stroke" | "effects">("fill");
+  const [activeTab, setActiveTab] = useState<"fill" | "stroke" | "effects">("stroke");
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const selectedShapes = items.filter(
