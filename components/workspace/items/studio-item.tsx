@@ -30,10 +30,10 @@ interface StudioItemComponentProps {
   onDragStop?: () => void;
 }
 
-export function StudioItemComponent({ 
-  item, 
-  children, 
-  onClick, 
+export function StudioItemComponent({
+  item,
+  children,
+  onClick,
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
@@ -116,7 +116,7 @@ export function StudioItemComponent({
         dragMovedRef.current = false;
         const { selectedIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
-        
+
         if (selectedIds.includes(item.id)) {
           const positions = new Map<string, { x: number; y: number }>();
           items.forEach((itm) => {
@@ -223,13 +223,13 @@ export function StudioItemComponent({
           ...position,
         });
       }}
-      style={{ 
+      style={{
         zIndex: item.zIndex,
         pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
       }}
       dragHandleClassName="drag-handle"
     >
-      <div 
+      <div
         ref={rootRef}
         className={`w-full h-full relative group ${className ?? ""}`}
         onClick={onClick}
@@ -240,14 +240,13 @@ export function StudioItemComponent({
         data-image-id={item.type === "image" ? item.id : undefined}
         data-shape-id={item.type === "shape" ? item.id : undefined}
       >
-        <div className={`w-full h-full relative ${
-          isCanvasPrimitive(item.type)
-            ? "overflow-visible bg-transparent border-0 shadow-none"
-            : "overflow-hidden bg-white border shadow-md rounded"
-        }`}>
+        <div className={`w-full h-full relative ${isCanvasPrimitive(item.type)
+          ? "overflow-visible bg-transparent border-0 shadow-none"
+          : "overflow-hidden bg-white border shadow-md rounded"
+          }`}>
           {!isConnecting && !isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           {isConnecting && (
-            <div 
+            <div
               className="absolute inset-0 z-50 cursor-crosshair bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
@@ -264,7 +263,7 @@ export function StudioItemComponent({
               transformOrigin: "center",
             }}
           >
-             {children}
+            {children}
           </div>
           {!isConnecting && !isDrawingMode && item.type === "image" && (
             <div
@@ -276,15 +275,15 @@ export function StudioItemComponent({
 
         {/* Connection Handle (Right Side) */}
         {!isConnecting && !isDrawingMode && showConnectionHandle && (
-           <button
-             onClick={(e) => {
-               e.stopPropagation();
-               // Trigger connection mode and select this node
-               // We need a way to tell the parent, but for now just a UI cue
-             }}
-             className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-30 hover:scale-125"
-             title="Click to start connection"
-           />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              // Trigger connection mode and select this node
+              // We need a way to tell the parent, but for now just a UI cue
+            }}
+            className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-30 hover:scale-125"
+            title="Click to start connection"
+          />
         )}
 
         {!isDrawingMode && showRotateButton && !isLocked && (
@@ -294,9 +293,8 @@ export function StudioItemComponent({
               e.preventDefault();
               setIsRotating(true);
             }}
-            className={`pointer-events-auto absolute -top-[16px] left-1/2 z-30 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${
-              isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
-            }`}
+            className={`pointer-events-auto absolute -top-[25px] left-1/2 z-30 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
+              }`}
             title="Drag to rotate"
           >
             <RotateCw className="w-3 h-3 text-white" />
@@ -313,7 +311,7 @@ export function StudioItemComponent({
               e.stopPropagation();
               removeItem(item.id);
             }}
-            className="pointer-events-auto absolute -top-[23px] -right-[23px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
+            className="pointer-events-auto absolute -top-[20px] -right-[20px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
           >
             <X className="w-3 h-3 text-white" />
           </button>
