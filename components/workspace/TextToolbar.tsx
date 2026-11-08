@@ -17,21 +17,21 @@ export function TextToolbar({ color, onColorChange, fontSize, onFontSizeChange }
   return (
     <div
       data-text-toolbar="true"
-      className="fixed bottom-24 left-1/2 z-[1300] flex items-center gap-3 -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-900/85 px-4 py-3 shadow-2xl backdrop-blur-xl"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-1/2 z-[1300] flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-2xl border border-white/10 bg-slate-900/85 px-2 py-2 shadow-2xl backdrop-blur-xl sm:gap-3 sm:px-4 sm:py-3 md:bottom-24"
     >
-      <div className="flex items-center gap-2 text-white/80">
-        <Type size={16} />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Text</span>
+      <div className="flex shrink-0 items-center gap-1 text-white/80 sm:gap-2">
+        <Type size={14} className="sm:h-4 sm:w-4" />
+        <span className="text-[9px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] sm:tracking-[0.18em]">Text</span>
       </div>
 
-      <div className="h-6 w-px bg-white/10" />
+      <div className="h-5 w-px shrink-0 bg-white/10 sm:h-6" />
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {TEXT_COLORS.map((swatch) => (
           <button
             key={swatch}
             onClick={() => onColorChange(swatch)}
-            className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+            className={`h-[18px] w-[18px] shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6 ${
               color === swatch ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.18)]" : "border-white/20"
             }`}
             style={{ backgroundColor: swatch }}
@@ -42,15 +42,15 @@ export function TextToolbar({ color, onColorChange, fontSize, onFontSizeChange }
 
       <div className="h-6 w-px bg-white/10" />
 
-      <div className="flex items-center gap-2 rounded-full bg-white/5 px-2 py-1">
+      <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-white/5 px-1 py-0.5 sm:gap-2 sm:px-2 sm:py-1">
         <button
           onClick={() => onFontSizeChange(Math.max(MIN_SIZE, fontSize - 2))}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:h-8 sm:w-8"
           title="Smaller text"
         >
           <Minus size={14} />
         </button>
-        <span className="min-w-12 text-center text-sm font-semibold text-white">{fontSize}px</span>
+        <span className="min-w-9 text-center text-xs font-semibold text-white sm:min-w-12 sm:text-sm">{fontSize}px</span>
         <button
           onClick={() => onFontSizeChange(Math.min(MAX_SIZE, fontSize + 2))}
           className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
