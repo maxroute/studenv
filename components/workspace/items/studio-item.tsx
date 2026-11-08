@@ -111,6 +111,7 @@ export function StudioItemComponent({
       pendingRotationRef.current = null;
       setIsRotating(false);
       onRotateChangeRef.current?.(finalRotation);
+      requestAnimationFrame(() => useSelectionStore.getState().clearRotationPreview(item.id));
     };
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -130,6 +131,7 @@ export function StudioItemComponent({
 
       rotationPreviewRef.current = start.startRotation + (start.accumulatedDelta * 180) / Math.PI;
       pendingRotationRef.current = rotationPreviewRef.current;
+      useSelectionStore.getState().setRotationPreview(item.id, rotationPreviewRef.current);
       if (rotationFrameRef.current === null) {
         rotationFrameRef.current = requestAnimationFrame(applyPreview);
       }
