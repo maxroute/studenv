@@ -14,7 +14,6 @@ import {
   Sparkles,
   Lock,
   Unlock,
-  Trash2,
 } from "lucide-react";
 
 const PRESET_COLORS = [
@@ -38,7 +37,7 @@ const VIEWPORT_PADDING = 8;
 
 export function ShapeStyleToolbar() {
   const { selectedIds } = useSelectionStore();
-  const { items, viewport, updateItemProps, removeItems } = useWorkspaceStore();
+  const { items, viewport, updateItemProps } = useWorkspaceStore();
   const [activeTab, setActiveTab] = useState<"fill" | "stroke" | "effects">("stroke");
   const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -135,11 +134,6 @@ export function ShapeStyleToolbar() {
     });
   };
 
-  const handleDeleteSelected = () => {
-    removeItems(selectedShapes.map((s) => s.id));
-    useSelectionStore.getState().deselectAll();
-  };
-
   const showCornerRadius = selectedShapes.some(
     (s) => s.props.kind === "rounded-rectangle"
   );
@@ -202,13 +196,6 @@ export function ShapeStyleToolbar() {
             title={isAllLocked ? "Unlock Shape" : "Lock Shape"}
           >
             {isAllLocked ? <Lock size={14} /> : <Unlock size={14} />}
-          </button>
-          <button
-            onClick={handleDeleteSelected}
-            className="p-1.5 rounded-lg transition-colors text-[#8a8f98] hover:text-red-400 hover:bg-red-500/10"
-            title="Delete Selected"
-          >
-            <Trash2 size={14} />
           </button>
         </div>
       </div>
