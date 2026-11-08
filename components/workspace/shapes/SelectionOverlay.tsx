@@ -126,18 +126,24 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
   ) => {
     e.stopPropagation();
     e.preventDefault();
-    const item = items.find((i) => i.id === itemId);
-    if (!item || (item.props as { locked?: boolean }).locked) return;
+    const targets = allSelectedItems.length > 1
+      ? allSelectedItems.filter((item) => !(item.props as { locked?: boolean }).locked)
+      : items.filter((item) => item.id === itemId && !(item.props as { locked?: boolean }).locked);
+    if (targets.length === 0) return;
 
     const startPointer = screenToWorld(e.clientX, e.clientY);
     const startBounds = new Map<string, Bounds>();
-    startBounds.set(itemId, { x: item.x, y: item.y, w: item.w, h: item.h });
+    const startRotations = new Map<string, number>();
+    targets.forEach((item) => {
+      startBounds.set(item.id, { x: item.x, y: item.y, w: item.w, h: item.h });
+      startRotations.set(item.id, item.rotation ?? 0);
+    });
 
     setTransformState({
       type: "resize",
       handle,
       startBounds,
-      startRotations: new Map([[itemId, item.rotation]]),
+      startRotations,
       startPointer,
     });
     if (containerRef.current) {
@@ -181,38 +187,78 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     const deltaY = currentPointer.y - transformState.startPointer.y;
 
     if (transformState.type === "resize" && transformState.handle) {
-      const updates: Array<{ id: string; changes: any }> = [];
-      transformState.startBounds.forEach((startBounds, itemId) => {
-        const item = items.find((i) => i.id === itemId);
-        if (!item) return;
-
-        // Force lock aspect ratio for perfect circles, shapes holding shift
-        const isAspectLocked =
-          item.type === "shape" &&
-          (item.props.kind === "circle" ||
-            item.props.kind === "star" ||
-            item.props.kind === "pentagon" ||
-            e.shiftKey);
-
-        const newBounds = computeResize(
-          transformState.handle!,
-          startBounds,
-          deltaX,
-          deltaY,
-          isAspectLocked,
-          item.rotation ?? 0
+      const updates: Array<{ id: string; changes: any; props?: Record<string, unknown> }> = [];
+      if (transformState.startBounds.size > 1) {
+        const starts = Array.from(transformState.startBounds.entries());
+        const group = starts.reduce(
+          (bounds, [, itemBounds]) => ({
+            left: Math.min(bounds.left, itemBounds.x),
+            top: Math.min(bounds.top, itemBounds.y),
+            right: Math.max(bounds.right, itemBounds.x + itemBounds.w),
+            bottom: Math.max(bounds.bottom, itemBounds.y + itemBounds.h),
+          }),
+          { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
         );
-
-        updates.push({
-          id: itemId,
-          changes: {
-            x: newBounds.x,
-            y: newBounds.y,
-            w: newBounds.w,
-            h: newBounds.h,
-          },
+        const startW = Math.max(1, group.right - group.left);
+        const startH = Math.max(1, group.bottom - group.top);
+        const anchorX = transformState.handle.includes("w") ? group.right
+          : transformState.handle.includes("e") ? group.left : group.left + startW / 2;
+        const anchorY = transformState.handle.includes("n") ? group.bottom
+          : transformState.handle.includes("s") ? group.top : group.top + startH / 2;
+        const nextLeft = transformState.handle.includes("w") ? group.left + deltaX
+          : transformState.handle.includes("e") ? group.left : group.left;
+        const nextRight = transformState.handle.includes("e") ? group.right + deltaX
+          : transformState.handle.includes("w") ? group.right : group.right;
+        const nextTop = transformState.handle.includes("n") ? group.top + deltaY
+          : transformState.handle.includes("s") ? group.top : group.top;
+        const nextBottom = transformState.handle.includes("s") ? group.bottom + deltaY
+          : transformState.handle.includes("n") ? group.bottom : group.bottom;
+        const nextW = Math.max(10, nextRight - nextLeft);
+        const nextH = Math.max(10, nextBottom - nextTop);
+        const scaleX = nextW / startW;
+        const scaleY = nextH / startH;
+        starts.forEach(([itemId, bounds]) => {
+          const item = items.find((candidate) => candidate.id === itemId);
+          if (!item) return;
+          const nextX = anchorX + (bounds.x - anchorX) * scaleX;
+          const nextY = anchorY + (bounds.y - anchorY) * scaleY;
+          const nextItemW = Math.max(1, bounds.w * scaleX);
+          const nextItemH = Math.max(1, bounds.h * scaleY);
+          const props = { ...item.props } as Record<string, unknown>;
+          const startPoint = props.startPoint as { x: number; y: number } | undefined;
+          const endPoint = props.endPoint as { x: number; y: number } | undefined;
+          if (startPoint) props.startPoint = { x: anchorX + (startPoint.x - anchorX) * scaleX, y: anchorY + (startPoint.y - anchorY) * scaleY };
+          if (endPoint) props.endPoint = { x: anchorX + (endPoint.x - anchorX) * scaleX, y: anchorY + (endPoint.y - anchorY) * scaleY };
+          updates.push({
+            id: itemId,
+            changes: { x: nextX, y: nextY, w: nextItemW, h: nextItemH },
+            props,
+          });
         });
-      });
+      } else {
+        transformState.startBounds.forEach((startBounds, itemId) => {
+          const item = items.find((i) => i.id === itemId);
+          if (!item) return;
+          const isAspectLocked =
+            item.type === "shape" &&
+            (item.props.kind === "circle" ||
+              item.props.kind === "star" ||
+              item.props.kind === "pentagon" ||
+              e.shiftKey);
+          const newBounds = computeResize(
+            transformState.handle!,
+            startBounds,
+            deltaX,
+            deltaY,
+            isAspectLocked,
+            transformState.startRotations.get(itemId) ?? 0
+          );
+          updates.push({
+            id: itemId,
+            changes: { x: newBounds.x, y: newBounds.y, w: newBounds.w, h: newBounds.h },
+          });
+        });
+      }
       batchUpdateItems(updates);
     } else if (transformState.type === "rotate") {
       transformState.startBounds.forEach((startBounds, itemId) => {
