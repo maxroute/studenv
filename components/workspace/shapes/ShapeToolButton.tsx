@@ -21,6 +21,7 @@ interface ShapeToolButtonProps {
   activeShapeKind: ShapeKind;
   isActive: boolean;
   onSelectShapeKind: (kind: ShapeKind) => void;
+  onOpen?: () => void;
 }
 
 // Icon mapper for shape dropdown items
@@ -113,6 +114,7 @@ export function ShapeToolButton({
   activeShapeKind,
   isActive,
   onSelectShapeKind,
+  onOpen,
 }: ShapeToolButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -130,8 +132,10 @@ export function ShapeToolButton({
 
   const handleButtonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Activate the currently selected shape as soon as the picker is opened.
-    onSelectShapeKind(activeShapeKind);
+    // Opening the picker is separate from selecting a shape. Desktop may
+    // preserve its existing activate-on-open behavior via onOpen; mobile
+    // leaves the launcher mounted until the user selects a shape.
+    if (!isOpen) onOpen?.();
     setIsOpen((open) => !open);
   };
 
