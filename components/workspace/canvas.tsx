@@ -1838,46 +1838,45 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               <button onClick={handleToolbarImageUpload} className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600" title="Upload Image"><ImagePlus size={18} /></button>
             </div>
 
-            {/* Mobile: one collapsible tool dock. The launcher and options share one container. */}
+            {/* Mobile: a single 44px dock that transforms between launcher and tool list. */}
             <div
-              className={`fixed top-20 left-3 z-[11000] flex sm:hidden flex-col items-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur transition-[max-height] duration-200 ease-out ${mobileToolbarOpen ? "max-h-[calc(100dvh-7rem)]" : "max-h-14"}`}
+              className={`fixed top-20 left-3 z-[11000] flex w-11 sm:hidden flex-col items-center overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-xl backdrop-blur transition-[max-height] duration-200 ease-out ${mobileToolbarOpen ? "max-h-[calc(100dvh-7rem)]" : "max-h-11"}`}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              <button
-                type="button"
-                aria-label={mobileToolbarOpen ? "Close tools" : "Open tools"}
-                aria-expanded={mobileToolbarOpen}
-                onClick={() => setMobileToolbarOpen((open) => !open)}
-                className="relative flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-xl text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                {isPanning
-                  ? <Hand size={20} />
-                  : isDrawing
-                    ? <Pencil size={20} />
-                    : isTextToolActive
-                      ? <Type size={20} />
-                      : isStickyToolActive
-                        ? <StickyNote size={20} />
-                        : isShapeToolActive
-                          ? <ShapeToolIcon kind={activeShapeKind} size={20} />
-                          : <MousePointer2 size={20} />}
-                <span className={`absolute bottom-1 right-1 h-2 w-2 rounded-full border border-white ${activeTool === "select" ? "bg-indigo-500" : "bg-amber-500"}`} />
-              </button>
-
-              <div
-                className={`flex min-h-0 flex-col gap-1 overflow-y-auto transition-[opacity,transform] duration-150 ease-out ${mobileToolbarOpen ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"}`}
-                aria-hidden={!mobileToolbarOpen}
-              >
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { setActiveTool("select"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { setActiveTool("pan"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
-                <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} />
-                <div className="mx-1 h-px bg-slate-100" />
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`relative rounded-lg p-2.5 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
-                <div className="mx-1 h-px bg-slate-100" />
-                <button type="button" tabIndex={mobileToolbarOpen ? 0 : -1} onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="rounded-lg p-2.5 text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
-              </div>
+              {!mobileToolbarOpen ? (
+                <button
+                  type="button"
+                  aria-label="Open tools"
+                  aria-expanded={false}
+                  onClick={() => setMobileToolbarOpen(true)}
+                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  {isPanning
+                    ? <Hand size={20} />
+                    : isDrawing
+                      ? <Pencil size={20} />
+                      : isTextToolActive
+                        ? <Type size={20} />
+                        : isStickyToolActive
+                          ? <StickyNote size={20} />
+                          : isShapeToolActive
+                            ? <ShapeToolIcon kind={activeShapeKind} size={20} />
+                            : <MousePointer2 size={20} />}
+                  <span className={`absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border border-white ${activeTool === "select" ? "bg-indigo-500" : "bg-amber-500"}`} />
+                </button>
+              ) : (
+                <div className="flex min-h-0 w-full flex-col items-center gap-1 overflow-y-auto">
+                  <button type="button" onClick={() => { setActiveTool("select"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("pan"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
+                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} />
+                  <div className="mx-1 h-px w-6 shrink-0 bg-slate-100" />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
+                  <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <div className="mx-1 h-px w-6 shrink-0 bg-slate-100" />
+                  <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
+                </div>
+              )}
             </div>
           </>
         )}
