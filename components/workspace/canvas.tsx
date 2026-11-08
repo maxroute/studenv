@@ -362,6 +362,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const transformRef = useRef<any>(null);
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
+  const outsideFreeTextDismissRef = useRef(false);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
@@ -1195,10 +1196,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   e.stopPropagation();
 
                   // Commit only after the outside gesture is fully consumed.
+                  // The textarea's onBlur also completes editing. Mark this
+                  // specific completion as an outside dismissal so its callback
+                  // does not re-select the text item.
+                  outsideFreeTextDismissRef.current = true;
                   const activeElement = document.activeElement;
                   if (activeElement instanceof HTMLTextAreaElement) {
                     activeElement.blur();
                   }
+                  outsideFreeTextDismissRef.current = false;
 
                   setEditingFreeTextId(null);
                   setSelectedFreeTextId(null);
@@ -1601,7 +1607,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {
-                          if (!saved) {
+                          if (outsideFreeTextDismissRef.current || !saved) {
                             setSelectedFreeTextId(null);
                           } else {
                             setSelectedFreeTextId(item.id);
