@@ -90,7 +90,8 @@ export function ShapeStyleToolbar() {
     return { left, top };
   }, [selectionBounds, viewport]);
 
-  if (selectedShapes.length === 0 || !toolbarPosition) return null;
+  // Individual styling controls must not compete with group manipulation.
+  if (selectedIds.length !== 1 || selectedShapes.length !== 1 || !toolbarPosition) return null;
 
   const firstShapeProps = selectedShapes[0].props as any;
   const isAllLocked = selectedShapes.every((s) => s.props.locked);
