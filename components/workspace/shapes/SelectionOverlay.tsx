@@ -52,6 +52,54 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const groupDragRef = useRef<{
+    pointerId: number;
+    startPointer: { x: number; y: number };
+    startPositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
+
+  const handleGroupDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (allSelectedItems.length < 2 || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startPositions = new Map<string, { x: number; y: number }>();
+    allSelectedItems.forEach((item) => {
+      if (!(item.props as { locked?: boolean }).locked) {
+        startPositions.set(item.id, { x: item.x, y: item.y });
+      }
+    });
+    if (startPositions.size === 0) return;
+    groupDragRef.current = {
+      pointerId: event.pointerId,
+      startPointer: screenToWorld(event.clientX, event.clientY),
+      startPositions,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleGroupDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = groupDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const currentPointer = screenToWorld(event.clientX, event.clientY);
+    const dx = currentPointer.x - drag.startPointer.x;
+    const dy = currentPointer.y - drag.startPointer.y;
+    batchUpdateItems(Array.from(drag.startPositions, ([id, position]) => ({
+      id,
+      changes: { x: position.x + dx, y: position.y + dy },
+    })));
+  };
+
+  const handleGroupDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (groupDragRef.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    groupDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   // Keep individual object handles for migrated items, while deriving one
   // shared axis-aligned boundary from every selected workspace object.
@@ -256,15 +304,22 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     <div ref={containerRef} className="absolute inset-0 pointer-events-none z-[1100]">
       {selectionBounds && (
         <div
-          aria-label={`${allSelectedItems.length} objects selected`}
+          aria-label={`${allSelectedItems.length} objects selected — drag to move selection`}
           className="absolute border-2 border-[#f5a623] border-dashed rounded-sm"
           style={{
             left: selectionBounds.left,
             top: selectionBounds.top,
             width: Math.max(1, selectionBounds.right - selectionBounds.left),
             height: Math.max(1, selectionBounds.bottom - selectionBounds.top),
-            pointerEvents: "none",
+            pointerEvents: "auto",
+            cursor: groupDragRef.current ? "grabbing" : "move",
+            touchAction: "none",
+            background: "transparent",
           }}
+          onPointerDown={handleGroupDragStart}
+          onPointerMove={handleGroupDragMove}
+          onPointerUp={handleGroupDragEnd}
+          onPointerCancel={handleGroupDragEnd}
         />
       )}
       {/* SVG Hover Outline */}
