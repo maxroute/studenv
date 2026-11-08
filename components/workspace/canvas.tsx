@@ -361,7 +361,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
   const syncTimerRef = useRef<number | null>(null);
-  const ignoreNextTextPointerUpRef = useRef(false);
+  const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
@@ -1005,14 +1005,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.stopPropagation();
       e.preventDefault();
 
-      // An outside press that exits text editing can reveal the full-canvas
-      // Text overlay before this same gesture's pointer-up. Consume that
-      // pointer-up so it cannot create a new text item at the dismissal point.
-      if (ignoreNextTextPointerUpRef.current) {
-        ignoreNextTextPointerUpRef.current = false;
-        return;
-      }
-
       const { x, y } = screenToWorld(e.clientX, e.clientY);
       const nextId =
         typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1180,30 +1172,43 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
                 onPointerDownCapture={(e) => {
-                  // While editing free text, an outside press is only a
-                  // commit-and-deselect action. Do not let that same gesture
-                  // reach React Rnd or the canvas pan handler.
+                  // Keep the editor mounted for the entire outside gesture.
+                  // Blurring on pointer-down remounts the Rnd drag handle under
+                  // the same gesture, which can interpret the press as a drag.
                   if (
                     editingFreeTextId &&
                     !(e.target instanceof Element &&
                       e.target.closest("[data-free-text-root]"))
                   ) {
-                    // The same physical press must not become a text-create
-                    // gesture if the Text overlay mounts before pointer-up.
-                    ignoreNextTextPointerUpRef.current = true;
+                    pendingFreeTextDismissPointerRef.current = e.pointerId;
                     e.preventDefault();
                     e.stopPropagation();
+                  }
+                }}
+                onPointerUpCapture={(e) => {
+                  if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
+                    return;
+                  }
 
-                    const activeElement = document.activeElement;
-                    if (activeElement instanceof HTMLTextAreaElement) {
-                      activeElement.blur();
-                    }
+                  pendingFreeTextDismissPointerRef.current = null;
+                  e.preventDefault();
+                  e.stopPropagation();
 
-                    setEditingFreeTextId(null);
-                    setSelectedFreeTextId(null);
-                    if (!isTextToolLocked) {
-                      setIsTextToolActive(false);
-                    }
+                  // Commit only after the outside gesture is fully consumed.
+                  const activeElement = document.activeElement;
+                  if (activeElement instanceof HTMLTextAreaElement) {
+                    activeElement.blur();
+                  }
+
+                  setEditingFreeTextId(null);
+                  setSelectedFreeTextId(null);
+                  if (!isTextToolLocked) {
+                    setIsTextToolActive(false);
+                  }
+                }}
+                onPointerCancelCapture={(e) => {
+                  if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
+                    pendingFreeTextDismissPointerRef.current = null;
                   }
                 }}
                 onPointerDown={(e) => {
@@ -1226,23 +1231,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     return;
                   }
 
-                  if (editingFreeTextId) {
-                    const activeElement = document.activeElement;
-
-                    // Blur first so FreeTextNode commits its draft, then deselect
-                    // in this same outside click instead of requiring a second click.
-                    if (activeElement instanceof HTMLTextAreaElement) {
-                      activeElement.blur();
-                    }
-
-                    setEditingFreeTextId(null);
-                    setSelectedFreeTextId(null);
-                    if (!isTextToolLocked) {
-                      setIsTextToolActive(false);
-                    }
-
-                    return;
-                  }
                   if (isStickyToolActive) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
