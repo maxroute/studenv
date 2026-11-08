@@ -453,40 +453,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                 />
               ))}
 
-            {/* Rotation Handle (Hidden if locked) */}
-            {!isLocked && (
-              <div
-                className="absolute flex flex-col items-center pointer-events-auto"
-                style={{
-                  left: "50%",
-                  top: -20 / canvasScale - handleSize,
-                  transform: "translateX(-50%)",
-                  width: handleSize * 2,
-                  zIndex: 10,
-                }}
-              >
-                {/* Knob */}
-                <div
-                  className="bg-white border border-[#f5a623] rounded-full shadow-sm hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100 cursor-alias"
-                  style={{
-                    width: handleSize * 1.3,
-                    height: handleSize * 1.3,
-                    borderWidth: Math.max(1, 1.5 / canvasScale),
-                  }}
-                  onPointerDown={(e) => handleRotateStart(e, item.id)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                />
-                {/* Connecting Line */}
-                <div
-                  className="bg-[#f5a623]"
-                  style={{
-                    width: Math.max(1, 1.5 / canvasScale),
-                    height: 20 / canvasScale,
-                  }}
-                />
-              </div>
-            )}
+
           </div>
         );
       })}
