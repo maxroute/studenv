@@ -59,11 +59,15 @@ export function StudioItemComponent({
   const rotationStartRef = useRef<{
     centerX: number;
     centerY: number;
-    startAngle: number;
     lastAngle: number;
     accumulatedDelta: number;
     startRotation: number;
   } | null>(null);
+  const rotationPreviewRef = useRef<number>(item.rotation ?? 0);
+  const rotationFrameRef = useRef<number | null>(null);
+  const pendingRotationRef = useRef<number | null>(null);
+  const rotatedContentRef = useRef<HTMLDivElement>(null);
+  const rotationControlsRef = useRef<HTMLDivElement>(null);
   const onRotateChangeRef = useRef(onRotateChange);
   onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -83,18 +87,40 @@ export function StudioItemComponent({
   useEffect(() => {
     if (!isRotating) return;
 
+    const applyPreview = () => {
+      rotationFrameRef.current = null;
+      const rotation = pendingRotationRef.current;
+      if (rotation === null) return;
+      const transform = `rotate(${rotation}deg)`;
+      if (rotatedContentRef.current) rotatedContentRef.current.style.transform = transform;
+      if (rotationControlsRef.current) rotationControlsRef.current.style.transform = transform;
+    };
+
+    const finishRotation = () => {
+      const start = rotationStartRef.current;
+      if (!start) return;
+
+      if (rotationFrameRef.current !== null) {
+        cancelAnimationFrame(rotationFrameRef.current);
+        rotationFrameRef.current = null;
+      }
+      applyPreview();
+
+      const finalRotation = ((rotationPreviewRef.current % 360) + 360) % 360;
+      rotationStartRef.current = null;
+      pendingRotationRef.current = null;
+      setIsRotating(false);
+      onRotateChangeRef.current?.(finalRotation);
+    };
+
     const handlePointerMove = (event: PointerEvent) => {
       const start = rotationStartRef.current;
-      const onRotate = onRotateChangeRef.current;
-      if (!start || !onRotate) return;
+      if (!start) return;
 
       const angle = Math.atan2(
         event.clientY - start.centerY,
         event.clientX - start.centerX
       );
-
-      // Track the shortest angular delta between consecutive pointer events.
-      // This avoids 0°/360° wraparound jumps and direction reversals.
       const delta = Math.atan2(
         Math.sin(angle - start.lastAngle),
         Math.cos(angle - start.lastAngle)
@@ -102,23 +128,25 @@ export function StudioItemComponent({
       start.accumulatedDelta += delta;
       start.lastAngle = angle;
 
-      const degrees = start.startRotation + (start.accumulatedDelta * 180) / Math.PI;
-      onRotate(((degrees % 360) + 360) % 360);
-    };
-
-    const handlePointerUp = () => {
-      rotationStartRef.current = null;
-      setIsRotating(false);
+      rotationPreviewRef.current = start.startRotation + (start.accumulatedDelta * 180) / Math.PI;
+      pendingRotationRef.current = rotationPreviewRef.current;
+      if (rotationFrameRef.current === null) {
+        rotationFrameRef.current = requestAnimationFrame(applyPreview);
+      }
     };
 
     document.addEventListener("pointermove", handlePointerMove, true);
-    document.addEventListener("pointerup", handlePointerUp, true);
-    document.addEventListener("pointercancel", handlePointerUp, true);
+    document.addEventListener("pointerup", finishRotation, true);
+    document.addEventListener("pointercancel", finishRotation, true);
 
     return () => {
       document.removeEventListener("pointermove", handlePointerMove, true);
-      document.removeEventListener("pointerup", handlePointerUp, true);
-      document.removeEventListener("pointercancel", handlePointerUp, true);
+      document.removeEventListener("pointerup", finishRotation, true);
+      document.removeEventListener("pointercancel", finishRotation, true);
+      if (rotationFrameRef.current !== null) {
+        cancelAnimationFrame(rotationFrameRef.current);
+        rotationFrameRef.current = null;
+      }
     };
   }, [isRotating]);
 
@@ -276,11 +304,12 @@ export function StudioItemComponent({
             />
           )}
           <div
+            ref={rotatedContentRef}
             className="relative z-10 w-full h-full"
             style={{
               pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
               cursor: isDrawingMode ? "inherit" : undefined,
-              transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
+              transform: `rotate(${item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
           >
@@ -309,6 +338,7 @@ export function StudioItemComponent({
 
         {!isDrawingMode && showRotateButton && !isLocked && (
           <div
+            ref={rotationControlsRef}
             className="pointer-events-none absolute inset-0 z-30"
             style={{
               transform: `rotate(${item.rotation ?? 0}deg)`,
@@ -324,13 +354,15 @@ export function StudioItemComponent({
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
                 const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                const startRotation = item.rotation ?? 0;
+                rotationPreviewRef.current = startRotation;
+                pendingRotationRef.current = startRotation;
                 rotationStartRef.current = {
                   centerX,
                   centerY,
-                  startAngle,
                   lastAngle: startAngle,
                   accumulatedDelta: 0,
-                  startRotation: item.rotation ?? 0,
+                  startRotation,
                 };
                 setIsRotating(true);
               }}
