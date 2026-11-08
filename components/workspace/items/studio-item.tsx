@@ -16,13 +16,11 @@ interface StudioItemComponentProps {
   onPointerEnter?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerLeave?: (event: React.PointerEvent<HTMLDivElement>) => void;
   className?: string;
-  isConnecting?: boolean;
   isDrawingMode?: boolean;
   canvasScale?: number;
   disableDragging?: boolean;
   enableResizing?: boolean;
   showDeleteButton?: boolean;
-  showConnectionHandle?: boolean;
   passThrough?: boolean;
   showRotateButton?: boolean;
   onRotateChange?: (rotation: number) => void;
@@ -38,13 +36,11 @@ export function StudioItemComponent({
   onPointerEnter,
   onPointerLeave,
   className,
-  isConnecting,
   isDrawingMode,
   canvasScale = 1,
   disableDragging,
   enableResizing,
   showDeleteButton = true,
-  showConnectionHandle = true,
   passThrough = false,
   showRotateButton = false,
   onRotateChange,
@@ -80,7 +76,7 @@ export function StudioItemComponent({
     setSize({ w: item.w, h: item.h });
   }, [item.x, item.y, item.w, item.h]);
 
-  const disableInteraction = isDrawingMode || isConnecting;
+  const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
   const resizingEnabled = enableResizing ?? (!disableInteraction && !isLocked);
 
@@ -301,16 +297,7 @@ export function StudioItemComponent({
           ? "overflow-visible bg-transparent border-0 shadow-none"
           : "overflow-hidden bg-white border shadow-md rounded"
           }`}>
-          {!isConnecting && !isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
-          {isConnecting && (
-            <div
-              className="absolute inset-0 z-50 cursor-crosshair bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick?.();
-              }}
-            />
-          )}
+          {!isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           <div
             ref={rotatedContentRef}
             className="relative z-10 w-full h-full"
@@ -323,26 +310,13 @@ export function StudioItemComponent({
           >
             {children}
           </div>
-          {!isConnecting && !isDrawingMode && item.type === "image" && (
+          {!isDrawingMode && item.type === "image" && (
             <div
               aria-hidden="true"
               className="drag-handle absolute inset-0 z-20 cursor-move"
             />
           )}
         </div>
-
-        {/* Connection Handle (Right Side) */}
-        {!isConnecting && !isDrawingMode && showConnectionHandle && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              // Trigger connection mode and select this node
-              // We need a way to tell the parent, but for now just a UI cue
-            }}
-            className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-30 hover:scale-125"
-            title="Click to start connection"
-          />
-        )}
 
         {!isDrawingMode && showRotateButton && !isLocked && (
           <div
