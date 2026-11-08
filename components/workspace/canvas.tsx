@@ -211,7 +211,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { items, viewport, workspaceAssetIds, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
+  const { items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -364,9 +364,67 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
+  const hasAppliedInitialFitRef = useRef(false);
+  const fitWorkspaceToViewport = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    const instance = transformRef.current?.instance;
+    if (!wrapper || !instance || items.length === 0) return;
+
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const bounds = items.reduce(
+      (acc, item) => {
+        const radians = ((item.rotation ?? 0) * Math.PI) / 180;
+        const rotatedWidth = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
+        const rotatedHeight = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
+        const centerX = item.x + item.w / 2;
+        const centerY = item.y + item.h / 2;
+        const left = centerX - rotatedWidth / 2;
+        const top = centerY - rotatedHeight / 2;
+        return {
+          left: Math.min(acc.left, left),
+          top: Math.min(acc.top, top),
+          right: Math.max(acc.right, left + rotatedWidth),
+          bottom: Math.max(acc.bottom, top + rotatedHeight),
+        };
+      },
+      { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
+    );
+
+    const contentWidth = Math.max(1, bounds.right - bounds.left);
+    const contentHeight = Math.max(1, bounds.bottom - bounds.top);
+    const padding = Math.min(48, Math.max(20, Math.min(rect.width, rect.height) * 0.06));
+    const scale = clampScale(Math.min((rect.width - padding * 2) / contentWidth, (rect.height - padding * 2) / contentHeight, 1));
+    const positionX = (rect.width - contentWidth * scale) / 2 - bounds.left * scale;
+    const positionY = (rect.height - contentHeight * scale) / 2 - bounds.top * scale;
+
+    transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
+  }, [items]);
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
   const outsideFreeTextDismissRef = useRef(false);
+
+  // Fit only a fresh/default workspace view. A saved non-default viewport is
+  // respected, and this ref prevents resize/content updates from refitting it.
+  useEffect(() => {
+    hasAppliedInitialFitRef.current = false;
+  }, [_workspaceId]);
+
+  useEffect(() => {
+    if (isLoading || items.length === 0 || hasAppliedInitialFitRef.current) return;
+    const isDefaultViewport = viewport.x === 0 && viewport.y === 0 && viewport.zoom === 1;
+    if (!isDefaultViewport) {
+      hasAppliedInitialFitRef.current = true;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      fitWorkspaceToViewport();
+      hasAppliedInitialFitRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [items, isLoading, viewport.x, viewport.y, viewport.zoom, fitWorkspaceToViewport]);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
