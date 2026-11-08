@@ -1905,16 +1905,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               <button onClick={handleToolbarImageUpload} className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600" title="Upload Image"><ImagePlus size={18} /></button>
             </div>
 
-            {/* Mobile: compact left-side launcher with primary tools and a secondary More group */}
+            {/* Mobile: compact tool rail mirrors the desktop tool order */}
             <div className="fixed top-20 left-3 z-[11000] flex sm:hidden flex-col items-start gap-2">
               <button
                 type="button"
                 aria-label={mobileToolbarOpen ? "Close tools" : "Open tools"}
                 aria-expanded={mobileToolbarOpen}
-                onClick={() => {
-                  setMobileToolbarOpen((open) => !open);
-                  setMobileMoreOpen(false);
-                }}
+                onClick={() => setMobileToolbarOpen((open) => !open)}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur"
               >
                 {isPanning ? <Hand size={19} /> : isDrawing ? <Pencil size={19} /> : isTextToolActive ? <Type size={19} /> : isStickyToolActive ? <StickyNote size={19} /> : isConnecting ? <Link2 size={19} /> : isShapeToolActive ? <ShapeToolIcon kind={activeShapeKind} size={19} /> : <MousePointer2 size={19} />}
@@ -1926,17 +1923,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <button type="button" onClick={() => { setActiveTool("select"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool("pan"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
                   <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} />
+                  <div className="mx-1 h-px bg-slate-100" />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`relative rounded-lg p-2.5 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isConnecting ? "select" : "connect"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedStickyId(null); setConnectingFromId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isConnecting ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connect"><Link2 size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setConnectingFromId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="mx-1 h-px bg-slate-100" />
-                  <button type="button" onClick={() => setMobileMoreOpen((open) => !open)} className={`flex items-center justify-center gap-1 rounded-lg p-2.5 text-slate-500 ${mobileMoreOpen ? "bg-slate-100" : ""}`} title="More tools"><MoreHorizontal size={20}/><ChevronRight size={12} className={mobileMoreOpen ? "rotate-90" : ""}/></button>
-                  {mobileMoreOpen && (
-                    <div className="mt-1 flex flex-col gap-1 border-t border-slate-100 pt-1">
-                      <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className={`rounded-lg p-2.5 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky note"><StickyNote size={20}/></button>
-                      <button type="button" onClick={() => { setActiveTool(isConnecting ? "select" : "connect"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedStickyId(null); setSelectedDrawingId(null); setConnectingFromId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className={`rounded-lg p-2.5 ${isConnecting ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connect"><Link2 size={20}/></button>
-                      <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className="rounded-lg p-2.5 text-slate-500" title="Upload image"><ImagePlus size={20}/></button>
-                    </div>
-                  )}
+                  <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="rounded-lg p-2.5 text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
                 </div>
               )}
             </div>
