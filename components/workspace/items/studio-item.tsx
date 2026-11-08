@@ -57,6 +57,7 @@ export function StudioItemComponent({
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const dragMovedRef = useRef(false);
 
   const isLocked = (item.props as { locked?: boolean }).locked === true;
 
@@ -109,11 +110,10 @@ export function StudioItemComponent({
       minHeight={1}
       disableDragging={draggingDisabled}
       enableResizing={isMigratedToSelectionOverlay(item.type) ? false : resizingEnabled}
-      onDragStart={(e, d) => {
-        if (item.type === "free-text") {
-          console.log("[FreeText gesture] Rnd onDragStart", { id: item.id, eventType: e.type, x: d.x, y: d.y });
-          console.trace("[FreeText gesture] Rnd drag start stack");
-        }
+      onDragStart={() => {
+        // react-draggable fires onStart as soon as a mouse/touch gesture begins,
+        // not only after the pointer has actually moved.
+        dragMovedRef.current = false;
         const { selectedIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
         
@@ -136,6 +136,10 @@ export function StudioItemComponent({
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
+
+        if (Math.hypot(dx, dy) > 2) {
+          dragMovedRef.current = true;
+        }
 
         if (onDrag) {
           const snapped = onDrag(item.id, startPos.x + dx, startPos.y + dy);
@@ -161,12 +165,20 @@ export function StudioItemComponent({
         }
       }}
       onDragStop={(e, d) => {
-        if (item.type === "free-text") {
-          console.log("[FreeText gesture] Rnd onDragStop", { id: item.id, eventType: e.type, x: d.x, y: d.y });
-        }
         const { selectedIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
         if (!startPos) return;
+
+        // A press can start an Rnd gesture without ever becoming a drag.
+        // In particular, a touch used to dismiss a text editor can end outside
+        // the item and still trigger onDragStop. Never commit that end position.
+        const didMove = dragMovedRef.current;
+        dragMovedRef.current = false;
+        dragStartPositionsRef.current = new Map();
+        if (!didMove) {
+          onDragStop?.();
+          return;
+        }
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
@@ -193,7 +205,6 @@ export function StudioItemComponent({
           setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
-        dragStartPositionsRef.current = new Map();
         if (onDragStop) {
           onDragStop();
         }
