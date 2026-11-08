@@ -29,7 +29,6 @@ export function FreeTextNode({
 }: FreeTextNodeProps) {
   const { items, updateItem, updateItems, removeItem } = useWorkspaceStore();
   const [editText, setEditText] = useState(item.props.text ?? "");
-  const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -100,7 +99,6 @@ export function FreeTextNode({
 
   return (
     <div
-      ref={rootRef}
       data-free-text-root="true"
       data-free-text-id={item.id}
       className="relative h-full w-full"
