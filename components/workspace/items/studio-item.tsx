@@ -174,8 +174,8 @@ export function StudioItemComponent({
         // the item and still trigger onDragStop. Never commit that end position.
         const didMove = dragMovedRef.current;
         dragMovedRef.current = false;
-        dragStartPositionsRef.current = new Map();
         if (!didMove) {
+          dragStartPositionsRef.current = new Map();
           onDragStop?.();
           return;
         }
@@ -205,6 +205,7 @@ export function StudioItemComponent({
           setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
+        dragStartPositionsRef.current = new Map();
         if (onDragStop) {
           onDragStop();
         }
