@@ -1631,7 +1631,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                           setSelectedDrawingId(null);
                         }
                       }
-                      if (item.type !== "sticky" && item.type !== "free-text") {
+                      if (item.type !== "free-text") {
                         setIsTextToolActive(false);
                       }
                     }}
