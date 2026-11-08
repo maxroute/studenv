@@ -1602,6 +1602,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
+                      const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
                       if (item.type === "sticky") {
                         // Keep a marquee-selected sticky note in the shared selection
                         // so its drag can move the whole selected group.
@@ -1624,8 +1625,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         }
                         return;
                       }
-                      const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
-
                       const targetIds = [item.id];
                       if (item.props && (item.props as any).groupId) {
                         const gId = (item.props as any).groupId;
