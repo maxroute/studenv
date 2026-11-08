@@ -146,9 +146,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
       startRotations,
       startPointer,
     });
-    if (containerRef.current) {
-      containerRef.current.setPointerCapture(e.pointerId);
-    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   // Handle pointer down on line/arrow endpoints
@@ -322,8 +320,9 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     if (!transformState) return;
     e.stopPropagation();
     e.preventDefault();
-    if (containerRef.current) {
-      containerRef.current.releasePointerCapture(e.pointerId);
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
     }
     setTransformState(null);
   };
