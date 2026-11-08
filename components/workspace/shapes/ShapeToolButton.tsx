@@ -5,6 +5,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_LABELS } from "@/lib/workspace/shape-types";
 import {
@@ -117,14 +118,55 @@ export function ShapeToolButton({
   onOpen,
 }: ShapeToolButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Render the menu in a body-level portal so the mobile toolbar's
+  // scroll container cannot clip it.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const placeMenu = () => {
+      const anchor = buttonRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+
+      const menuWidth = 178;
+      const menuHeight = Math.min(420, window.innerHeight - 16);
+      const gap = 8;
+      const openRight = anchor.right + gap + menuWidth <= window.innerWidth - 8;
+      const left = openRight
+        ? anchor.right + gap
+        : Math.max(8, anchor.left - menuWidth - gap);
+      const top = Math.min(
+        Math.max(8, anchor.top),
+        Math.max(8, window.innerHeight - menuHeight - 8),
+      );
+
+      setMenuPosition({ top, left });
+    };
+
+    placeMenu();
+    window.addEventListener("resize", placeMenu);
+    window.addEventListener("scroll", placeMenu, true);
+    return () => {
+      window.removeEventListener("resize", placeMenu);
+      window.removeEventListener("scroll", placeMenu, true);
+    };
+  }, [isOpen]);
+
+  // Treat clicks inside the portalled menu as internal clicks.
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+      const target = e.target as Node;
+      if (
+        containerRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      ) {
+        return;
       }
+      setIsOpen(false);
     };
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
@@ -161,6 +203,7 @@ export function ShapeToolButton({
   return (
     <div ref={containerRef} className="relative flex items-center select-none">
       <button
+        ref={buttonRef}
         type="button"
         onClick={handleButtonClick}
         aria-label={`Choose shape: ${SHAPE_LABELS[activeShapeKind]}`}
@@ -173,27 +216,34 @@ export function ShapeToolButton({
         <ShapeIcon kind={activeShapeKind} size={20} />
       </button>
 
-      {isOpen && (
-        <div className="absolute left-14 top-0 bg-white border border-slate-100 shadow-xl rounded-lg p-1.5 z-[1300] min-w-[170px] flex flex-col gap-0.5 animate-in fade-in duration-100 slide-in-from-left-2">
-          <div className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">
-            Shapes
-          </div>
-          {shapeKinds.map((kind) => (
-            <button
-              key={kind}
-              onClick={() => selectKind(kind)}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-xs font-medium transition-colors ${
-                activeShapeKind === kind
-                  ? "bg-indigo-50 text-indigo-600"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <ShapeIcon kind={kind} size={14} className={activeShapeKind === kind ? "text-indigo-600" : "text-slate-400"} />
-              <span>{SHAPE_LABELS[kind]}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {isOpen && menuPosition && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ position: "fixed", top: menuPosition.top, left: menuPosition.left, maxHeight: "min(70dvh, 420px)" }}
+            className="z-[20000] min-w-[170px] overflow-y-auto rounded-lg border border-slate-100 bg-white p-1.5 shadow-xl flex flex-col gap-0.5 animate-in fade-in duration-100"
+          >
+            <div className="sticky top-0 bg-white text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">
+              Shapes
+            </div>
+            {shapeKinds.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => selectKind(kind)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-xs font-medium transition-colors ${
+                  activeShapeKind === kind
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <ShapeIcon kind={kind} size={14} className={activeShapeKind === kind ? "text-indigo-600" : "text-slate-400"} />
+                <span>{SHAPE_LABELS[kind]}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
