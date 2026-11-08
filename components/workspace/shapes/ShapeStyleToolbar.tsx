@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   Minus, MoreHorizontal, Lock, Unlock, Sparkles, Square,
-  Check, SlidersHorizontal, Pipette,
+  Check, SlidersHorizontal,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
