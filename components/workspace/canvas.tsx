@@ -1169,6 +1169,30 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
+                onPointerDownCapture={(e) => {
+                  // While editing free text, an outside press is only a
+                  // commit-and-deselect action. Do not let that same gesture
+                  // reach React Rnd or the canvas pan handler.
+                  if (
+                    editingFreeTextId &&
+                    !(e.target instanceof Element &&
+                      e.target.closest("[data-free-text-root]"))
+                  ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const activeElement = document.activeElement;
+                    if (activeElement instanceof HTMLTextAreaElement) {
+                      activeElement.blur();
+                    }
+
+                    setEditingFreeTextId(null);
+                    setSelectedFreeTextId(null);
+                    if (!isTextToolLocked) {
+                      setIsTextToolActive(false);
+                    }
+                  }
+                }}
                 onPointerDown={(e) => {
                   setContextMenu(null);
                   if (e.target !== e.currentTarget || isDrawing || isConnecting) {
