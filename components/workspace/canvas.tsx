@@ -896,6 +896,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       const eraserSamples = resamplePolyline(path, 2);
       const radiusSquared = eraserRadius * eraserRadius;
       const nextItems = items.flatMap((item) => {
+        if (item.type === "shape") {
+          // Shapes are atomic vector objects: erase the whole object when the
+          // eraser path intersects its rotated bounds.
+          const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
+          const cos = Math.cos(rotation);
+          const sin = Math.sin(rotation);
+          const centerX = item.x + item.w / 2;
+          const centerY = item.y + item.h / 2;
+          const touchedShape = eraserSamples.some((point) => {
+            const dx = point.x - centerX;
+            const dy = point.y - centerY;
+            const localX = dx * cos + dy * sin + item.w / 2;
+            const localY = -dx * sin + dy * cos + item.h / 2;
+            return localX >= -eraserRadius && localX <= item.w + eraserRadius &&
+              localY >= -eraserRadius && localY <= item.h + eraserRadius;
+          });
+          return touchedShape ? [] : [item];
+        }
+
         if (item.type !== "drawing") {
           return [item];
         }
@@ -1523,7 +1542,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                                 ? selectedIds.includes(item.id)
                                 : true
                     }
-                    passThrough={item.type === "drawing"}
+                    passThrough={false}
                     showRotateButton={
                       (item.type === "drawing" && selectedDrawingId === item.id) ||
                       (item.type === "image" && selectedImageId === item.id) ||
