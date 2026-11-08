@@ -1705,7 +1705,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "sticky" && (
                       <StickyNode
                         item={item as any}
-                        isSelected={selectedStickyId === item.id || selectedIds.includes(item.id)}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         isEditing={editingStickyId === item.id}
                         onColorChange={(color) => {
                           setStickyColor(color);
@@ -1717,7 +1717,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "free-text" && (
                       <FreeTextNode
                         item={item as any}
-                        isSelected={selectedFreeTextId === item.id || selectedIds.includes(item.id)}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         isEditing={editingFreeTextId === item.id}
                         onSelect={() => {
                           handleFreeTextSelect(item.id);
@@ -1741,7 +1741,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "drawing" && (
                       <DrawingNode
                         item={item as any}
-                        isSelected={selectedDrawingId === item.id || selectedIds.includes(item.id)}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         onSelect={() => {
                           setSelectedFreeTextId(null);
                           setEditingFreeTextId(null);
@@ -1800,7 +1800,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               />
             )}
 
-            {(isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
+            {selectedIds.length <= 1 && (isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
               <TextToolbar
                 color={textColor}
                 onColorChange={handleFreeTextColorChange}
