@@ -299,7 +299,7 @@ export function AssetDrawer() {
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-20 right-4 z-[1000] p-3 bg-white shadow-lg border rounded-full text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all group"
+        className="fixed top-20 right-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border bg-white p-0 text-slate-600 shadow-lg transition-all hover:bg-indigo-50 hover:text-indigo-600 group"
         title="Asset Library"
       >
         <Library className="w-5 h-5 group-hover:scale-110 transition-transform" />
