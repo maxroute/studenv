@@ -1187,9 +1187,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   );
 
   const handleFreeTextSelect = useCallback((itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    const groupId = item ? (item.props as { groupId?: string }).groupId : undefined;
+    const groupIds = groupId
+      ? items
+          .filter((candidate) => (candidate.props as { groupId?: string }).groupId === groupId)
+          .map((candidate) => candidate.id)
+      : [itemId];
+    const selection = useSelectionStore.getState();
+    if (!selection.selectedIds.includes(itemId)) {
+      selection.clearAndSelectIds(groupIds);
+    }
     setSelectedFreeTextId(itemId);
     setEditingFreeTextId(null);
-  }, []);
+  }, [items]);
 
   const startFreeTextEditing = useCallback((itemId: string) => {
     setIsTextToolActive(true);
