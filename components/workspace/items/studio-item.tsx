@@ -57,6 +57,7 @@ export function StudioItemComponent({
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const dragMovedRef = useRef(false);
 
   const isLocked = (item.props as { locked?: boolean }).locked === true;
 
@@ -109,7 +110,10 @@ export function StudioItemComponent({
       minHeight={1}
       disableDragging={draggingDisabled}
       enableResizing={isMigratedToSelectionOverlay(item.type) ? false : resizingEnabled}
-      onDragStart={(e, d) => {
+      onDragStart={() => {
+        // react-draggable fires onStart as soon as a mouse/touch gesture begins,
+        // not only after the pointer has actually moved.
+        dragMovedRef.current = false;
         const { selectedIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
         
@@ -132,6 +136,10 @@ export function StudioItemComponent({
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
+
+        if (item.type === "free-text" && Math.hypot(dx, dy) > 2) {
+          dragMovedRef.current = true;
+        }
 
         if (onDrag) {
           const snapped = onDrag(item.id, startPos.x + dx, startPos.y + dy);
@@ -160,6 +168,17 @@ export function StudioItemComponent({
         const { selectedIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
         if (!startPos) return;
+
+        // A press can start an Rnd gesture without ever becoming a drag.
+        // In particular, a touch used to dismiss a text editor can end outside
+        // the item and still trigger onDragStop. Never commit that end position.
+        const didMove = item.type !== "free-text" || dragMovedRef.current;
+        dragMovedRef.current = false;
+        if (!didMove) {
+          dragStartPositionsRef.current = new Map();
+          onDragStop?.();
+          return;
+        }
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
@@ -226,7 +245,7 @@ export function StudioItemComponent({
             ? "overflow-visible bg-transparent border-0 shadow-none"
             : "overflow-hidden bg-white border shadow-md rounded"
         }`}>
-          {!isConnecting && !isDrawingMode && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
+          {!isConnecting && !isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           {isConnecting && (
             <div 
               className="absolute inset-0 z-50 cursor-crosshair bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
@@ -270,6 +289,10 @@ export function StudioItemComponent({
 
         {!isDrawingMode && showDeleteButton && !isLocked && (
           <button
+            onPointerDown={(e) => {
+              // Keep delete clicks from reaching canvas/item selection handlers.
+              e.stopPropagation();
+            }}
             onClick={(e) => {
               e.stopPropagation();
               removeItem(item.id);

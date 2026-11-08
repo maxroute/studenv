@@ -88,7 +88,7 @@ export const DEFAULT_SHAPE_DIMENSIONS: Record<ShapeKind, { w: number; h: number 
  * Primitives render directly on the canvas without white background wrappers/containers.
  */
 export function isCanvasPrimitive(type: string): boolean {
-  return type === "shape" || type === "drawing" || type === "free-text" || type === "text";
+  return type === "shape" || type === "drawing" || type === "free-text" || type === "text" || type === "sticky";
 }
 
 /**

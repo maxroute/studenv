@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Hand,
   ImagePlus,
+  StickyNote,
   Link2,
   Lock,
   Maximize2,
@@ -23,6 +24,7 @@ import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
 import { FreeTextNode } from "./items/FreeTextNode";
+import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { ConnectionsLayer } from "./ConnectionsLayer";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
@@ -198,6 +200,7 @@ type WorkspaceTool =
   | "highlighter"
   | "eraser"
   | "text"
+  | "sticky"
   | "connect"
   | ShapeKind;
 
@@ -220,6 +223,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const isConnecting = activeTool === "connect";
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
+  const isStickyToolActive = activeTool === "sticky";
   const isShapeToolActive = SHAPE_KINDS.includes(activeTool as any);
 
   // Mock setter wrappers using functional updaters.
@@ -287,6 +291,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [editingFreeTextId, setEditingFreeTextId] = useState<string | null>(null);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [selectedStickyId, setSelectedStickyId] = useState<string | null>(null);
+  const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  const [stickyColor, setStickyColor] = useState<string>(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -354,6 +361,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
   const syncTimerRef = useRef<number | null>(null);
+  const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
+  const outsideFreeTextDismissRef = useRef(false);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
@@ -996,6 +1005,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
       e.preventDefault();
+
       const { x, y } = screenToWorld(e.clientX, e.clientY);
       const nextId =
         typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1138,6 +1148,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           disabled: isDrawing,
           wheelPanning: true,
           allowLeftClickPan: isPanning,
+          // A text item's drag handle owns single-touch gestures. This keeps
+          // the canvas from starting a pan before the text can select/edit/move.
+          excluded: ["drag-handle"],
         }}
         pinch={{ disabled: isDrawing }}
         wheel={{
@@ -1159,17 +1172,84 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
+                onPointerDownCapture={(e) => {
+                  // Keep the editor mounted for the entire outside gesture.
+                  // Blurring on pointer-down remounts the Rnd drag handle under
+                  // the same gesture, which can interpret the press as a drag.
+                  if (
+                    editingFreeTextId &&
+                    !(e.target instanceof Element &&
+                      e.target.closest("[data-free-text-root]"))
+                  ) {
+                    pendingFreeTextDismissPointerRef.current = e.pointerId;
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
+                onPointerUpCapture={(e) => {
+                  if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
+                    return;
+                  }
+
+                  pendingFreeTextDismissPointerRef.current = null;
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  // Commit only after the outside gesture is fully consumed.
+                  // The textarea's onBlur also completes editing. Mark this
+                  // specific completion as an outside dismissal so its callback
+                  // does not re-select the text item.
+                  outsideFreeTextDismissRef.current = true;
+                  const activeElement = document.activeElement;
+                  if (activeElement instanceof HTMLTextAreaElement) {
+                    activeElement.blur();
+                  }
+                  outsideFreeTextDismissRef.current = false;
+
+                  setEditingFreeTextId(null);
+                  setSelectedFreeTextId(null);
+                  if (!isTextToolLocked) {
+                    setIsTextToolActive(false);
+                  }
+                }}
+                onPointerCancelCapture={(e) => {
+                  if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
+                    pendingFreeTextDismissPointerRef.current = null;
+                  }
+                }}
                 onPointerDown={(e) => {
                   setContextMenu(null);
                   if (e.target !== e.currentTarget || isDrawing || isConnecting) {
                     return;
                   }
 
-                  if (editingFreeTextId) {
+                  if (editingStickyId) {
                     const activeElement = document.activeElement;
+
                     if (activeElement instanceof HTMLTextAreaElement) {
                       activeElement.blur();
+                    } else {
+                      setEditingStickyId(null);
                     }
+
+                    // Exit editing and deselect the sticky note in the same click.
+                    setSelectedStickyId(null);
+                    return;
+                  }
+
+                  if (isStickyToolActive) {
+                    const { x, y } = screenToWorld(e.clientX, e.clientY);
+                    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                      ? `item-${crypto.randomUUID()}`
+                      : `item-${Math.random().toString(36).slice(2, 11)}`;
+                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
+                      id, x, y,
+                      zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
+                    });
+                    if (note) updateItems([...items, note]);
+                    setSelectedStickyId(id);
+                    setEditingStickyId(id);
+                    setActiveTool("select");
                     return;
                   }
 
@@ -1177,6 +1257,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     return;
                   }
 
+                  setSelectedStickyId(null);
+                  setEditingStickyId(null);
                   setSelectedFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedImageId(null);
@@ -1263,7 +1345,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 {isTextToolActive && !isDrawing && !editingFreeTextId && (
                   <div
-                    className="absolute inset-0 z-[10000]"
+                    className="absolute inset-0 z-[0]"
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
@@ -1327,7 +1409,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     key={item.id}
                     item={item}
                     isConnecting={isConnecting}
-                    isDrawingMode={isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
+                    // Sticky notes own their text input; other tools must never disable their pointer events.
+                    isDrawingMode={item.type === "sticky" ? false : isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
                     canvasScale={viewport.zoom}
                     onPointerEnter={() => {
                       if (!isDrawing && !isConnecting && !isShapeToolActive && !isTextToolActive) {
@@ -1338,30 +1421,34 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setHoveredItemId((prev) => (prev === item.id ? null : prev));
                     }}
                     disableDragging={
-                      item.type === "free-text"
-                        ? editingFreeTextId === item.id
-                        : item.type === "drawing"
-                          ? false
-                          : isMigratedToSelectionOverlay(item.type)
-                            ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
-                            : undefined
+                      item.type === "sticky"
+                        ? editingStickyId === item.id
+                        : item.type === "free-text"
+                          ? editingFreeTextId === item.id || selectedFreeTextId !== item.id
+                          : item.type === "drawing"
+                            ? false
+                            : isMigratedToSelectionOverlay(item.type)
+                              ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
+                              : undefined
                     }
                     enableResizing={
-                      item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
+                      item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
                         ? false
                         : undefined
                     }
-                    showConnectionHandle={item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
+                    showConnectionHandle={item.type !== "sticky" && item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
                     showDeleteButton={
-                      item.type === "free-text"
-                        ? selectedFreeTextId === item.id
-                        : item.type === "drawing"
-                          ? selectedDrawingId === item.id
-                          : item.type === "image"
-                            ? selectedImageId === item.id
-                            : isMigratedToSelectionOverlay(item.type)
-                              ? selectedIds.includes(item.id)
-                              : true
+                      item.type === "sticky"
+                        ? selectedStickyId === item.id
+                        : item.type === "free-text"
+                          ? selectedFreeTextId === item.id
+                          : item.type === "drawing"
+                            ? selectedDrawingId === item.id
+                            : item.type === "image"
+                              ? selectedImageId === item.id
+                              : isMigratedToSelectionOverlay(item.type)
+                                ? selectedIds.includes(item.id)
+                                : true
                     }
                     passThrough={item.type === "drawing"}
                     showRotateButton={
@@ -1399,6 +1486,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
+                      if (item.type === "sticky") {
+                        // Sticky-note editing is self-contained and must not inherit Text tool state.
+                        setActiveTool("select");
+                        setIsTextToolLocked(false);
+                        setSelectedFreeTextId(null);
+                        setEditingFreeTextId(null);
+                        setSelectedDrawingId(null);
+                        setSelectedImageId(null);
+                        setSelectedShapeId(null);
+                        useSelectionStore.getState().deselectAll();
+
+                        if (selectedStickyId === item.id) {
+                          setEditingStickyId(item.id);
+                        } else {
+                          setSelectedStickyId(item.id);
+                          setEditingStickyId(null);
+                        }
+                        return;
+                      }
                       const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
 
                       const targetIds = [item.id];
@@ -1411,12 +1517,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       }
 
                       if (item.type === "free-text") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
                         useSelectionStore.getState().deselectAll();
                         handleFreeTextSelect(item.id);
                       } else if (item.type === "drawing") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
                         setIsTextToolActive(false);
@@ -1425,6 +1535,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         useSelectionStore.getState().deselectAll();
                         setSelectedDrawingId(item.id);
                       } else if (item.type === "shape" || item.type === "text" || item.type === "image") {
+                        setSelectedStickyId(null);
+                        setEditingStickyId(null);
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
                         setIsTextToolActive(false);
@@ -1471,6 +1583,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "pdf-fragment" && <PdfFragment item={item} />}
                     {item.type === "video-anchor" && <VideoAnchor item={item} />}
                     {item.type === "text" && <TextNode item={item as any} />}
+                    {item.type === "sticky" && (
+                      <StickyNode
+                        item={item as any}
+                        isSelected={selectedStickyId === item.id}
+                        isEditing={editingStickyId === item.id}
+                        onColorChange={(color) => {
+                          setStickyColor(color);
+                          useWorkspaceStore.getState().updateItemProps(item.id, { color });
+                        }}
+                        onFinishEditing={() => setEditingStickyId(null)}
+                      />
+                    )}
                     {item.type === "free-text" && (
                       <FreeTextNode
                         item={item as any}
@@ -1483,7 +1607,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {
-                          if (!saved) {
+                          if (outsideFreeTextDismissRef.current || !saved) {
                             setSelectedFreeTextId(null);
                           } else {
                             setSelectedFreeTextId(item.id);
@@ -1608,13 +1732,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
+                onClick={() => {
+                  setActiveTool(activeTool === "sticky" ? "select" : "sticky");
+                  setEditingStickyId(null);
+                  setSelectedStickyId(null);
+                  setIsTextToolLocked(false);
+                }}
+                className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
+                title="Sticky Note — click the canvas to place"
+              >
+                <StickyNote size={18} />
+              </button>
+              <button
                 onClick={() => activateTextTool(false)}
                 onDoubleClick={() => activateTextTool(true)}
                 className={`relative p-2 rounded-md transition-colors ${isTextToolActive
-                    ? isTextToolLocked
-                      ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
-                      : "bg-indigo-50 text-indigo-600"
-                    : "hover:bg-slate-50 text-slate-400"
+                  ? isTextToolLocked
+                    ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
+                    : "bg-indigo-50 text-indigo-600"
+                  : "hover:bg-slate-50 text-slate-400"
                   }`}
                 title="Text Tool (T) - Double-click to lock"
               >

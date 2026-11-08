@@ -29,9 +29,10 @@ export function FreeTextNode({
 }: FreeTextNodeProps) {
   const { items, updateItem, updateItems, removeItem } = useWorkspaceStore();
   const [editText, setEditText] = useState(item.props.text ?? "");
-  const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   useEffect(() => {
     setEditText(item.props.text ?? "");
@@ -44,30 +45,6 @@ export function FreeTextNode({
       textareaRef.current.value.length,
       textareaRef.current.value.length,
     );
-  }, [isEditing]);
-
-  useEffect(() => {
-    if (!isEditing) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (rootRef.current?.contains(target)) {
-        return;
-      }
-
-      window.setTimeout(() => {
-        textareaRef.current?.blur();
-      }, 0);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-    };
   }, [isEditing]);
 
   useEffect(() => {
@@ -122,7 +99,6 @@ export function FreeTextNode({
 
   return (
     <div
-      ref={rootRef}
       data-free-text-root="true"
       data-free-text-id={item.id}
       className="relative h-full w-full"
@@ -148,8 +124,8 @@ export function FreeTextNode({
           onChange={(e) => setEditText(e.target.value)}
           onBlur={() => finishEditing(true)}
           onPointerDown={(e) => {
+            // Keep the editor mounted when the user clicks to reposition the caret.
             e.stopPropagation();
-            onSelect?.();
           }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
@@ -182,14 +158,76 @@ export function FreeTextNode({
           style={{
             ...sharedStyle,
             userSelect: "none",
+            // Let React Rnd receive touch drags instead of the browser treating
+            // the gesture as page scrolling or native text interaction.
+            touchAction: "none",
+            WebkitTouchCallout: "none",
           }}
           onPointerDown={(e) => {
+            // Track whether this gesture becomes a drag. React Rnd handles
+            // the actual movement; this only distinguishes drag from click.
+            pointerStartRef.current = { x: e.clientX, y: e.clientY };
+            suppressClickRef.current = false;
             e.stopPropagation();
-            onSelect?.();
           }}
-          onDoubleClick={(e) => {
+          onPointerMove={(e) => {
+            const start = pointerStartRef.current;
+            if (!start) return;
+
+            const distance = Math.hypot(
+              e.clientX - start.x,
+              e.clientY - start.y
+            );
+
+            if (distance > 5) {
+              suppressClickRef.current = true;
+            }
+          }}
+          onPointerUp={(e) => {
+            const start = pointerStartRef.current;
+            pointerStartRef.current = null;
+
+            // Mobile browsers do not always deliver the synthesized click
+            // consistently after a touch gesture handled by a drag library.
+            // Resolve a stationary touch directly on pointer-up instead.
+            if (e.pointerType === "touch" && start) {
+              const distance = Math.hypot(
+                e.clientX - start.x,
+                e.clientY - start.y,
+              );
+
+              if (distance <= 5 && !suppressClickRef.current) {
+                e.stopPropagation();
+                suppressClickRef.current = true;
+
+                if (isSelected) {
+                  onStartEditing?.();
+                } else {
+                  onSelect?.();
+                }
+                return;
+              }
+            }
+          }}
+          onPointerCancel={() => {
+            pointerStartRef.current = null;
+            suppressClickRef.current = false;
+          }}
+          onClick={(e) => {
             e.stopPropagation();
-            onStartEditing?.();
+
+            // Ignore the synthetic click after touch pointer-up, and ignore
+            // clicks generated at the end of a drag.
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              return;
+            }
+
+            if (isSelected) {
+              onStartEditing?.();
+            } else {
+              onSelect?.();
+            }
           }}
         >
           {item.props.text}
