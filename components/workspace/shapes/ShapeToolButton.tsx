@@ -130,6 +130,8 @@ export function ShapeToolButton({
 
   const handleButtonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Activate the currently selected shape as soon as the picker is opened.
+    onSelectShapeKind(activeShapeKind);
     setIsOpen((open) => !open);
   };
 
