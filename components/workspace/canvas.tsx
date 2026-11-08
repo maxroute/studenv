@@ -1695,7 +1695,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             )}
 
             {/* Full tool rail for desktop and tablet */}
-            <div className="fixed top-20 left-4 z-[1200] hidden sm:flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
+            <div className="fixed top-20 left-4 z-[11000] hidden sm:flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
               <button
                 onClick={() => {
                   setActiveTool("select");
@@ -1774,7 +1774,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             </div>
 
             {/* Mobile: compact left-side launcher with primary tools and a secondary More group */}
-            <div className="fixed top-20 left-3 z-[1200] flex sm:hidden flex-col items-start gap-2">
+            <div className="fixed top-20 left-3 z-[11000] flex sm:hidden flex-col items-start gap-2">
               <button
                 type="button"
                 aria-label={mobileToolbarOpen ? "Close tools" : "Open tools"}
