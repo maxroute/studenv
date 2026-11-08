@@ -7,7 +7,6 @@ import {
   Hand,
   ImagePlus,
   StickyNote,
-  Link2,
   Lock,
   Maximize2,
   Minus,
@@ -27,7 +26,6 @@ import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
 import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
-import { ConnectionsLayer } from "./ConnectionsLayer";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
@@ -203,7 +201,6 @@ type WorkspaceTool =
   | "eraser"
   | "text"
   | "sticky"
-  | "connect"
   | ShapeKind;
 
 interface StudioCanvasProps {
@@ -211,7 +208,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
+  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -235,7 +232,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
-  const isConnecting = activeTool === "connect";
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
@@ -250,14 +246,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       setActiveTool("pan");
     } else {
       setActiveTool((prev) => (prev === "pan" ? "select" : prev));
-    }
-  }, []);
-
-  const setIsConnecting = useCallback((val: boolean) => {
-    if (val) {
-      setActiveTool("connect");
-    } else {
-      setActiveTool((prev) => (prev === "connect" ? "select" : prev));
     }
   }, []);
 
@@ -297,7 +285,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedFreeTextId(null);
     setEditingFreeTextId(null);
     setSelectedDrawingId(null);
-    setConnectingFromId(null);
     setCurrentPath([]);
     setEraserPath([]);
   }, []);
@@ -345,7 +332,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedDrawingId(null);
     setSelectedImageId(null);
     setSelectedShapeId(null);
-    setConnectingFromId(null);
     setCurrentPath([]);
     setEraserPath([]);
   }, [activeShapeKind]);
@@ -362,7 +348,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     onActivateShapeTool: handleActivateShapeShortcut,
   });
 
-  const [connectingFromId, setConnectingFromId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [currentPath, setCurrentPath] = useState<CanvasPoint[]>([]);
   const [eraserPath, setEraserPath] = useState<CanvasPoint[]>([]);
@@ -1334,7 +1319,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onPointerDown={(e) => {
                   setContextMenu(null);
-                  if (isDrawing || isConnecting) return;
+                  if (isDrawing) return;
 
                   // Start marquee selection on any non-interactive empty-canvas
                   // surface, not only when the exact canvas div is the target.
@@ -1451,8 +1436,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                <ConnectionsLayer />
-
                 {isDrawing && (
                   <div
                     className="absolute inset-0 z-[10000]"
@@ -1492,20 +1475,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {isConnecting && connectingFromId && (
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
-                    <line
-                      x1={items.find((item) => item.id === connectingFromId)!.x + items.find((item) => item.id === connectingFromId)!.w / 2}
-                      y1={items.find((item) => item.id === connectingFromId)!.y + items.find((item) => item.id === connectingFromId)!.h / 2}
-                      x2={mousePos.x}
-                      y2={mousePos.y}
-                      stroke="#6366f1"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
-                    />
-                  </svg>
-                )}
-
                 {currentPath.length > 1 && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
                     <path
@@ -1535,12 +1504,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <StudioItemComponent
                     key={item.id}
                     item={item}
-                    isConnecting={isConnecting}
                     // Sticky notes own their text input; other tools must never disable their pointer events.
                     isDrawingMode={item.type === "sticky" ? false : isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
                     canvasScale={viewport.zoom}
                     onPointerEnter={() => {
-                      if (!isDrawing && !isConnecting && !isShapeToolActive && !isTextToolActive) {
+                      if (!isDrawing && !isShapeToolActive && !isTextToolActive) {
                         setHoveredItemId(item.id);
                       }
                     }}
@@ -1563,7 +1531,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? false
                         : undefined
                     }
-                    showConnectionHandle={item.type !== "sticky" && item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
                     showDeleteButton={selectedIds.includes(item.id)}
                     passThrough={false}
                     showRotateButton={
@@ -1670,24 +1637,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setIsTextToolActive(false);
                       }
                     }}
-                    onClick={() => {
-                      if (!isConnecting) return;
-                      if (!connectingFromId) {
-                        setConnectingFromId(item.id);
-                        toast.success("Select target node to connect");
-                        return;
-                      }
-                      if (connectingFromId !== item.id) {
-                        addConnection(connectingFromId, item.id);
-                        setConnectingFromId(null);
-                        setIsConnecting(false);
-                        toast.success("Nodes connected!");
-                      }
-                    }}
                     className={[
-                      connectingFromId === item.id
-                        ? "ring-4 ring-indigo-500 rounded-lg"
-                        : item.type === "drawing" && selectedDrawingId === item.id
+                      item.type === "drawing" && selectedDrawingId === item.id
                           ? "rounded-md ring-2 ring-slate-500/60"
                           : isMigratedToSelectionOverlay(item.type)
                             ? ""
@@ -1870,21 +1821,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               </button>
               <button
                 onClick={() => {
-                  setActiveTool(isConnecting ? "select" : "connect");
-                  useSelectionStore.getState().deselectAll();
-                  setSelectedShapeId(null);
-                  setSelectedImageId(null);
-                  setSelectedStickyId(null);
-                  setConnectingFromId(null);
-                  setIsTextToolLocked(false);
-                  setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                }}
-                className={`p-2 rounded-md transition-colors ${isConnecting ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
-                title="Connect Nodes"
-              ><Link2 size={18} /></button>
-              <button
-                onClick={() => {
                   setActiveTool(isDrawing ? "select" : drawTool);
                   useSelectionStore.getState().deselectAll();
                   setSelectedImageId(null);
@@ -1894,8 +1830,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   setEditingFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedShapeId(null);
-                  setConnectingFromId(null);
-                  setCurrentPath([]);
+                                setCurrentPath([]);
                   setEraserPath([]);
                 }}
                 className={`p-2 rounded-md transition-colors ${isDrawing ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
@@ -1914,7 +1849,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onClick={() => setMobileToolbarOpen((open) => !open)}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur"
               >
-                {isPanning ? <Hand size={19} /> : isDrawing ? <Pencil size={19} /> : isTextToolActive ? <Type size={19} /> : isStickyToolActive ? <StickyNote size={19} /> : isConnecting ? <Link2 size={19} /> : isShapeToolActive ? <ShapeToolIcon kind={activeShapeKind} size={19} /> : <MousePointer2 size={19} />}
+                {isPanning ? <Hand size={19} /> : isDrawing ? <Pencil size={19} /> : isTextToolActive ? <Type size={19} /> : isStickyToolActive ? <StickyNote size={19} /> : isShapeToolActive ? <ShapeToolIcon kind={activeShapeKind} size={19} /> : <MousePointer2 size={19} />}
                 <span className={`absolute ml-7 mt-7 h-2 w-2 rounded-full border border-white ${activeTool === "select" ? "bg-indigo-500" : "bg-amber-500"}`} />
               </button>
 
@@ -1926,8 +1861,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <div className="mx-1 h-px bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`relative rounded-lg p-2.5 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool(isConnecting ? "select" : "connect"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedStickyId(null); setConnectingFromId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isConnecting ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connect"><Link2 size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setConnectingFromId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null);  setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="mx-1 h-px bg-slate-100" />
                   <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="rounded-lg p-2.5 text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
                 </div>
