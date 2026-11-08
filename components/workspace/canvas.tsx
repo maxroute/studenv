@@ -1540,12 +1540,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       item.type === "sticky"
                         ? editingStickyId === item.id
                         : item.type === "free-text"
-                          ? editingFreeTextId === item.id || selectedFreeTextId !== item.id
+                          ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
                           : item.type === "drawing"
                             ? false
                             : isMigratedToSelectionOverlay(item.type)
                               ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
-                              : undefined
+                              : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
                     }
                     enableResizing={
                       item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
@@ -1603,6 +1603,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
                       if (item.type === "sticky") {
+                        // Keep a marquee-selected sticky note in the shared selection
+                        // so its drag can move the whole selected group.
+                        const wasMultiSelected = selIds.includes(item.id);
                         // Sticky-note editing is self-contained and must not inherit Text tool state.
                         setActiveTool("select");
                         setIsTextToolLocked(false);
@@ -1611,7 +1614,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
+                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
 
                         if (selectedStickyId === item.id) {
                           setEditingStickyId(item.id);
@@ -1633,14 +1636,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       }
 
                       if (item.type === "free-text") {
+                        const wasMultiSelected = selIds.includes(item.id);
                         setSelectedStickyId(null);
                         setEditingStickyId(null);
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
+                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
                         handleFreeTextSelect(item.id);
                       } else if (item.type === "drawing") {
+                        const wasMultiSelected = selIds.includes(item.id);
                         setSelectedStickyId(null);
                         setEditingStickyId(null);
                         setSelectedFreeTextId(null);
@@ -1648,7 +1653,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setIsTextToolActive(false);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
+                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
                         setSelectedDrawingId(item.id);
                       } else if (item.type === "shape" || item.type === "text" || item.type === "image") {
                         setSelectedStickyId(null);
@@ -1684,7 +1689,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         toast.success("Nodes connected!");
                       }
                     }}
-                    className={
+                    className={[
                       connectingFromId === item.id
                         ? "ring-4 ring-indigo-500 rounded-lg"
                         : item.type === "drawing" && selectedDrawingId === item.id
@@ -1693,8 +1698,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                             ? ""
                             : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
                               ? "rounded-md ring-2 ring-indigo-400/70"
-                              : ""
-                    }
+                              : "",
+                      !isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id)
+                        ? "ring-2 ring-[#f5a623] ring-offset-1 rounded-md"
+                        : "",
+                    ].filter(Boolean).join(" ")}
                   >
                     {item.type === "pdf-fragment" && <PdfFragment item={item} />}
                     {item.type === "video-anchor" && <VideoAnchor item={item} />}
@@ -1702,7 +1710,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "sticky" && (
                       <StickyNode
                         item={item as any}
-                        isSelected={selectedStickyId === item.id}
+                        isSelected={selectedStickyId === item.id || selectedIds.includes(item.id)}
                         isEditing={editingStickyId === item.id}
                         onColorChange={(color) => {
                           setStickyColor(color);
@@ -1714,7 +1722,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "free-text" && (
                       <FreeTextNode
                         item={item as any}
-                        isSelected={selectedFreeTextId === item.id}
+                        isSelected={selectedFreeTextId === item.id || selectedIds.includes(item.id)}
                         isEditing={editingFreeTextId === item.id}
                         onSelect={() => {
                           handleFreeTextSelect(item.id);
@@ -1738,7 +1746,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "drawing" && (
                       <DrawingNode
                         item={item as any}
-                        isSelected={selectedDrawingId === item.id}
+                        isSelected={selectedDrawingId === item.id || selectedIds.includes(item.id)}
                         onSelect={() => {
                           setSelectedFreeTextId(null);
                           setEditingFreeTextId(null);
