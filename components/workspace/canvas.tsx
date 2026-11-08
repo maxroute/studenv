@@ -222,6 +222,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
+  // On touch-first devices, let the active canvas tool own one-finger gestures.
+  // This prevents TransformWrapper from interpreting Select drags as canvas pans.
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+    const updatePointerMode = () => setIsCoarsePointer(mediaQuery.matches);
+    updatePointerMode();
+    mediaQuery.addEventListener("change", updatePointerMode);
+    return () => mediaQuery.removeEventListener("change", updatePointerMode);
+  }, []);
+
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
   const isConnecting = activeTool === "connect";
@@ -1235,13 +1246,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         smooth
         doubleClick={{ disabled: true }}
         panning={{
-          // Shape creation owns the pointer drag. Do not let the transform
-          // wrapper interpret the same touch/mouse gesture as canvas panning.
-          disabled: isDrawing || isShapeToolActive,
+          // Shape creation and drawing own their pointer gestures.
+          // On touch-first devices, Select also owns one-finger gestures:
+          // item drags move items and empty-canvas drags create selection boxes.
+          // The Pan tool is the only mode that hands one-finger movement to
+          // TransformWrapper. Desktop mouse behavior remains unchanged.
+          disabled: isDrawing || isShapeToolActive || (isCoarsePointer && !isPanning),
           wheelPanning: true,
           allowLeftClickPan: isPanning,
-          // A text item's drag handle owns single-touch gestures. This keeps
-          // the canvas from starting a pan before the text can select/edit/move.
           excluded: ["drag-handle"],
         }}
         pinch={{ disabled: isDrawing }}
