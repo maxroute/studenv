@@ -294,7 +294,7 @@ export function StudioItemComponent({
               e.preventDefault();
               setIsRotating(true);
             }}
-            className={`pointer-events-auto absolute -top-6 left-1/2 z-30 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${
+            className={`pointer-events-auto absolute -top-[11px] left-1/2 z-30 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${
               isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
             }`}
             title="Drag to rotate"
@@ -313,7 +313,7 @@ export function StudioItemComponent({
               e.stopPropagation();
               removeItem(item.id);
             }}
-            className="pointer-events-auto absolute -top-[13px] -right-[13px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
+            className="pointer-events-auto absolute -top-[18px] -right-[18px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
           >
             <X className="w-3 h-3 text-white" />
           </button>
