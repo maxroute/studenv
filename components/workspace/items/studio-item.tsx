@@ -110,6 +110,10 @@ export function StudioItemComponent({
       disableDragging={draggingDisabled}
       enableResizing={isMigratedToSelectionOverlay(item.type) ? false : resizingEnabled}
       onDragStart={(e, d) => {
+        if (item.type === "free-text") {
+          console.log("[FreeText gesture] Rnd onDragStart", { id: item.id, eventType: e.type, x: d.x, y: d.y });
+          console.trace("[FreeText gesture] Rnd drag start stack");
+        }
         const { selectedIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
         
@@ -157,6 +161,9 @@ export function StudioItemComponent({
         }
       }}
       onDragStop={(e, d) => {
+        if (item.type === "free-text") {
+          console.log("[FreeText gesture] Rnd onDragStop", { id: item.id, eventType: e.type, x: d.x, y: d.y });
+        }
         const { selectedIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
         if (!startPos) return;
