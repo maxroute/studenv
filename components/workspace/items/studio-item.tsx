@@ -106,7 +106,10 @@ export function StudioItemComponent({
       }
       applyPreview();
 
-      const finalRotation = ((rotationPreviewRef.current % 360) + 360) % 360;
+      // Keep the accumulated angle unwrapped. Normalizing 360° to 0° here
+      // changes the numeric transform at pointer-up and can make the visual
+      // rotation snap/reverse even though both angles represent the same pose.
+      const finalRotation = rotationPreviewRef.current;
       rotationStartRef.current = null;
       pendingRotationRef.current = null;
       setIsRotating(false);
