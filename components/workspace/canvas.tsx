@@ -1323,7 +1323,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onPointerDown={(e) => {
                   setContextMenu(null);
-                  if (e.target !== e.currentTarget || isDrawing || isConnecting) {
+                  if (isDrawing || isConnecting) return;
+
+                  // Start marquee selection on any non-interactive empty-canvas
+                  // surface, not only when the exact canvas div is the target.
+                  // Real workspace items and controls keep ownership of their
+                  // own pointer gestures.
+                  const target = e.target;
+                  if (
+                    target instanceof Element &&
+                    target.closest(
+                      '[data-workspace-item="true"], button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-marquee]'
+                    )
+                  ) {
                     return;
                   }
 
