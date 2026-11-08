@@ -1723,10 +1723,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 activeShapeKind={activeShapeKind}
                 isActive={isShapeToolActive}
                 onSelectShapeKind={handleSelectShapeKind}
-                onClick={() => {
-                  if (isShapeToolActive) setActiveTool("select");
-                  else activateShapeTool(activeShapeKind);
-                }}
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
@@ -1797,7 +1793,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 <div className="flex max-h-[calc(100dvh-7rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur">
                   <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
-                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} onClick={() => { activateShapeTool(activeShapeKind); setMobileToolbarOpen(false); }} />
+                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} />
                   <button type="button" onClick={() => { activateTextTool(false); setMobileToolbarOpen(false); }} className={`relative rounded-lg p-2.5 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setConnectingFromId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="mx-1 h-px bg-slate-100" />
