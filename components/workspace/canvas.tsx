@@ -1626,7 +1626,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedShapeId(null);
                         setSelectedStickyId(item.id);
                         setEditingStickyId(
-                          !event.shiftKey && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
@@ -1642,7 +1642,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedFreeTextId(item.id);
                         setEditingFreeTextId(
-                          !event.shiftKey && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
