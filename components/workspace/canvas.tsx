@@ -1553,19 +1553,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         : undefined
                     }
                     showConnectionHandle={item.type !== "sticky" && item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
-                    showDeleteButton={
-                      item.type === "sticky"
-                        ? selectedStickyId === item.id
-                        : item.type === "free-text"
-                          ? selectedFreeTextId === item.id
-                          : item.type === "drawing"
-                            ? selectedDrawingId === item.id
-                            : item.type === "image"
-                              ? selectedImageId === item.id
-                              : isMigratedToSelectionOverlay(item.type)
-                                ? selectedIds.includes(item.id)
-                                : true
-                    }
+                    showDeleteButton={selectedIds.includes(item.id)}
                     passThrough={false}
                     showRotateButton={
                       (item.type === "drawing" && selectedDrawingId === item.id) ||
@@ -1602,12 +1590,33 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
-                      const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
+                      const selection = useSelectionStore.getState();
+                      const selectedBeforePointer = selection.selectedIds;
+                      const targetIds = [item.id];
+                      const groupId = (item.props as { groupId?: string }).groupId;
+                      if (groupId) {
+                        const groupMembers = items
+                          .filter((candidate) => (candidate.props as { groupId?: string }).groupId === groupId)
+                          .map((candidate) => candidate.id);
+                        targetIds.push(...groupMembers.filter((id) => id !== item.id));
+                      }
+
+                      const isAlreadySelected = targetIds.some((id) => selectedBeforePointer.includes(id));
+                      if (event.shiftKey) {
+                        if (isAlreadySelected) {
+                          selection.clearAndSelectIds(selectedBeforePointer.filter((id) => !targetIds.includes(id)));
+                        } else {
+                          selection.selectIds(targetIds);
+                        }
+                      } else if (!isAlreadySelected || selectedBeforePointer.length === 0) {
+                        selection.clearAndSelectIds(targetIds);
+                      }
+
+                      // Editing is a separate intent from selecting. Never enter an
+                      // editor when the pointer is operating on a multi-selection.
+                      const nextSelection = useSelectionStore.getState().selectedIds;
+                      const isSingleSelection = nextSelection.length === 1 && nextSelection[0] === item.id;
                       if (item.type === "sticky") {
-                        // Keep a marquee-selected sticky note in the shared selection
-                        // so its drag can move the whole selected group.
-                        const wasMultiSelected = selIds.includes(item.id);
-                        // Sticky-note editing is self-contained and must not inherit Text tool state.
                         setActiveTool("select");
                         setIsTextToolLocked(false);
                         setSelectedFreeTextId(null);
@@ -1615,63 +1624,39 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
-                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
-
-                        if (selectedStickyId === item.id) {
-                          setEditingStickyId(item.id);
-                        } else {
-                          setSelectedStickyId(item.id);
-                          setEditingStickyId(null);
-                        }
+                        setSelectedStickyId(item.id);
+                        setEditingStickyId(
+                          !event.shiftKey && isAlreadySelected && isSingleSelection
+                            ? item.id
+                            : null
+                        );
                         return;
                       }
-                      const targetIds = [item.id];
-                      if (item.props && (item.props as any).groupId) {
-                        const gId = (item.props as any).groupId;
-                        const groupMembers = items.filter(i => i.props && (i.props as any).groupId === gId).map(i => i.id);
-                        if (groupMembers.length > 0) {
-                          targetIds.push(...groupMembers.filter(id => id !== item.id));
-                        }
-                      }
+
+                      setSelectedStickyId(null);
+                      setEditingStickyId(null);
+                      setSelectedImageId(null);
+                      setSelectedShapeId(null);
 
                       if (item.type === "free-text") {
-                        const wasMultiSelected = selIds.includes(item.id);
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
                         setSelectedDrawingId(null);
-                        setSelectedImageId(null);
-                        setSelectedShapeId(null);
-                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
-                        handleFreeTextSelect(item.id);
-                      } else if (item.type === "drawing") {
-                        const wasMultiSelected = selIds.includes(item.id);
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
+                        setSelectedFreeTextId(item.id);
+                        setEditingFreeTextId(
+                          !event.shiftKey && isAlreadySelected && isSingleSelection
+                            ? item.id
+                            : null
+                        );
+                      } else {
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
-                        setIsTextToolActive(false);
-                        setSelectedImageId(null);
-                        setSelectedShapeId(null);
-                        if (!wasMultiSelected) useSelectionStore.getState().deselectAll();
-                        setSelectedDrawingId(item.id);
-                      } else if (item.type === "shape" || item.type === "text" || item.type === "image") {
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
-                        setSelectedFreeTextId(null);
-                        setEditingFreeTextId(null);
-                        setIsTextToolActive(false);
-                        setSelectedDrawingId(null);
-                        setSelectedImageId(null);
-                        if (event?.shiftKey) {
-                          const isSomeSelected = targetIds.some(id => selIds.includes(id));
-                          if (isSomeSelected) {
-                            useSelectionStore.getState().clearAndSelectIds(selIds.filter(id => !targetIds.includes(id)));
-                          } else {
-                            useSelectionStore.getState().selectIds(targetIds);
-                          }
+                        if (item.type === "drawing") {
+                          setSelectedDrawingId(item.id);
                         } else {
-                          useSelectionStore.getState().clearAndSelectIds(targetIds);
+                          setSelectedDrawingId(null);
                         }
+                      }
+                      if (item.type !== "sticky" && item.type !== "free-text") {
+                        setIsTextToolActive(false);
                       }
                     }}
                     onClick={() => {
