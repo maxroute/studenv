@@ -309,9 +309,6 @@ export default function WorkspacePage() {
                 {title}
               </h1>
             )}
-            <span className="text-[10px] bg-indigo-50 px-2 py-0.5 rounded text-indigo-600 uppercase tracking-widest font-bold">
-              Studio
-            </span>
           </div>
         </div>
 
