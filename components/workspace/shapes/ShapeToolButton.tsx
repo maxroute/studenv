@@ -26,7 +26,7 @@ interface ShapeToolButtonProps {
 }
 
 // Icon mapper for shape dropdown items
-const ShapeIcon = ({ kind, size = 16, className = "" }: { kind: ShapeKind; size?: number; className?: string }) => {
+export const ShapeToolIcon = ({ kind, size = 16, className = "" }: { kind: ShapeKind; size?: number; className?: string }) => {
   switch (kind) {
     case "rectangle":
       return <Square size={size} className={className} />;
@@ -213,7 +213,7 @@ export function ShapeToolButton({
         }`}
         title={`Shapes — ${SHAPE_LABELS[activeShapeKind]}`}
       >
-        <ShapeIcon kind={activeShapeKind} size={20} />
+        <ShapeToolIcon kind={activeShapeKind} size={20} />
       </button>
 
       {isOpen && menuPosition && typeof document !== "undefined" &&
