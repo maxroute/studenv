@@ -51,7 +51,7 @@ export function StudioItemComponent({
   onDrag,
   onDragStop,
 }: StudioItemComponentProps) {
-  const { updateItem, removeItem } = useWorkspaceStore();
+  const { updateItem } = useWorkspaceStore();
   const [pos, setPos] = useState({ x: item.x, y: item.y });
   const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
