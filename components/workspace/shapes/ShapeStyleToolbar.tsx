@@ -92,7 +92,6 @@ export function ShapeStyleToolbar() {
               <Minus size={12} className="text-white/45" />
               <input aria-label="Stroke width" type="range" min="1" max="12" value={props.stroke?.width ?? 2} onChange={(event) => updateStroke({ width: Number(event.target.value) })} className="h-1 w-14 cursor-pointer accent-[#f5a623]" />
               <span className="min-w-[2rem] text-center text-[11px] font-medium tabular-nums text-white/75">{props.stroke?.width ?? 2}px</span>
-              <PlusIcon />
             </div>
           </>
         )}
@@ -132,6 +131,3 @@ export function ShapeStyleToolbar() {
   );
 }
 
-function PlusIcon() {
-  return <span className="sr-only">Adjust stroke width</span>;
-}
