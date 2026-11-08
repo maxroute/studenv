@@ -211,7 +211,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
+  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -412,7 +412,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   }, [_workspaceId]);
 
   useEffect(() => {
-    if (isLoading || items.length === 0 || hasAppliedInitialFitRef.current) return;
+    if (isLoading || workspaceId !== _workspaceId || hasAppliedInitialFitRef.current) return;
+
+    // Mark an intentionally empty workspace as initialized too, so adding its
+    // first object later does not unexpectedly move the user's canvas.
+    if (items.length === 0) {
+      hasAppliedInitialFitRef.current = true;
+      return;
+    }
+
     const isDefaultViewport = viewport.x === 0 && viewport.y === 0 && viewport.zoom === 1;
     if (!isDefaultViewport) {
       hasAppliedInitialFitRef.current = true;
@@ -424,7 +432,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       hasAppliedInitialFitRef.current = true;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [items, isLoading, viewport.x, viewport.y, viewport.zoom, fitWorkspaceToViewport]);
+  }, [items, isLoading, workspaceId, _workspaceId, viewport.x, viewport.y, viewport.zoom, fitWorkspaceToViewport]);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
