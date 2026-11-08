@@ -237,7 +237,7 @@ export function ShapeToolButton({
                     : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <ShapeIcon kind={kind} size={14} className={activeShapeKind === kind ? "text-indigo-600" : "text-slate-400"} />
+                <ShapeToolIcon kind={kind} size={14} className={activeShapeKind === kind ? "text-indigo-600" : "text-slate-400"} />
                 <span>{SHAPE_LABELS[kind]}</span>
               </button>
             ))}
