@@ -12,6 +12,8 @@ import {
   Maximize2,
   Minus,
   MousePointer2,
+  MoreHorizontal,
+  ChevronRight,
   Pencil,
   Plus,
   Type,
@@ -217,6 +219,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [isTextToolLocked, setIsTextToolLocked] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("pen");
   const [activeShapeKind, setActiveShapeKind] = useState<ShapeKind>("rectangle");
+  const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
@@ -1690,7 +1694,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               />
             )}
 
-            <div className="fixed top-20 left-4 z-[1200] flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
+            {/* Full tool rail for desktop and tablet */}
+            <div className="fixed top-20 left-4 z-[1200] hidden sm:flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
               <button
                 onClick={() => {
                   setActiveTool("select");
@@ -1701,9 +1706,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className={`p-2 rounded-md transition-colors ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Select Mode"
-              >
-                <MousePointer2 size={18} />
-              </button>
+              ><MousePointer2 size={18} /></button>
               <button
                 onClick={() => {
                   setActiveTool("pan");
@@ -1714,20 +1717,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className={`p-2 rounded-md transition-colors ${isPanning ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Pan Mode"
-              >
-                <Hand size={18} />
-              </button>
+              ><Hand size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <ShapeToolButton
                 activeShapeKind={activeShapeKind}
                 isActive={isShapeToolActive}
                 onSelectShapeKind={handleSelectShapeKind}
                 onClick={() => {
-                  if (isShapeToolActive) {
-                    setActiveTool("select");
-                  } else {
-                    activateShapeTool(activeShapeKind);
-                  }
+                  if (isShapeToolActive) setActiveTool("select");
+                  else activateShapeTool(activeShapeKind);
                 }}
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
@@ -1740,26 +1738,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Sticky Note — click the canvas to place"
-              >
-                <StickyNote size={18} />
-              </button>
+              ><StickyNote size={18} /></button>
               <button
                 onClick={() => activateTextTool(false)}
                 onDoubleClick={() => activateTextTool(true)}
-                className={`relative p-2 rounded-md transition-colors ${isTextToolActive
-                  ? isTextToolLocked
-                    ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
-                    : "bg-indigo-50 text-indigo-600"
-                  : "hover:bg-slate-50 text-slate-400"
-                  }`}
+                className={`relative p-2 rounded-md transition-colors ${isTextToolActive ? (isTextToolLocked ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50" : "bg-indigo-50 text-indigo-600") : "hover:bg-slate-50 text-slate-400"}`}
                 title="Text Tool (T) - Double-click to lock"
               >
                 <Type size={18} />
-                {isTextToolLocked && (
-                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white shadow-sm ring-1 ring-white">
-                    <Lock size={8} strokeWidth={3} />
-                  </span>
-                )}
+                {isTextToolLocked && <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white shadow-sm ring-1 ring-white"><Lock size={8} strokeWidth={3} /></span>}
               </button>
               <button
                 onClick={() => {
@@ -1771,9 +1758,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className={`p-2 rounded-md transition-colors ${isConnecting ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Connect Nodes"
-              >
-                <Link2 size={18} />
-              </button>
+              ><Link2 size={18} /></button>
               <button
                 onClick={() => {
                   setActiveTool(isDrawing ? "select" : drawTool);
@@ -1787,17 +1772,45 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 className={`p-2 rounded-md transition-colors ${isDrawing ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Draw Tool"
-              >
-                <Pencil size={18} />
-              </button>
+              ><Pencil size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
+              <button onClick={handleToolbarImageUpload} className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600" title="Upload Image"><ImagePlus size={18} /></button>
+            </div>
+
+            {/* Mobile: compact left-side launcher with primary tools and a secondary More group */}
+            <div className="fixed top-20 left-3 z-[1200] flex sm:hidden flex-col items-start gap-2">
               <button
-                onClick={handleToolbarImageUpload}
-                className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600"
-                title="Upload Image"
+                type="button"
+                aria-label={mobileToolbarOpen ? "Close tools" : "Open tools"}
+                aria-expanded={mobileToolbarOpen}
+                onClick={() => {
+                  setMobileToolbarOpen((open) => !open);
+                  setMobileMoreOpen(false);
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur"
               >
-                <ImagePlus size={18} />
+                <MousePointer2 size={19} />
+                <span className={`absolute ml-7 mt-7 h-2 w-2 rounded-full border border-white ${activeTool === "select" ? "bg-indigo-500" : "bg-amber-500"}`} />
               </button>
+
+              {mobileToolbarOpen && (
+                <div className="flex max-h-[calc(100dvh-7rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur">
+                  <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
+                  <button type="button" onClick={() => { activateShapeTool(activeShapeKind); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isShapeToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Shapes"><ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} onClick={() => { activateShapeTool(activeShapeKind); setMobileToolbarOpen(false); }} /></button>
+                  <button type="button" onClick={() => { activateTextTool(false); setMobileToolbarOpen(false); }} className={`relative rounded-lg p-2.5 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setConnectingFromId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`rounded-lg p-2.5 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <div className="mx-1 h-px bg-slate-100" />
+                  <button type="button" onClick={() => setMobileMoreOpen((open) => !open)} className={`flex items-center justify-center gap-1 rounded-lg p-2.5 text-slate-500 ${mobileMoreOpen ? "bg-slate-100" : ""}`} title="More tools"><MoreHorizontal size={20}/><ChevronRight size={12} className={mobileMoreOpen ? "rotate-90" : ""}/></button>
+                  {mobileMoreOpen && (
+                    <div className="mt-1 flex flex-col gap-1 border-t border-slate-100 pt-1">
+                      <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className={`rounded-lg p-2.5 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky note"><StickyNote size={20}/></button>
+                      <button type="button" onClick={() => { setActiveTool(isConnecting ? "select" : "connect"); setConnectingFromId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className={`rounded-lg p-2.5 ${isConnecting ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connect"><Link2 size={20}/></button>
+                      <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); setMobileMoreOpen(false); }} className="rounded-lg p-2.5 text-slate-500" title="Upload image"><ImagePlus size={20}/></button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
