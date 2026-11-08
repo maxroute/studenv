@@ -1215,7 +1215,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         smooth
         doubleClick={{ disabled: true }}
         panning={{
-          disabled: isDrawing,
+          // Shape creation owns the pointer drag. Do not let the transform
+          // wrapper interpret the same touch/mouse gesture as canvas panning.
+          disabled: isDrawing || isShapeToolActive,
           wheelPanning: true,
           allowLeftClickPan: isPanning,
           // A text item's drag handle owns single-touch gestures. This keeps
