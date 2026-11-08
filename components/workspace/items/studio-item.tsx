@@ -287,18 +287,27 @@ export function StudioItemComponent({
         )}
 
         {!isDrawingMode && showRotateButton && !isLocked && (
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              setIsRotating(true);
+          <div
+            className="pointer-events-none absolute inset-0 z-30"
+            style={{
+              transform: `rotate(${item.rotation ?? 0}deg)`,
+              transformOrigin: "center",
             }}
-            className={`pointer-events-auto absolute -top-[25px] left-1/2 z-30 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
-              }`}
-            title="Drag to rotate"
           >
-            <RotateCw className="w-3 h-3 text-white" />
-          </button>
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setIsRotating(true);
+              }}
+              className={`pointer-events-auto absolute -top-[25px] left-1/2 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
+                }`}
+              style={{ transform: `translateX(-50%) rotate(-${item.rotation ?? 0}deg)` }}
+              title="Drag to rotate"
+            >
+              <RotateCw className="w-3 h-3 text-white" />
+            </button>
+          </div>
         )}
 
         {!isDrawingMode && showDeleteButton && !isLocked && (
