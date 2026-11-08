@@ -11,8 +11,6 @@ import {
   Maximize2,
   Minus,
   MousePointer2,
-  MoreHorizontal,
-  ChevronRight,
   Pencil,
   Plus,
   Type,
