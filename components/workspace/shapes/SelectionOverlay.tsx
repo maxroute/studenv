@@ -84,28 +84,6 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     }
   };
 
-  // Handle pointer down on rotation knob
-  const handleRotateStart = (e: React.PointerEvent, itemId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const item = items.find((i) => i.id === itemId);
-    if (!item || (item.props as { locked?: boolean }).locked) return;
-
-    const startPointer = screenToWorld(e.clientX, e.clientY);
-    const startBounds = new Map<string, Bounds>();
-    startBounds.set(itemId, { x: item.x, y: item.y, w: item.w, h: item.h });
-
-    setTransformState({
-      type: "rotate",
-      startBounds,
-      startRotations: new Map([[itemId, item.rotation]]),
-      startPointer,
-    });
-    if (containerRef.current) {
-      containerRef.current.setPointerCapture(e.pointerId);
-    }
-  };
-
   // Handle pointer down on line/arrow endpoints
   const handleEndpointDragStart = (
     e: React.PointerEvent,
