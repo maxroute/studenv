@@ -48,7 +48,7 @@ function getRotatedCursor(handle: ResizeHandle, rotation: number): string {
 }
 
 export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: SelectionOverlayProps) {
-  const { selectedIds } = useSelectionStore();
+  const { selectedIds, rotationPreviews } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -397,7 +397,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
               top: item.y,
               width: item.w,
               height: item.h,
-              transform: `rotate(${item.rotation ?? 0}deg)`,
+              transform: `rotate(${rotationPreviews[item.id] ?? item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
           >
@@ -420,7 +420,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                   style={{
                     width: handleSize,
                     height: handleSize,
-                    cursor: getRotatedCursor(hType, item.rotation ?? 0),
+                    cursor: getRotatedCursor(hType, rotationPreviews[item.id] ?? item.rotation ?? 0),
                     zIndex: 10,
                     borderWidth: Math.max(1, 1.5 / canvasScale),
                     ...handleStyles[hType],
