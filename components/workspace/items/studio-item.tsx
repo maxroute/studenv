@@ -137,7 +137,7 @@ export function StudioItemComponent({
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
 
-        if (Math.hypot(dx, dy) > 2) {
+        if (item.type === "free-text" && Math.hypot(dx, dy) > 2) {
           dragMovedRef.current = true;
         }
 
@@ -172,7 +172,7 @@ export function StudioItemComponent({
         // A press can start an Rnd gesture without ever becoming a drag.
         // In particular, a touch used to dismiss a text editor can end outside
         // the item and still trigger onDragStop. Never commit that end position.
-        const didMove = dragMovedRef.current;
+        const didMove = item.type !== "free-text" || dragMovedRef.current;
         dragMovedRef.current = false;
         if (!didMove) {
           dragStartPositionsRef.current = new Map();
