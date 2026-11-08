@@ -49,30 +49,6 @@ export function FreeTextNode({
   }, [isEditing]);
 
   useEffect(() => {
-    if (!isEditing) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (rootRef.current?.contains(target)) {
-        return;
-      }
-
-      window.setTimeout(() => {
-        textareaRef.current?.blur();
-      }, 0);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-    };
-  }, [isEditing]);
-
-  useEffect(() => {
     const textToMeasure = isEditing ? editText : item.props.text;
     if (!measureRef.current || (!textToMeasure && !isEditing)) return;
 
