@@ -1173,6 +1173,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
                 onPointerDownCapture={(e) => {
+                  if (editingFreeTextId && !(e.target instanceof Element && e.target.closest("[data-free-text-root]"))) {
+                    console.log("[FreeText gesture] outside pointerdown", { pointerId: e.pointerId, pointerType: e.pointerType, target: e.target, editingFreeTextId });
+                  }
                   // Keep the editor mounted for the entire outside gesture.
                   // Blurring on pointer-down remounts the Rnd drag handle under
                   // the same gesture, which can interpret the press as a drag.
@@ -1187,6 +1190,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onPointerUpCapture={(e) => {
+                  if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
+                    console.log("[FreeText gesture] outside pointerup capture", { pointerId: e.pointerId, pointerType: e.pointerType, target: e.target, editingFreeTextId, activeElement: document.activeElement });
+                  }
                   if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
                     return;
                   }
@@ -1350,7 +1356,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       e.stopPropagation();
                       e.preventDefault();
                     }}
-                    onPointerUp={handleTextPointerUp}
+                    onPointerUp={(event) => {
+                      console.log("[FreeText gesture] text creation overlay pointerup", { pointerId: event.pointerId, pointerType: event.pointerType, target: event.target });
+                      handleTextPointerUp(event);
+                    }}
                     style={{ cursor: "text" }}
                   />
                 )}
