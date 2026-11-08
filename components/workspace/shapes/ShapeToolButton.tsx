@@ -15,14 +15,12 @@ import {
   Star,
   ArrowRight,
   Minus,
-  ChevronRight,
 } from "lucide-react";
 
 interface ShapeToolButtonProps {
   activeShapeKind: ShapeKind;
   isActive: boolean;
   onSelectShapeKind: (kind: ShapeKind) => void;
-  onClick: () => void;
 }
 
 // Icon mapper for shape dropdown items
@@ -115,7 +113,6 @@ export function ShapeToolButton({
   activeShapeKind,
   isActive,
   onSelectShapeKind,
-  onClick,
 }: ShapeToolButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,14 +128,9 @@ export function ShapeToolButton({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const handleMainButtonClick = (e: React.MouseEvent) => {
+  const handleButtonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onClick();
-  };
-
-  const handleArrowClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsOpen(!isOpen);
+    setIsOpen((open) => !open);
   };
 
   const selectKind = (kind: ShapeKind) => {
@@ -163,22 +155,16 @@ export function ShapeToolButton({
   return (
     <div ref={containerRef} className="relative flex items-center select-none">
       <button
-        onClick={handleMainButtonClick}
-        className={`p-2 rounded-l-md transition-colors border-r border-slate-100 ${
-          isActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"
+        type="button"
+        onClick={handleButtonClick}
+        aria-label={`Choose shape: ${SHAPE_LABELS[activeShapeKind]}`}
+        aria-expanded={isOpen}
+        className={`rounded-md p-2.5 transition-colors ${
+          isActive || isOpen ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"
         }`}
-        title={`Shape Tool (${SHAPE_LABELS[activeShapeKind]})`}
+        title={`Shapes — ${SHAPE_LABELS[activeShapeKind]}`}
       >
-        <ShapeIcon kind={activeShapeKind} size={18} />
-      </button>
-      <button
-        onClick={handleArrowClick}
-        className={`p-1 py-2.5 rounded-r-md transition-colors flex items-center justify-center ${
-          isActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"
-        }`}
-        title="Select Shape Kind"
-      >
-        <ChevronRight size={10} className={`transform transition-transform ${isOpen ? "rotate-90" : ""}`} />
+        <ShapeIcon kind={activeShapeKind} size={20} />
       </button>
 
       {isOpen && (
