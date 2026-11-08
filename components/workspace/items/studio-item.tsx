@@ -392,7 +392,10 @@ export function StudioItemComponent({
             }}
             onClick={(e) => {
               e.stopPropagation();
-              removeItem(item.id);
+              const selectedIds = useSelectionStore.getState().selectedIds;
+              const idsToRemove = selectedIds.includes(item.id) ? selectedIds : [item.id];
+              useWorkspaceStore.getState().removeItems(idsToRemove);
+              useSelectionStore.getState().deselectAll();
             }}
             className="pointer-events-auto absolute -top-[20px] -right-[20px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
           >
