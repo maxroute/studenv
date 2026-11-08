@@ -363,14 +363,14 @@ export default function WorkspacePage() {
             <button
               onClick={() => saveNow()}
               disabled={isSaving || !isDirty}
-              className={`ml-2 px-3 py-1.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors ${
+              className={`ml-2 p-2 sm:px-3 sm:py-1.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors ${
                 isDirty 
                   ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" 
                   : "bg-slate-50 text-slate-400 cursor-default"
               }`}
             >
-              <Save size={14} />
-              Save
+              <Save size={16} />
+              <span className="hidden sm:inline">Save</span>
             </button>
           </div>
         </div>
