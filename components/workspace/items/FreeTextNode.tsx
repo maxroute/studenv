@@ -153,7 +153,7 @@ export function FreeTextNode({
           className={`${
             patrickHand.className
           } drag-handle h-full w-full whitespace-pre-wrap break-words bg-transparent px-1 py-0.5 ${
-            isSelected ? "cursor-move" : "cursor-grab"
+            isSelected ? "cursor-move" : "cursor-move"
           }`}
           style={{
             ...sharedStyle,
