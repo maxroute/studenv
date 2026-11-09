@@ -1380,6 +1380,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
 
                   if (isStickyToolActive) {
+                    // Own the full touch sequence for sticky-note placement.
+                    // This prevents a parent gesture handler from taking over
+                    // after the note has been created on pointer-down.
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
                       ? `item-${crypto.randomUUID()}`
@@ -1475,19 +1480,37 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setCurrentPath([]);
                       setEraserPath([]);
                     }}
-                    style={{ cursor: drawTool === "eraser" ? "none" : "crosshair" }}
+                    style={{
+                      cursor: drawTool === "eraser" ? "none" : "crosshair",
+                      // Touch input must stay with the drawing surface instead of
+                      // becoming a browser gesture while the pointer is captured.
+                      touchAction: "none",
+                    }}
                   />
                 )}
 
                 {isTextToolActive && !isDrawing && !editingFreeTextId && (
                   <div
-                    className="absolute inset-0 z-[0]"
+                    className="absolute inset-0 z-[10000]"
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
+                      // Keep the complete touch gesture routed to the text tool,
+                      // even if the finger drifts beyond the overlay before release.
+                      e.currentTarget.setPointerCapture(e.pointerId);
                     }}
-                    onPointerUp={handleTextPointerUp}
-                    style={{ cursor: "text" }}
+                    onPointerUp={(e) => {
+                      handleTextPointerUp(e);
+                      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                      }
+                    }}
+                    onPointerCancel={(e) => {
+                      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                      }
+                    }}
+                    style={{ cursor: "text", touchAction: "none" }}
                   />
                 )}
 
