@@ -1530,7 +1530,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         : undefined
                     }
                     showDeleteButton={selectedIds.includes(item.id)}
-                    passThrough={false}
+                    passThrough={isPanning}
                     showRotateButton={
                       (item.type === "drawing" && selectedDrawingId === item.id) ||
                       (item.type === "image" && selectedImageId === item.id) ||
