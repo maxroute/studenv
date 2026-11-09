@@ -1527,7 +1527,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                               : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
                     }
                     enableResizing={
-                      item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
+                      isPanning
+                        ? false
+                        : item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
                         ? false
                         : undefined
                     }
@@ -1568,6 +1570,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
+                      if (isPanning) return;
                       const selection = useSelectionStore.getState();
                       const selectedBeforePointer = selection.selectedIds;
                       const targetIds = [item.id];
@@ -1694,6 +1697,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         item={item as any}
                         isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         onSelect={() => {
+                          if (isPanning) return;
                           setSelectedFreeTextId(null);
                           setEditingFreeTextId(null);
                           setIsTextToolActive(false);
