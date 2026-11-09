@@ -6685,3 +6685,14 @@ body.shelf-scroll-locked {
   min-height: 0;
 }
 
+
+/* Workspace interaction cursors are owned by the active canvas tool. */
+[data-workspace-interaction="pan"],
+[data-workspace-interaction="pan"] * {
+  cursor: grab !important;
+}
+
+[data-workspace-interaction="pan"][data-pan-dragging="true"],
+[data-workspace-interaction="pan"][data-pan-dragging="true"] * {
+  cursor: grabbing !important;
+}
