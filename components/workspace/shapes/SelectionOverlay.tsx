@@ -16,6 +16,7 @@ interface SelectionOverlayProps {
   canvasScale: number;
   screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
   hoveredItemId?: string | null;
+  interactive?: boolean;
 }
 
 interface TransformState {
@@ -47,7 +48,7 @@ function getRotatedCursor(handle: ResizeHandle, rotation: number): string {
   }
 }
 
-export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: SelectionOverlayProps) {
+export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, interactive = true }: SelectionOverlayProps) {
   const { selectedIds, rotationPreviews } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
@@ -356,17 +357,17 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
             top: selectionBounds.top,
             width: Math.max(1, selectionBounds.right - selectionBounds.left),
             height: Math.max(1, selectionBounds.bottom - selectionBounds.top),
-            pointerEvents: "auto",
+            pointerEvents: interactive ? "auto" : "none",
             cursor: groupDragRef.current ? "grabbing" : "move",
             touchAction: "none",
             background: "transparent",
           }}
-          onPointerDown={handleGroupDragStart}
-          onPointerMove={handleGroupDragMove}
-          onPointerUp={handleGroupDragEnd}
-          onPointerCancel={handleGroupDragEnd}
+          onPointerDown={interactive ? handleGroupDragStart : undefined}
+          onPointerMove={interactive ? handleGroupDragMove : undefined}
+          onPointerUp={interactive ? handleGroupDragEnd : undefined}
+          onPointerCancel={interactive ? handleGroupDragEnd : undefined}
         >
-          {baseHandles.map((handle) => (
+          {interactive && baseHandles.map((handle) => (
             <div
               key={`group-handle-${handle}`}
               className="absolute rounded-full border border-[#f5a623] bg-white shadow-sm"
@@ -493,7 +494,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                 />
               </svg>
 
-              {!isLocked && (
+              {interactive && !isLocked && (
                 <div
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
@@ -557,7 +558,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
             />
 
             {/* Resize Handles (Hidden if locked) */}
-            {selectedIds.length === 1 && !isLocked &&
+            {interactive && selectedIds.length === 1 && !isLocked &&
               baseHandles.map((hType) => (
                 <div
                   key={hType}
