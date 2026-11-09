@@ -1525,7 +1525,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     isDrawingMode={item.type === "sticky" ? false : isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
                     canvasScale={viewport.zoom}
                     onPointerEnter={() => {
-                      if (!isDrawing && !isShapeToolActive && !isTextToolActive) {
+                      if (!isPanning && !isDrawing && !isShapeToolActive && !isTextToolActive) {
                         setHoveredItemId(item.id);
                       }
                     }}
