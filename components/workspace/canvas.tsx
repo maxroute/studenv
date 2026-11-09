@@ -230,6 +230,23 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
+
+  // Pan mode is viewport-only: clear any lingering object selection/edit UI
+  // and remove the selection overlay so its handles cannot intercept gestures.
+  useEffect(() => {
+    if (!isPanning) return;
+    useSelectionStore.getState().deselectAll();
+    setSelectedShapeId(null);
+    setSelectedImageId(null);
+    setSelectedDrawingId(null);
+    setSelectedStickyId(null);
+    setSelectedFreeTextId(null);
+    setEditingFreeTextId(null);
+    setEditingStickyId(null);
+    setHoveredItemId(null);
+    setIsTextToolLocked(false);
+    setIsTextToolActive(false);
+  }, [isPanning]);
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
@@ -1712,11 +1729,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 <SnapGuidesOverlay guides={snapGuides} />
 
                 {/* Bounding handles selection overlay */}
-                <SelectionOverlay
-                  canvasScale={viewport.zoom}
-                  screenToWorld={screenToWorld}
-                  hoveredItemId={hoveredItemId}
-                />
+                {!isPanning && (
+                  <SelectionOverlay
+                    canvasScale={viewport.zoom}
+                    screenToWorld={screenToWorld}
+                    hoveredItemId={hoveredItemId}
+                  />
+                )}
               </div>
             </TransformComponent>
 
