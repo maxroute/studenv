@@ -232,6 +232,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const isPanning = activeTool === "pan";
   const [isPanDragging, setIsPanDragging] = useState(false);
 
+  useEffect(() => {
+    if (!isPanDragging) return;
+    const finishPanGesture = () => setIsPanDragging(false);
+    window.addEventListener("pointerup", finishPanGesture);
+    window.addEventListener("pointercancel", finishPanGesture);
+    return () => {
+      window.removeEventListener("pointerup", finishPanGesture);
+      window.removeEventListener("pointercancel", finishPanGesture);
+    };
+  }, [isPanDragging]);
+
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
