@@ -233,6 +233,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [isPanDragging, setIsPanDragging] = useState(false);
 
   useEffect(() => {
+    if (!isPanning) return;
+    setHoveredItemId(null);
+    setIsPanDragging(false);
+  }, [isPanning]);
+
+  useEffect(() => {
     if (!isPanDragging) return;
     const finishPanGesture = () => setIsPanDragging(false);
     window.addEventListener("pointerup", finishPanGesture);
