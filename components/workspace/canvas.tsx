@@ -231,22 +231,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
 
-  // Pan mode is viewport-only: clear any lingering object selection/edit UI
-  // and remove the selection overlay so its handles cannot intercept gestures.
-  useEffect(() => {
-    if (!isPanning) return;
-    useSelectionStore.getState().deselectAll();
-    setSelectedShapeId(null);
-    setSelectedImageId(null);
-    setSelectedDrawingId(null);
-    setSelectedStickyId(null);
-    setSelectedFreeTextId(null);
-    setEditingFreeTextId(null);
-    setEditingStickyId(null);
-    setHoveredItemId(null);
-    setIsTextToolLocked(false);
-    setIsTextToolActive(false);
-  }, [isPanning]);
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
@@ -1265,7 +1249,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           disabled: isDrawing || isShapeToolActive || (isCoarsePointer && !isPanning),
           wheelPanning: true,
           allowLeftClickPan: isPanning,
-          excluded: ["drag-handle"],
+          // Pan accepts gestures that begin over objects; other tools reserve drag handles.
+          excluded: isPanning ? [] : ["drag-handle"],
         }}
         pinch={{ disabled: isDrawing }}
         wheel={{
@@ -1531,7 +1516,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setHoveredItemId((prev) => (prev === item.id ? null : prev));
                     }}
                     disableDragging={
-                      item.type === "sticky"
+                      isPanning || item.type === "sticky"
                         ? editingStickyId === item.id
                         : item.type === "free-text"
                           ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
@@ -1546,12 +1531,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? false
                         : undefined
                     }
-                    showDeleteButton={selectedIds.includes(item.id)}
+                    showDeleteButton={!isPanning && selectedIds.includes(item.id)}
                     passThrough={isPanning}
                     showRotateButton={
-                      (item.type === "drawing" && selectedDrawingId === item.id) ||
+                      !isPanning && ((item.type === "drawing" && selectedDrawingId === item.id) ||
                       (item.type === "image" && selectedImageId === item.id) ||
-                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !('locked' in item.props && item.props.locked))
+                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !('locked' in item.props && item.props.locked)))
                     }
                     onRotateChange={(rotation) => {
                       updateItem(item.id, { rotation });
@@ -1728,14 +1713,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 <SnapGuidesOverlay guides={snapGuides} />
 
-                {/* Bounding handles selection overlay */}
-                {!isPanning && (
-                  <SelectionOverlay
-                    canvasScale={viewport.zoom}
-                    screenToWorld={screenToWorld}
-                    hoveredItemId={hoveredItemId}
-                  />
-                )}
+                {/* Keep selection outlines visible in Pan mode, but disable their handles. */}
+                <SelectionOverlay
+                  canvasScale={viewport.zoom}
+                  screenToWorld={screenToWorld}
+                  hoveredItemId={hoveredItemId}
+                  interactive={!isPanning}
+                />
               </div>
             </TransformComponent>
 
