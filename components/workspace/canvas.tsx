@@ -1770,11 +1770,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               <button
                 onClick={() => {
                   setActiveTool("select");
-                  useSelectionStore.getState().deselectAll();
                   setIsTextToolLocked(false);
                   setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedShapeId(null);
                 }}
                 className={`p-2 rounded-md transition-colors ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Select Mode"
@@ -1782,11 +1779,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               <button
                 onClick={() => {
                   setActiveTool("pan");
-                  useSelectionStore.getState().deselectAll();
                   setIsTextToolLocked(false);
                   setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedShapeId(null);
                 }}
                 className={`p-2 rounded-md transition-colors ${isPanning ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Pan Mode"
@@ -1877,8 +1871,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 </button>
               ) : (
                 <div className="flex max-h-[calc(100dvh-7.5rem)] w-full flex-col items-center gap-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-                  <button type="button" onClick={() => { setActiveTool("select"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool("pan"); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
                   <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} compact />
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
