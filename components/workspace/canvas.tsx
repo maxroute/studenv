@@ -1700,9 +1700,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         isEditing={editingFreeTextId === item.id}
                         onSelect={() => {
+                          if (isPanning) return;
                           handleFreeTextSelect(item.id);
                         }}
                         onStartEditing={() => {
+                          if (isPanning) return;
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {
