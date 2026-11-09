@@ -101,7 +101,7 @@ export const ShapeNode = React.memo(function ShapeNode({
             filter={filterAttr}
             style={{ pointerEvents: "stroke" }}
             className={`drag-handle transition-colors duration-150 ${
-              isSelected ? "cursor-move" : "cursor-grab"
+              isSelected ? "cursor-move" : "cursor-move"
             }`}
           />
         </svg>
@@ -135,7 +135,7 @@ export const ShapeNode = React.memo(function ShapeNode({
               strokeLinecap="round"
               style={{ pointerEvents: "stroke" }}
               className={`drag-handle transition-colors duration-150 ${
-                isSelected ? "cursor-move" : "cursor-grab"
+                isSelected ? "cursor-move" : "cursor-move"
               }`}
             />
             {arrow.points && (
@@ -147,7 +147,7 @@ export const ShapeNode = React.memo(function ShapeNode({
                 strokeLinejoin="round"
                 style={{ pointerEvents: "fill" }}
                 className={`drag-handle transition-colors duration-150 ${
-                  isSelected ? "cursor-move" : "cursor-grab"
+                  isSelected ? "cursor-move" : "cursor-move"
                 }`}
               />
             )}
@@ -182,7 +182,7 @@ export const ShapeNode = React.memo(function ShapeNode({
           filter={filterAttr}
           style={{ pointerEvents: "visiblePainted" }}
           className={`drag-handle transition-colors duration-150 ${
-            isSelected ? "cursor-move" : "cursor-grab"
+            isSelected ? "cursor-move" : "cursor-move"
           }`}
         />
       </svg>
