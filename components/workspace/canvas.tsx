@@ -230,6 +230,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
+  const [isPanDragging, setIsPanDragging] = useState(false);
 
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
@@ -1269,10 +1270,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             <TransformComponent wrapperClass="!w-full !h-full">
               <div
                 className="relative w-[10000px] h-[10000px]"
+                data-workspace-interaction={isPanning ? "pan" : "select"}
+                data-pan-dragging={isPanDragging ? "true" : "false"}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
                 onPointerDownCapture={(e) => {
+                  if (isPanning && e.button === 0) setIsPanDragging(true);
                   // Keep the editor mounted for the entire outside gesture.
                   // Blurring on pointer-down remounts the Rnd drag handle under
                   // the same gesture, which can interpret the press as a drag.
@@ -1287,6 +1291,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onPointerUpCapture={(e) => {
+                  setIsPanDragging(false);
                   if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
                     return;
                   }
@@ -1313,6 +1318,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onPointerCancelCapture={(e) => {
+                  setIsPanDragging(false);
                   if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
                     pendingFreeTextDismissPointerRef.current = null;
                   }
