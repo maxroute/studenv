@@ -27,7 +27,7 @@ export function DrawingNode({ item, isSelected = false, onSelect }: DrawingNodeP
       >
         <path
           d={pathData}
-          className={`drag-handle ${isSelected ? "cursor-move" : "cursor-grab"}`}
+          className={`drag-handle ${isSelected ? "cursor-move" : "cursor-move"}`}
           stroke={item.props.color}
           strokeWidth={item.props.strokeWidth}
           fill="none"
