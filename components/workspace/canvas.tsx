@@ -232,11 +232,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const isPanning = activeTool === "pan";
   const [isPanDragging, setIsPanDragging] = useState(false);
 
-  useEffect(() => {
-    if (!isPanning) return;
-    setHoveredItemId(null);
-    setIsPanDragging(false);
-  }, [isPanning]);
 
   useEffect(() => {
     if (!isPanDragging) return;
@@ -315,6 +310,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [stickyColor, setStickyColor] = useState<string>(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPanning) return;
+    setHoveredItemId(null);
+    setIsPanDragging(false);
+  }, [isPanning]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
