@@ -379,6 +379,64 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
+
+  // TEMPORARY: phone-only canvas input diagnostics. Remove after collecting
+  // one failed gesture per tool; this does not cancel or modify any events.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const describeTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return String(target);
+      const element = target as HTMLElement;
+      return {
+        tag: element.tagName.toLowerCase(),
+        id: element.id || undefined,
+        className: typeof element.className === "string" ? element.className : undefined,
+        touchAction: window.getComputedStyle(element).touchAction,
+      };
+    };
+
+    const log = (event: Event) => {
+      const pointer = event instanceof PointerEvent ? event : null;
+      const touch = event instanceof TouchEvent ? event : null;
+      if (pointer && pointer.pointerType !== "touch") return;
+      if (!pointer && !touch) return;
+
+      console.info("[workspace-touch-diagnostic]", {
+        type: event.type,
+        tool: activeTool,
+        pointerType: pointer?.pointerType,
+        pointerId: pointer?.pointerId,
+        button: pointer?.button,
+        isPrimary: pointer?.isPrimary,
+        cancelable: event.cancelable,
+        defaultPrevented: event.defaultPrevented,
+        target: describeTarget(event.target),
+        currentTarget: describeTarget(event.currentTarget),
+        coarsePointer: window.matchMedia("(pointer: coarse)").matches,
+        maxTouchPoints: navigator.maxTouchPoints,
+        touches: touch?.touches.length,
+        changedTouches: touch?.changedTouches.length,
+      });
+    };
+
+    const eventTypes = [
+      "pointerdown", "pointermove", "pointerup", "pointercancel",
+      "touchstart", "touchmove", "touchend", "touchcancel",
+    ] as const;
+    eventTypes.forEach((type) => wrapper.addEventListener(type, log, { capture: true }));
+    console.info("[workspace-touch-diagnostic] ready", {
+      tool: activeTool,
+      coarsePointer: window.matchMedia("(pointer: coarse)").matches,
+      maxTouchPoints: navigator.maxTouchPoints,
+      wrapperTouchAction: window.getComputedStyle(wrapper).touchAction,
+    });
+
+    return () => {
+      eventTypes.forEach((type) => wrapper.removeEventListener(type, log, true));
+    };
+  }, [activeTool]);
   const hasAppliedInitialFitRef = useRef(false);
   const fitWorkspaceToViewport = useCallback(() => {
     const wrapper = wrapperRef.current;
