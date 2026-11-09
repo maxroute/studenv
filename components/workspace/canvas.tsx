@@ -1290,6 +1290,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 className="relative w-[10000px] h-[10000px]"
                 data-workspace-interaction={isPanning ? "pan" : "select"}
                 data-pan-dragging={isPanDragging ? "true" : "false"}
+                style={{ cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default" }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
