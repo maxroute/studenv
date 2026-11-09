@@ -1290,7 +1290,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 className="relative w-[10000px] h-[10000px]"
                 data-workspace-interaction={isPanning ? "pan" : "select"}
                 data-pan-dragging={isPanDragging ? "true" : "false"}
-                style={{ cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default" }}
+                style={{
+                  cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default",
+                  backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
+                  backgroundSize: "40px 40px",
+                  touchAction: "none",
+                }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
@@ -1446,11 +1451,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     addItem("text", { text: "" }, { x, y });
                   }
                 }}
-                style={{
-                  backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
-                  backgroundSize: "40px 40px",
-                  touchAction: "none",
-                }}
+                
               >
                 {selectionBox && (
                   <SelectionBox
