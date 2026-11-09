@@ -1533,15 +1533,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setHoveredItemId((prev) => (prev === item.id ? null : prev));
                     }}
                     disableDragging={
-                      isPanning || item.type === "sticky"
-                        ? editingStickyId === item.id
-                        : item.type === "free-text"
-                          ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
-                          : item.type === "drawing"
-                            ? false
-                            : isMigratedToSelectionOverlay(item.type)
-                              ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
-                              : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
+                      isPanning || (
+                        item.type === "sticky"
+                          ? editingStickyId === item.id
+                          : item.type === "free-text"
+                            ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
+                            : item.type === "drawing"
+                              ? false
+                              : isMigratedToSelectionOverlay(item.type)
+                                ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
+                                : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
+                      )
                     }
                     enableResizing={
                       isPanning
