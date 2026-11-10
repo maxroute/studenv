@@ -3,6 +3,32 @@ import { getStroke } from "perfect-freehand";
 export type StrokePoint = { x: number; y: number; pressure?: number };
 export type Point = { x: number; y: number };
 
+/** Resample a stroke without inventing pressure values for missing samples. */
+export function resampleStrokePoints(points: StrokePoint[], maxStep = 2): StrokePoint[] {
+  if (points.length <= 1) return points;
+  const sampled: StrokePoint[] = [points[0]];
+  for (let i = 1; i < points.length; i += 1) {
+    const start = points[i - 1];
+    const end = points[i];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0) continue;
+    const segments = Math.max(1, Math.ceil(distance / Math.max(0.25, maxStep)));
+    for (let step = 1; step <= segments; step += 1) {
+      const t = step / segments;
+      sampled.push({
+        x: start.x + dx * t,
+        y: start.y + dy * t,
+        ...(typeof start.pressure === "number" && typeof end.pressure === "number"
+          ? { pressure: start.pressure + (end.pressure - start.pressure) * t }
+          : {}),
+      });
+    }
+  }
+  return sampled;
+}
+
 /** Build a pressure-aware filled outline. Pressure is optional so mouse-only
  * devices and older saved strokes retain a predictable constant-width feel. */
 export function createStrokeOutline(points: StrokePoint[], baseWidth: number): Point[] {
