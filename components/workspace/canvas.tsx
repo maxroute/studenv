@@ -1267,7 +1267,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       data-workspace-canvas="true"
       data-workspace-tool={activeTool}
       style={{
-        cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
+        cursor: activeTool === "eraser" ? "none" : undefined,
         touchAction: "none",
       }}
       onPointerDownCapture={(e) => {
@@ -1381,7 +1381,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       }}
       onPointerMoveCapture={(e) => {
         const gesture = canvasGestureRef.current;
-        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        if (!gesture || gesture.pointerId !== e.pointerId) {
+          // The eraser preview is a hover cursor, not part of an erase gesture.
+          // Keep its world-space position current without starting or extending
+          // an erase session.
+          if (activeTool === "eraser" && e.pointerType === "mouse") {
+            const world = screenToWorld(e.clientX, e.clientY);
+            setMousePos(world);
+          }
+          return;
+        }
         if (gesture.mode === "draw") {
           handleDrawPointerMove(e);
           return;
@@ -1571,7 +1580,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 data-workspace-interaction={isPanning ? "pan" : "select"}
                 data-pan-dragging={isPanDragging ? "true" : "false"}
                 style={{
-                  cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default",
+                  cursor: isPanning
+                    ? (isPanDragging ? "grabbing" : "grab")
+                    : activeTool === "eraser"
+                      ? "none"
+                      : isDrawing || isShapeToolActive
+                        ? "crosshair"
+                        : isTextToolActive
+                          ? "text"
+                          : "default",
                   backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
                   backgroundSize: "40px 40px",
                   touchAction: "none",
