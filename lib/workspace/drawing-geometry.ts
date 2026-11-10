@@ -1,3 +1,5 @@
+import { getStroke } from "perfect-freehand";
+
 export type StrokePoint = { x: number; y: number; pressure?: number };
 export type Point = { x: number; y: number };
 
@@ -5,39 +7,19 @@ export type Point = { x: number; y: number };
  * devices and older saved strokes retain a predictable constant-width feel. */
 export function createStrokeOutline(points: StrokePoint[], baseWidth: number): Point[] {
   if (!points.length) return [];
-  const width = Math.max(0.5, Number.isFinite(baseWidth) ? baseWidth : 3);
-  const sampled: StrokePoint[] = [];
-  for (const point of points) {
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
-    const previous = sampled[sampled.length - 1];
-    if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.15) {
-      sampled[sampled.length - 1] = point;
-    } else sampled.push(point);
-  }
-  if (!sampled.length) return [];
-  if (sampled.length === 1) {
-    const radius = width * (0.18 + 0.82 * pressureOf(sampled[0])) / 2;
-    return Array.from({ length: 16 }, (_, i) => ({
-      x: sampled[0].x + Math.cos((i / 16) * Math.PI * 2) * radius,
-      y: sampled[0].y + Math.sin((i / 16) * Math.PI * 2) * radius,
-    }));
-  }
-
-  const left: Point[] = [];
-  const right: Point[] = [];
-  for (let i = 0; i < sampled.length; i++) {
-    const before = sampled[Math.max(0, i - 1)];
-    const after = sampled[Math.min(sampled.length - 1, i + 1)];
-    let dx = after.x - before.x;
-    let dy = after.y - before.y;
-    const length = Math.hypot(dx, dy) || 1;
-    dx /= length; dy /= length;
-    const pressure = pressureOf(sampled[i]);
-    const radius = Math.max(0.35, width * (0.18 + pressure * 0.82) / 2);
-    left.push({ x: sampled[i].x - dy * radius, y: sampled[i].y + dx * radius });
-    right.push({ x: sampled[i].x + dy * radius, y: sampled[i].y - dx * radius });
-  }
-  return [...left, ...right.reverse()];
+  const input = points
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    .map((point) => ({ x: point.x, y: point.y, pressure: pressureOf(point) }));
+  if (!input.length) return [];
+  const outline = getStroke(input, {
+    size: Math.max(0.5, Number.isFinite(baseWidth) ? baseWidth : 3),
+    thinning: 0.65,
+    smoothing: 0.5,
+    streamline: 0.5,
+    simulatePressure: false,
+    last: true,
+  });
+  return outline.map(([x, y]) => ({ x, y }));
 }
 
 function pressureOf(point: StrokePoint) {
