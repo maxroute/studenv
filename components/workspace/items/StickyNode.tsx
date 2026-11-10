@@ -184,6 +184,22 @@ export function StickyNode({
         }}
       >
 
+        {/* Dedicated drag grip remains available while the note text is being edited. */}
+        {isEditing && (
+          <div
+            aria-label="Move sticky note"
+            title="Drag to move note"
+            className="drag-handle absolute right-3 top-2 z-30 flex h-7 w-10 cursor-grab touch-none items-center justify-center rounded-md bg-black/5 text-slate-600/70 active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+          >
+            <span aria-hidden="true" className="flex gap-1">
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+            </span>
+          </div>
+        )}
+
         {/* Editable text */}
         {isEditing ? (
           <textarea
