@@ -499,8 +499,6 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               {interactive && !isLocked && (
                 <div
                   data-no-canvas-gesture="true"
-                  data-no-canvas-gesture="true"
-                  data-no-canvas-gesture="true"
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
                     width: handleSize * 1.3,
