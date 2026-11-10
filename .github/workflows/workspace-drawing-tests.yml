@@ -9,6 +9,8 @@ on:
       - "lib/workspace/drawing-geometry.test.ts"
       - "lib/workspace/image-sizing.ts"
       - "lib/workspace/image-sizing.test.ts"
+      - "lib/workspace/transform-engine.ts"
+      - "lib/workspace/image-resize.test.ts"
       - "lib/workspace/pointer-session.ts"
       - "lib/workspace/pointer-session.test.ts"
       - "types/workspace.ts"
