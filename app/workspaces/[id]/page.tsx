@@ -285,7 +285,7 @@ export default function WorkspacePage() {
     <div data-workspace-page="true" className="relative w-screen h-[100dvh] min-h-0 overflow-hidden overscroll-none flex flex-col">
       {/* Header */}
       <header className="h-14 min-h-14 border-b bg-white flex items-center px-3 sm:px-4 justify-between shrink-0 z-20 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button 
             onClick={() => router.back()}
             className="p-2 -ml-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-2"
@@ -336,7 +336,7 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-4">
           {/* Minimized Viewers */}
           <div className="hidden sm:flex items-center gap-2 border-r border-slate-200 pr-4 mr-2">
             {viewers.filter(v => v.minimized).map(viewer => (
