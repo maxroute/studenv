@@ -27,7 +27,7 @@ import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
-import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
+import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeOutlineIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -1120,15 +1120,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
         const cos = Math.cos(rotation), sin = Math.sin(rotation);
         const centerX = item.w / 2, centerY = item.h / 2;
-        const worldPoints = localPoints.map((point) => {
+        // Test the same pressure-aware filled outline that is rendered on the
+        // canvas, rather than approximating a thick stroke with its centerline.
+        const localOutline = createStrokeOutline(localPoints, item.props.strokeWidth ?? 3);
+        const worldOutline = localOutline.map((point) => {
           const dx = point.x - centerX, dy = point.y - centerY;
           return {
             x: item.x + centerX + dx * cos - dy * sin,
             y: item.y + centerY + dx * sin + dy * cos,
-            pressure: point.pressure,
           };
         });
-        return !strokeIntersectsPolyline(worldPoints, eraserSamples, eraserRadius, item.props.strokeWidth);
+        return !strokeOutlineIntersectsPolyline(worldOutline, eraserSamples, eraserRadius);
       });
       if (nextItems.length !== items.length) commitDrawingItems(nextItems);
     },
