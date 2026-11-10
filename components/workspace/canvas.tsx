@@ -43,7 +43,6 @@ import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
-import { SelectionBox } from "./shapes/ShapeInteractionLayer";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
@@ -224,16 +223,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
-  // On touch-first devices, let the active canvas tool own one-finger gestures.
-  // This prevents TransformWrapper from interpreting Select drags as canvas pans.
-  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(pointer: coarse)");
-    const updatePointerMode = () => setIsCoarsePointer(mediaQuery.matches);
-    updatePointerMode();
-    mediaQuery.addEventListener("change", updatePointerMode);
-    return () => mediaQuery.removeEventListener("change", updatePointerMode);
-  }, []);
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
@@ -1311,21 +1300,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           allowLeftClickPan: false,
           excluded: [],
         }}
-        /* panning={{
-          // Shape creation and drawing own their pointer gestures.
-          // On touch-first devices, Select also owns one-finger gestures:
-          // item drags move items and empty-canvas drags create selection boxes.
-          // The Pan tool is the only mode that hands one-finger movement to
-          // TransformWrapper. Desktop mouse behavior remains unchanged.
-          disabled: isDrawing || isShapeToolActive || (isCoarsePointer && !isPanning),
-          wheelPanning: true,
-          allowLeftClickPan: isPanning,
-          // Pan accepts gestures that begin over objects; other tools reserve drag handles.
-          excluded: isPanning ? [] : ["drag-handle"],
-        }}
-        // Creation tools own their one-finger gesture; do not let a second
-        // touch be interpreted as a transform-layer pinch at the same time.
-        */
         pinch={{ disabled: isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
@@ -1448,6 +1422,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onLostPointerCapture={(e) => {
+                  const stickySession = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(stickySession, e)) {
+                    stickyPointerSessionRef.current = clearPointerSession(stickySession, e);
+                  }
+                }}
+                onLostPointerCapture={(e) => {
+                  if (panPointerRef.current?.pointerId === e.pointerId) {
+                    panPointerRef.current = null;
+                    setIsPanDragging(false);
+                  }
                   const stickySession = stickyPointerSessionRef.current;
                   if (ownsPointerSession(stickySession, e)) {
                     stickyPointerSessionRef.current = clearPointerSession(stickySession, e);
