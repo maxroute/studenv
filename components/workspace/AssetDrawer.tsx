@@ -52,6 +52,7 @@ export function AssetDrawer() {
   const [scope, setScope] = useState<DrawerScope>("workspace");
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const touchDragRef = useRef<{ asset: Asset; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
   const workspaceItems = useWorkspaceStore((state) => state.items);
   const workspaceCoverAssetId = useWorkspaceStore((state) => state.coverAssetId);
   const workspaceAssetIdsFromStore = useWorkspaceStore((state) => state.workspaceAssetIds);
@@ -313,6 +314,31 @@ export function AssetDrawer() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            data-no-canvas-gesture="true"
+            onPointerDownCapture={(event) => event.stopPropagation()}
+            onPointerMoveCapture={(event) => {
+              const drag = touchDragRef.current;
+              if (!drag || drag.pointerId !== event.pointerId) return;
+              if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+                drag.moved = true;
+              }
+              event.stopPropagation();
+            }}
+            onPointerUpCapture={(event) => {
+              const drag = touchDragRef.current;
+              if (!drag || drag.pointerId !== event.pointerId) return;
+              touchDragRef.current = null;
+              event.stopPropagation();
+              if (drag.moved) {
+                window.dispatchEvent(new CustomEvent("workspace-asset-touch-drop", {
+                  detail: { asset: drag.asset, clientX: event.clientX, clientY: event.clientY },
+                }));
+              }
+            }}
+            onPointerCancelCapture={(event) => {
+              if (touchDragRef.current?.pointerId === event.pointerId) touchDragRef.current = null;
+              event.stopPropagation();
+            }}
             className="fixed top-[4.5rem] right-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] w-[min(20rem,calc(100vw-1.5rem))] sm:right-4 sm:top-[4.5rem] sm:bottom-4 sm:w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex min-h-0 flex-col overflow-hidden"
           >
             {/* Header */}
@@ -461,6 +487,16 @@ export function AssetDrawer() {
                   <div
                     key={asset.id}
                     draggable
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "touch") return;
+                      touchDragRef.current = {
+                        asset,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        moved: false,
+                      };
+                    }}
                     onDragStart={(e) => {
                       const dragData = {
                         type: asset.kind,
