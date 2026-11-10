@@ -6736,7 +6736,9 @@ body.shelf-scroll-locked {
  */
 @media (pointer: coarse) {
   [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
-    .workspace-item-rnd {
+    .workspace-item-rnd,
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    .workspace-item-rnd * {
     pointer-events: none !important;
   }
 }
