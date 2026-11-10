@@ -2,7 +2,9 @@
 
 import { ImageNode as ImageNodeType } from "@/types/workspace";
 import { Image as ImageIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useWorkspaceStore } from "@/hooks/use-workspace-store";
+import { fitImageToBounds } from "@/lib/workspace/image-sizing";
 
 interface ImageNodeProps {
   item: ImageNodeType;
@@ -16,6 +18,11 @@ export function ImageNode({ item }: ImageNodeProps) {
   const [sources, setSources] = useState<string[]>(initialCandidates);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [alt, setAlt] = useState(item.props.alt ?? "Image");
+  const appliedNaturalSizeRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    appliedNaturalSizeRef.current = null;
+  }, [item.id, item.props.assetId, item.props.src]);
 
   useEffect(() => {
     setSources(initialCandidates);
@@ -88,8 +95,26 @@ export function ImageNode({ item }: ImageNodeProps) {
       key={activeSource}
       src={activeSource}
       alt={alt}
-      className="drag-handle h-full w-full cursor-move select-none object-contain bg-white"
+      className="drag-handle block h-full w-full cursor-move select-none object-contain"
       draggable={false}
+      onLoad={(event) => {
+        const loadedImage = event.currentTarget;
+        if (!loadedImage.naturalWidth || !loadedImage.naturalHeight) return;
+
+        const sourceKey = loadedImage.currentSrc || activeSource;
+        if (appliedNaturalSizeRef.current === sourceKey) return;
+        appliedNaturalSizeRef.current = sourceKey;
+
+        const naturalSize = fitImageToBounds(
+          loadedImage.naturalWidth,
+          loadedImage.naturalHeight,
+          item.w,
+          item.h,
+        );
+        if (Math.abs(naturalSize.w - item.w) > 1 || Math.abs(naturalSize.h - item.h) > 1) {
+          useWorkspaceStore.getState().updateItem(item.id, naturalSize);
+        }
+      }}
       onError={() => {
         setSourceIndex((current) => {
           if (current < sources.length - 1) {
