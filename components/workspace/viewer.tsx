@@ -135,6 +135,34 @@ export function FloatingViewer({
   const [showPinForm, setShowPinForm] = useState(false);
   const [pinNote, setPinNote] = useState("");
   const [pinTimestampMs, setPinTimestampMs] = useState(0);
+  const pinButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [pinPopoverPosition, setPinPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!showPinForm) {
+      setPinPopoverPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchor = pinButtonRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(288, window.innerWidth - 24);
+      const estimatedHeight = 230;
+      const left = Math.max(12, Math.min(anchor.right - width, window.innerWidth - width - 12));
+      const below = anchor.bottom + 8;
+      const top = below + estimatedHeight <= window.innerHeight - 12
+        ? below
+        : Math.max(12, anchor.top - estimatedHeight - 8);
+      setPinPopoverPosition({ top, left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [showPinForm]);
+
   const livePlaybackTimeRef = useRef<number>(currentTime ?? 0);
   const playbackPollRef = useRef<number | null>(null);
   const [youTubeHost, setYouTubeHost] = useState<"youtube" | "youtube-nocookie">("youtube");
@@ -823,7 +851,9 @@ export function FloatingViewer({
                 Page Stamp
               </button>
             ) : (
-            <button 
+            <button
+              ref={pinButtonRef}
+              type="button"
               onClick={() => {
                 if (!assetId) return;
                 const ms = getCurrentTimeMs();
@@ -839,15 +869,21 @@ export function FloatingViewer({
             </button>
             )}
 
-            {/* Pin Timestamp Note Popover */}
-            {showPinForm && (
-              <div className="absolute top-full right-0 mt-1 w-72 rounded-sm border border-amber-300/80 bg-[#F8E7A1] shadow-[0_10px_24px_rgba(40,34,20,0.18)] ring-1 ring-black/5 z-[100] overflow-hidden text-slate-800">
-                <div className="flex items-center justify-between gap-2 border-b border-amber-900/10 px-3 py-2">
+            {/* Portal keeps the note popover clear of the viewer's clipped header/surface. */}
+            {showPinForm && pinPopoverPosition && typeof document !== "undefined" && createPortal(
+              <div
+                role="dialog"
+                aria-label="Pin timestamp note"
+                onPointerDown={(event) => event.stopPropagation()}
+                className="fixed z-[10000] w-[min(288px,calc(100vw-24px))] overflow-hidden rounded-sm border border-amber-900/15 bg-[#F8E7A1] text-slate-800 shadow-[0_10px_24px_rgba(40,34,20,0.18)]"
+                style={{ top: pinPopoverPosition.top, left: pinPopoverPosition.left }}
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-amber-900/10 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <MapPin className="h-3 w-3 shrink-0 text-slate-600/70" />
-                    <span className="truncate text-[11px] font-semibold text-slate-700">Pin Timestamp Note</span>
+                    <MapPin className="h-3 w-3 shrink-0 text-slate-700/70" />
+                    <span className="truncate text-[11px] font-semibold text-slate-800">Pin Timestamp Note</span>
                   </div>
-                  <span className="rounded-md bg-slate-900/10 px-2 py-1 text-[10px] font-mono font-semibold text-slate-800">
+                  <span className="shrink-0 whitespace-nowrap rounded-md bg-slate-900/10 px-2 py-1 text-[10px] font-mono font-semibold tabular-nums text-slate-800">
                     {formatTimestamp(pinTimestampMs)}
                   </span>
                 </div>
@@ -858,7 +894,23 @@ export function FloatingViewer({
                     value={pinNote}
                     onChange={(e) => setPinNote(e.target.value)}
                     rows={4}
-                    className="min-h-[108px] w-full resize-none rounded-sm border border-amber-900/15 bg-white/20 px-2.5 py-2 text-[12px] leading-relaxed text-slate-800 placeholder:text-slate-600/40 focus:border-amber-900/30 focus:outline-none focus:ring-0"
+                    style={{
+                      width: "100%",
+                      minHeight: 108,
+                      height: 108,
+                      margin: 0,
+                      padding: "8px 2px",
+                      border: "0",
+                      borderRadius: 0,
+                      outline: "none",
+                      boxShadow: "none",
+                      background: "transparent",
+                      color: "#1F2937",
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      resize: "none",
+                    }}
+                    className="!border-0 !bg-transparent !shadow-none focus:!border-0 focus:!shadow-none focus:!outline-none placeholder:!text-slate-700/40"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                         e.preventDefault();
@@ -867,28 +919,31 @@ export function FloatingViewer({
                       if (e.key === "Escape") setShowPinForm(false);
                     }}
                   />
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <span className="text-[10px] text-slate-600/65">
-                      Ctrl+Enter to confirm
-                    </span>
-                    <div className="flex gap-1.5">
+                  <div className="flex items-center justify-between gap-2 border-t border-amber-900/10 pt-2">
+                    <span className="text-[10px] leading-tight text-slate-700/65">Ctrl+Enter to confirm</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button
+                        type="button"
                         onClick={() => setShowPinForm(false)}
-                        className="rounded-sm px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition-colors hover:bg-black/5"
+                        style={{ width: "auto", minHeight: 32, padding: "6px 10px", background: "transparent", color: "#334155", border: 0 }}
+                        className="rounded-sm text-[11px] font-medium hover:bg-black/5"
                       >
                         Cancel
                       </button>
                       <button
+                        type="button"
                         onClick={handlePinConfirm}
-                        className="flex items-center gap-1 rounded-sm bg-slate-800 px-3 py-1.5 text-[11px] font-semibold text-amber-50 transition-colors hover:bg-slate-700"
+                        style={{ width: "auto", minWidth: 76, minHeight: 36, padding: "7px 11px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#1E293B", color: "#FEF3C7", border: 0, whiteSpace: "nowrap" }}
+                        className="rounded-sm text-[11px] font-semibold hover:!bg-slate-700"
                       >
-                        <MapPin className="h-3 w-3" />
-                        Pin Note
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span>Pin Note</span>
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
           <div className="w-px h-4 bg-slate-300 mx-1" />
