@@ -131,8 +131,8 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
       className="relative flex h-full w-full flex-col overflow-hidden rounded-sm shadow-md"
       style={{ backgroundColor: noteColor, color: textColor }}
     >
-      <div className="drag-handle flex shrink-0 items-center justify-between gap-2 border-b border-black/10 px-2.5 py-2 cursor-move select-none">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/10 px-2.5 py-2 select-none">
+        <div className="drag-handle flex min-w-0 flex-1 items-center gap-1.5 cursor-move">
           <GripHorizontal className="h-3.5 w-3.5 shrink-0 opacity-50" />
           <span className="truncate text-[11px] font-semibold">
             {item.props.label || "Video note"}
@@ -140,8 +140,13 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onTouchStart={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={handlePlay}
-            className="flex items-center gap-1 rounded-md bg-black/10 px-2 py-1 transition-colors hover:bg-black/15"
+            style={{ touchAction: "manipulation" }}
+            className="relative z-10 flex min-h-8 items-center gap-1 rounded-md bg-black/10 px-2 py-1 transition-colors hover:bg-black/15"
             title={`Jump to ${formatTimestamp(item.props.startTimeMs)}`}
             aria-label={`Jump to ${formatTimestamp(item.props.startTimeMs)}`}
           >
@@ -152,22 +157,27 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
           </button>
           {isEditing ? (
             <>
-              <button onClick={handleCancelEdit} className="rounded p-1 hover:bg-black/10" title="Cancel edit">
+              <button type="button" onPointerDown={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onClick={handleCancelEdit} style={{ touchAction: "manipulation" }} className="relative z-10 min-h-8 min-w-8 rounded p-1 hover:bg-black/10" title="Cancel edit">
                 <X className="h-3.5 w-3.5" />
               </button>
-              <button onClick={handleSaveNotes} className="rounded p-1 hover:bg-black/10" title="Save note">
+              <button type="button" onPointerDown={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onClick={handleSaveNotes} style={{ touchAction: "manipulation" }} className="relative z-10 min-h-8 min-w-8 rounded p-1 hover:bg-black/10" title="Save note">
                 <Check className="h-3.5 w-3.5" />
               </button>
             </>
           ) : (
             <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 setEditNotes(item.props.notes ?? "");
                 setNoteColor(item.props.color || NOTE_COLORS[0]);
                 setIsEditing(true);
               }}
-              className="rounded px-1.5 py-1 text-[10px] font-semibold hover:bg-black/10"
+              style={{ touchAction: "manipulation" }}
+              className="relative z-10 min-h-8 min-w-10 rounded px-2 py-1 text-[11px] font-semibold hover:bg-black/10"
               title="Edit note"
             >
               Edit
