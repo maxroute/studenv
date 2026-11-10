@@ -841,24 +841,24 @@ export function FloatingViewer({
 
             {/* Pin Timestamp Note Popover */}
             {showPinForm && (
-              <div className="absolute top-full right-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] overflow-hidden">
-                <div className="bg-slate-800 px-3 py-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="text-xs font-semibold text-white">Pin Timestamp Note</span>
+              <div className="absolute top-full right-0 mt-1 w-72 rounded-sm border border-amber-300/80 bg-[#F8E7A1] shadow-[0_10px_24px_rgba(40,34,20,0.18)] ring-1 ring-black/5 z-[100] overflow-hidden text-slate-800">
+                <div className="flex items-center justify-between gap-2 border-b border-amber-900/10 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <MapPin className="h-3 w-3 shrink-0 text-slate-600/70" />
+                    <span className="truncate text-[11px] font-semibold text-slate-700">Pin Timestamp Note</span>
                   </div>
-                  <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded">
+                  <span className="rounded-md bg-slate-900/10 px-2 py-1 text-[10px] font-mono font-semibold text-slate-800">
                     {formatTimestamp(pinTimestampMs)}
                   </span>
                 </div>
-                <div className="p-3 space-y-2">
+                <div className="space-y-2 p-2.5">
                   <textarea
                     autoFocus
-                    placeholder="Add a note about this moment... (optional)"
+                    placeholder="Write something..."
                     value={pinNote}
                     onChange={(e) => setPinNote(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 bg-slate-50 resize-none placeholder:text-slate-400"
+                    rows={4}
+                    className="min-h-[108px] w-full resize-none rounded-sm border border-amber-900/15 bg-white/20 px-2.5 py-2 text-[12px] leading-relaxed text-slate-800 placeholder:text-slate-600/40 focus:border-amber-900/30 focus:outline-none focus:ring-0"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                         e.preventDefault();
@@ -867,22 +867,22 @@ export function FloatingViewer({
                       if (e.key === "Escape") setShowPinForm(false);
                     }}
                   />
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-slate-400">
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="text-[10px] text-slate-600/65">
                       Ctrl+Enter to confirm
                     </span>
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => setShowPinForm(false)}
-                        className="px-2.5 py-1.5 text-[11px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors font-medium"
+                        className="rounded-sm px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition-colors hover:bg-black/5"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handlePinConfirm}
-                        className="px-3 py-1.5 text-[11px] bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-colors font-semibold flex items-center gap-1"
+                        className="flex items-center gap-1 rounded-sm bg-slate-800 px-3 py-1.5 text-[11px] font-semibold text-amber-50 transition-colors hover:bg-slate-700"
                       >
-                        <MapPin className="w-3 h-3" />
+                        <MapPin className="h-3 w-3" />
                         Pin Note
                       </button>
                     </div>
