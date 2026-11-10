@@ -658,6 +658,50 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   );
 
   useEffect(() => {
+    const handleTouchAssetDrop = async (event: Event) => {
+      const detail = (event as CustomEvent<{
+        asset: { id: string; title: string; kind: string };
+        clientX: number;
+        clientY: number;
+      }>).detail;
+      if (!detail?.asset?.id) return;
+
+      const { x, y } = screenToWorld(detail.clientX, detail.clientY);
+      const asset = detail.asset;
+      registerWorkspaceAsset(asset.id);
+
+      if (asset.kind === "image") {
+        addItem("image", {
+          assetId: asset.id,
+          src: `/api/assets/${asset.id}/content`,
+          alt: asset.title,
+          w: 360,
+          h: 240,
+        }, { x, y });
+        toast.success("Image added to canvas");
+        return;
+      }
+
+      const viewerType = getViewerTypeForAssetKind(asset.kind);
+      if (!viewerType) {
+        toast.error("That asset can't be opened from the canvas yet");
+        return;
+      }
+
+      try {
+        await useViewerStore.getState().open(asset.id, viewerType, 1);
+        toast.success(`${getAssetKindLabel(asset.kind)} opened`);
+      } catch (error) {
+        console.error("Touch asset drop failed", error);
+        toast.error("Couldn't add that asset to the workspace");
+      }
+    };
+
+    window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+    return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+  }, [addItem, registerWorkspaceAsset, screenToWorld]);
+
+  useEffect(() => {
     if (syncTimerRef.current) {
       window.clearTimeout(syncTimerRef.current);
     }
