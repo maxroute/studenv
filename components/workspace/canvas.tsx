@@ -432,46 +432,60 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
     transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
   }, [items]);
-  // Determine whether the user has lost the workspace overview, not merely
-  // whether every last object has left the viewport. This catches mobile users
-  // who are zoomed into one object while the rest of the board is elsewhere.
+  // Measure the rendered item elements against the actual canvas viewport.
+  // This deliberately uses DOM client rects rather than reconstructing screen
+  // coordinates from the saved viewport: TransformWrapper's live transform,
+  // wrapper sizing, and CSS transforms are then reflected in the measurement.
   const workspaceViewIsLost = useMemo(() => {
-    if (items.length === 0 || !wrapperRef.current || viewport.zoom <= 0) return false;
-    const rect = wrapperRef.current.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    const visible = {
-      left: -viewport.x / viewport.zoom,
-      top: -viewport.y / viewport.zoom,
-      right: (rect.width - viewport.x) / viewport.zoom,
-      bottom: (rect.height - viewport.y) / viewport.zoom,
-    };
+    const wrapper = wrapperRef.current;
+    if (!wrapper || items.length === 0) return false;
+
+    const viewportRect = wrapper.getBoundingClientRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return false;
+
+    const itemElements = Array.from(
+      wrapper.querySelectorAll<HTMLElement>('[data-workspace-item="true"]'),
+    );
+    if (itemElements.length === 0) return false;
+
     let visibleCount = 0;
-    const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
-    for (const item of items) {
-      const radians = ((item.rotation ?? 0) * Math.PI) / 180;
-      const width = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
-      const height = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
-      const centerX = item.x + item.w / 2;
-      const centerY = item.y + item.h / 2;
-      const left = centerX - width / 2;
-      const top = centerY - height / 2;
-      const right = left + width;
-      const bottom = top + height;
-      bounds.left = Math.min(bounds.left, left);
-      bounds.top = Math.min(bounds.top, top);
-      bounds.right = Math.max(bounds.right, right);
-      bounds.bottom = Math.max(bounds.bottom, bottom);
-      if (left < visible.right && right > visible.left && top < visible.bottom && bottom > visible.top) visibleCount += 1;
+    let contentLeft = Infinity;
+    let contentTop = Infinity;
+    let contentRight = -Infinity;
+    let contentBottom = -Infinity;
+
+    for (const element of itemElements) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+
+      contentLeft = Math.min(contentLeft, rect.left);
+      contentTop = Math.min(contentTop, rect.top);
+      contentRight = Math.max(contentRight, rect.right);
+      contentBottom = Math.max(contentBottom, rect.bottom);
+
+      const intersectsViewport =
+        rect.left < viewportRect.right &&
+        rect.right > viewportRect.left &&
+        rect.top < viewportRect.bottom &&
+        rect.bottom > viewportRect.top;
+
+      if (intersectsViewport) visibleCount += 1;
     }
-    const visibleRatio = visibleCount / items.length;
-    const viewportCenterX = (visible.left + visible.right) / 2;
-    const viewportCenterY = (visible.top + visible.bottom) / 2;
-    const contentCenterX = (bounds.left + bounds.right) / 2;
-    const contentCenterY = (bounds.top + bounds.bottom) / 2;
+
+    const measuredCount = itemElements.length;
+    if (measuredCount === 0 || contentLeft === Infinity) return false;
+    if (visibleCount === 0) return true;
+
+    const visibleRatio = visibleCount / measuredCount;
+    const viewportCenterX = (viewportRect.left + viewportRect.right) / 2;
+    const viewportCenterY = (viewportRect.top + viewportRect.bottom) / 2;
+    const contentCenterX = (contentLeft + contentRight) / 2;
+    const contentCenterY = (contentTop + contentBottom) / 2;
     const centerIsFarFromContent =
-      Math.abs(viewportCenterX - contentCenterX) > (visible.right - visible.left) * 0.65 ||
-      Math.abs(viewportCenterY - contentCenterY) > (visible.bottom - visible.top) * 0.65;
-    return visibleCount === 0 || (items.length > 1 && visibleRatio < 0.25 && centerIsFarFromContent);
+      Math.abs(viewportCenterX - contentCenterX) > viewportRect.width * 0.65 ||
+      Math.abs(viewportCenterY - contentCenterY) > viewportRect.height * 0.65;
+
+    return measuredCount > 1 && visibleRatio < 0.25 && centerIsFarFromContent;
   }, [items, viewport.x, viewport.y, viewport.zoom]);
 
   const dismissFitHint = useCallback(() => setFitHintDismissed(true), []);
