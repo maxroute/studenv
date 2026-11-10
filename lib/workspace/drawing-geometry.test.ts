@@ -22,6 +22,19 @@ test("pressure changes the visible stroke width", () => {
   assert.ok(firmBounds.maxY - firmBounds.minY > lightBounds.maxY - lightBounds.minY);
 });
 
+test("missing pen-up pressure preserves the last measured pressure", () => {
+  const outline = createStrokeOutline([
+    { x: 0, y: 0, pressure: 0.12 },
+    { x: 20, y: 0, pressure: 0.9 },
+    { x: 40, y: 0 },
+  ], 10);
+  const bounds = getStrokeBounds(outline);
+  // The unpressured final sample must not trigger simulated pressure for the
+  // complete stroke; the pressure variation remains visible in the outline.
+  assert.ok(bounds.maxY - bounds.minY > 3);
+  assert.ok(bounds.maxY - bounds.minY < 10);
+});
+
 test("eraser removes a stroke when paths cross", () => {
   assert.equal(
     strokeIntersectsPolyline([{ x: 0, y: 0 }, { x: 100, y: 0 }], [{ x: 50, y: -20 }, { x: 50, y: 20 }], 2, 3),
