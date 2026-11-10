@@ -9,6 +9,13 @@ import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { buildShapeProps, MIN_SHAPE_SIZE } from "@/lib/workspace/shape-engine";
+import {
+  beginPointerSession,
+  clearPointerSession,
+  endPointerSession,
+  ownsPointerSession,
+  type PointerSession,
+} from "@/lib/workspace/pointer-session";
 
 interface ShapeCreationOverlayProps {
   activeShapeKind: ShapeKind;
@@ -68,6 +75,7 @@ export function ShapeCreationOverlay({
   const { addItem } = useWorkspaceStore();
   const [dragState, setDragState] = useState<DragState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pointerSessionRef = useRef<PointerSession | null>(null);
 
   // Handle escape key to cancel drawing
   useEffect(() => {
@@ -82,9 +90,9 @@ export function ShapeCreationOverlay({
   }, [onComplete]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return; // Only draw on left-click
-    e.stopPropagation();
-    e.preventDefault();
+    const session = beginPointerSession(e, e.currentTarget, pointerSessionRef.current);
+    if (!session) return;
+    pointerSessionRef.current = session;
     const { x, y } = screenToWorld(e.clientX, e.clientY);
     setDragState({
       startX: x,
@@ -99,7 +107,7 @@ export function ShapeCreationOverlay({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState) return;
+    if (!ownsPointerSession(pointerSessionRef.current, e) || !dragState) return;
     e.stopPropagation();
     e.preventDefault();
     const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -109,14 +117,20 @@ export function ShapeCreationOverlay({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState) return;
+    const session = pointerSessionRef.current;
+    if (!ownsPointerSession(session, e) || !dragState) return;
+    pointerSessionRef.current = endPointerSession(session, e);
     e.stopPropagation();
     e.preventDefault();
-    if (e.currentTarget) {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    }
 
-    const { startX, startY, currentX, currentY, shiftKey } = dragState;
+    // Pointer-up may be the final movement delivered by the browser. Use its
+    // coordinates instead of relying only on the last pointer-move render.
+    const releasePoint = screenToWorld(e.clientX, e.clientY);
+    const startX = dragState.startX;
+    const startY = dragState.startY;
+    const currentX = releasePoint.x;
+    const currentY = releasePoint.y;
+    const shiftKey = dragState.shiftKey || e.shiftKey;
     setDragState(null);
 
     let startXVal = startX;
@@ -197,10 +211,19 @@ export function ShapeCreationOverlay({
   };
 
   const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState) return;
-    if (e.currentTarget) {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    const session = pointerSessionRef.current;
+    if (!ownsPointerSession(session, e)) return;
+    pointerSessionRef.current = endPointerSession(session, e);
+    setDragState(null);
+    if (onComplete) {
+      onComplete();
     }
+  };
+
+  const handleLostPointerCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+    const session = pointerSessionRef.current;
+    if (!ownsPointerSession(session, e)) return;
+    pointerSessionRef.current = clearPointerSession(session, e);
     setDragState(null);
     if (onComplete) {
       onComplete();
@@ -350,6 +373,7 @@ export function ShapeCreationOverlay({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handleLostPointerCapture}
       />
       {dragState && previewComponent && (
         <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[10001]">
