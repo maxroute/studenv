@@ -134,7 +134,6 @@ export function FloatingViewer({
   const [mediaErrorText, setMediaErrorText] = useState("The format may not be supported or the file is corrupted.");
   const [showPinForm, setShowPinForm] = useState(false);
   const [pinNote, setPinNote] = useState("");
-  const [pinLabel, setPinLabel] = useState("");
   const [pinTimestampMs, setPinTimestampMs] = useState(0);
   const livePlaybackTimeRef = useRef<number>(currentTime ?? 0);
   const playbackPollRef = useRef<number | null>(null);
@@ -672,12 +671,12 @@ export function FloatingViewer({
       startTimeMs: pinTimestampMs,
       w: 240,
       h: pinNote.trim() ? 160 : 120,
-      label: pinLabel.trim() || title,
+      label: title,
       notes: pinNote.trim() || undefined,
+      color: "#F8E7A1",
     }, { x, y });
     setShowPinForm(false);
     setPinNote("");
-    setPinLabel("");
   }
 
   // This should be rendered in a portal
@@ -829,7 +828,6 @@ export function FloatingViewer({
                 if (!assetId) return;
                 const ms = getCurrentTimeMs();
                 setPinTimestampMs(ms);
-                setPinLabel("");
                 setPinNote("");
                 setShowPinForm(true);
               }} 
@@ -854,23 +852,8 @@ export function FloatingViewer({
                   </span>
                 </div>
                 <div className="p-3 space-y-2">
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Label (e.g. Key concept)"
-                    value={pinLabel}
-                    onChange={(e) => setPinLabel(e.target.value)}
-                    className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 bg-slate-50 placeholder:text-slate-400"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        const textarea = e.currentTarget.parentElement?.querySelector("textarea");
-                        textarea?.focus();
-                      }
-                      if (e.key === "Escape") setShowPinForm(false);
-                    }}
-                  />
                   <textarea
+                    autoFocus
                     placeholder="Add a note about this moment... (optional)"
                     value={pinNote}
                     onChange={(e) => setPinNote(e.target.value)}
