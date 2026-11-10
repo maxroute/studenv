@@ -1647,7 +1647,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     disableDragging={
                       isPanning || (
                         item.type === "sticky"
-                          ? editingStickyId === item.id
+                          ? false
                           : item.type === "free-text"
                             ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
                             : item.type === "drawing"
