@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Library,
   Search,
@@ -50,6 +51,7 @@ export function AssetDrawer() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [scope, setScope] = useState<DrawerScope>("workspace");
+  const [touchDragPreview, setTouchDragPreview] = useState<{ asset: Asset; x: number; y: number } | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const touchDragRef = useRef<{ asset: Asset; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
@@ -297,6 +299,19 @@ export function AssetDrawer() {
         onChange={handleAssetSelected}
       />
 
+      {touchDragPreview && typeof document !== "undefined" ? createPortal(
+        <div
+          className="pointer-events-none fixed z-[10000] flex max-w-[220px] items-center gap-2 rounded-xl border border-indigo-200 bg-white/95 px-3 py-2 text-sm font-medium text-slate-700 shadow-xl"
+          style={{ left: touchDragPreview.x + 12, top: touchDragPreview.y + 12 }}
+        >
+          <span className={`rounded-md p-1.5 ${getAssetIconClassName(touchDragPreview.asset)}`}>
+            {renderAssetIcon(touchDragPreview.asset)}
+          </span>
+          <span className="truncate">{touchDragPreview.asset.title}</span>
+        </div>,
+        document.body,
+      ) : null}
+
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(true)}
@@ -320,6 +335,7 @@ export function AssetDrawer() {
               if (!drag || drag.pointerId !== event.pointerId) return;
               if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
                 drag.moved = true;
+                setTouchDragPreview({ asset: drag.asset, x: event.clientX, y: event.clientY });
               }
               event.stopPropagation();
             }}
@@ -327,8 +343,11 @@ export function AssetDrawer() {
               const drag = touchDragRef.current;
               if (!drag || drag.pointerId !== event.pointerId) return;
               touchDragRef.current = null;
+              setTouchDragPreview(null);
               event.stopPropagation();
-              if (drag.moved) {
+              const dropTarget = document.elementFromPoint(event.clientX, event.clientY);
+              const droppedOnCanvas = !!dropTarget?.closest('[data-workspace-canvas="true"]');
+              if (drag.moved && droppedOnCanvas) {
                 window.dispatchEvent(new CustomEvent("workspace-asset-touch-drop", {
                   detail: { asset: drag.asset, clientX: event.clientX, clientY: event.clientY },
                 }));
@@ -336,6 +355,7 @@ export function AssetDrawer() {
             }}
             onPointerCancelCapture={(event) => {
               if (touchDragRef.current?.pointerId === event.pointerId) touchDragRef.current = null;
+              setTouchDragPreview(null);
               event.stopPropagation();
             }}
             className="fixed top-[4.5rem] right-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] w-[min(20rem,calc(100vw-1.5rem))] sm:right-4 sm:top-[4.5rem] sm:bottom-4 sm:w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex min-h-0 flex-col overflow-hidden"
@@ -499,6 +519,7 @@ export function AssetDrawer() {
                         startY: event.clientY,
                         moved: false,
                       };
+                      setTouchDragPreview({ asset, x: event.clientX, y: event.clientY });
                     }}
                     onPointerMove={(event) => {
                       const drag = touchDragRef.current;
@@ -511,6 +532,7 @@ export function AssetDrawer() {
                       const drag = touchDragRef.current;
                       if (!drag || drag.pointerId !== event.pointerId) return;
                       touchDragRef.current = null;
+                      setTouchDragPreview(null);
                       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                         event.currentTarget.releasePointerCapture(event.pointerId);
                       }
@@ -523,6 +545,7 @@ export function AssetDrawer() {
                     onPointerCancel={(event) => {
                       if (touchDragRef.current?.pointerId === event.pointerId) {
                         touchDragRef.current = null;
+                        setTouchDragPreview(null);
                       }
                     }}
                     onDragStart={(e) => {
