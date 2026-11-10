@@ -315,7 +315,6 @@ export function AssetDrawer() {
             exit={{ x: 300, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             data-no-canvas-gesture="true"
-            onPointerDownCapture={(event) => event.stopPropagation()}
             onPointerMoveCapture={(event) => {
               const drag = touchDragRef.current;
               if (!drag || drag.pointerId !== event.pointerId) return;
