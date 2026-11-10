@@ -63,7 +63,7 @@ import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 type CanvasPoint = { x: number; y: number; pressure?: number };
 type HistoryEntry = StudioItem[];
 
-function ZoomControls({ utils }: { utils: any }) {
+function ZoomControls({ utils, onFitToScreen }: { utils: any; onFitToScreen: () => void }) {
   const [scale, setScale] = useState(1);
   const zoomAnimationTime = 140;
 
@@ -116,7 +116,7 @@ function ZoomControls({ utils }: { utils: any }) {
         <Plus size={14} className="text-slate-600" />
       </button>
       <button
-        onClick={() => utils.resetTransform(zoomAnimationTime, "easeOut")}
+        onClick={onFitToScreen}
         className="p-1.5 hover:bg-slate-50 transition-colors border-l"
         title="Fit to Screen"
       >
@@ -1863,7 +1863,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             </TransformComponent>
 
 
-            <ZoomControls utils={utils} />
+            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} />
             <AssetDrawer />
 
             {isDrawing && (
