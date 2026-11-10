@@ -125,6 +125,22 @@ export function computeResize(
   };
 }
 
+/** Keep intrinsic media proportions while resizing. Shape-specific rules
+ * remain unchanged; images are always aspect-locked for every handle. */
+export function shouldLockAspectRatioOnResize(
+  itemType: string,
+  props: Record<string, unknown>,
+  shiftKey: boolean,
+): boolean {
+  if (itemType === "image") return true;
+  return itemType === "shape" && (
+    props.kind === "circle" ||
+    props.kind === "star" ||
+    props.kind === "pentagon" ||
+    shiftKey
+  );
+}
+
 /**
  * Computes rotation angle relative to shape center point and pointer location.
  * Snaps to 15-degree increments unless holdAlt is active.
