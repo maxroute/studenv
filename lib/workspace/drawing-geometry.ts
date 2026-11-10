@@ -7,15 +7,39 @@ export type Point = { x: number; y: number };
  * devices and older saved strokes retain a predictable constant-width feel. */
 export function createStrokeOutline(points: StrokePoint[], baseWidth: number): Point[] {
   if (!points.length) return [];
-  const input = points
-    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-    .map((point) => ({
+  const validPoints = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  const hasMeasuredPressure = validPoints.some(
+    (point) => typeof point.pressure === "number" && Number.isFinite(point.pressure),
+  );
+
+  // Pointer-up events commonly report pressure=0 (pen lifted), even though
+  // the last coalesced move sample contains the real pen pressure. Once a
+  // stroke has measured pressure, fill missing samples from the nearest
+  // measured sample instead of switching the whole stroke to simulated
+  // pressure during finalization.
+  const input = validPoints.map((point, index) => {
+    let pressure = point.pressure;
+    if (hasMeasuredPressure && (pressure === undefined || !Number.isFinite(pressure))) {
+      let before: number | undefined;
+      let after: number | undefined;
+      for (let i = index - 1; i >= 0 && before === undefined; i -= 1) {
+        const candidate = validPoints[i].pressure;
+        if (typeof candidate === "number" && Number.isFinite(candidate)) before = candidate;
+      }
+      for (let i = index + 1; i < validPoints.length && after === undefined; i += 1) {
+        const candidate = validPoints[i].pressure;
+        if (typeof candidate === "number" && Number.isFinite(candidate)) after = candidate;
+      }
+      pressure = before === undefined ? after : after === undefined ? before : (before + after) / 2;
+    }
+    return {
       x: point.x,
       y: point.y,
-      ...(point.pressure === undefined
-        ? {}
-        : { pressure: Math.max(0.08, Math.min(1, point.pressure)) }),
-    }));
+      ...(typeof pressure === "number" && Number.isFinite(pressure)
+        ? { pressure: Math.max(0.08, Math.min(1, pressure)) }
+        : {}),
+    };
+  });
   if (!input.length) return [];
   const outline = getStroke(input, {
     size: Math.max(0.5, Number.isFinite(baseWidth) ? baseWidth : 3),
