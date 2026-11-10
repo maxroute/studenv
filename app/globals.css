@@ -6726,3 +6726,17 @@ body.shelf-scroll-locked {
   pointer-events: none !important;
 }
 
+
+
+/*
+ * On touch-first devices, drawing/editing tools own the canvas gesture.
+ * Workspace objects must not receive touch input unless Select is active;
+ * otherwise react-rnd can drag a sticky note while the user is drawing over it.
+ * The coarse-pointer query keeps desktop mouse interactions unchanged.
+ */
+@media (pointer: coarse) {
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    [data-workspace-item="true"] {
+    pointer-events: none !important;
+  }
+}
