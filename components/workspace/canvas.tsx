@@ -241,7 +241,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, [isPanDragging]);
 
-  const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
+  const isDrawing = activeTool === "pen" || activeTool === "highlighter" || drawTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
   const isShapeToolActive = SHAPE_KINDS.includes(activeTool as any);
@@ -1395,7 +1395,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         // avoids depending on the zoom/pan wrapper's inherited cursor.
         cursor: isPanning
           ? (isPanDragging ? "grabbing" : "grab")
-          : activeTool === "eraser"
+          : drawTool === "eraser"
             ? "none"
             : isDrawing || isShapeToolActive
               ? "crosshair"
@@ -1519,7 +1519,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           // The eraser preview is a hover cursor, not part of an erase gesture.
           // Keep its world-space position current without starting or extending
           // an erase session.
-          if (activeTool === "eraser" && e.pointerType === "mouse") {
+          if (isDrawing && drawTool === "eraser" && e.pointerType === "mouse") {
             // This handler is attached to the canvas boundary, so every
             // bubbled move inside the workspace is a valid hover sample.
             // Do not gate on the event target: transformed children and
@@ -1721,7 +1721,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 style={{
                   cursor: isPanning
                     ? (isPanDragging ? "grabbing" : "grab")
-                    : activeTool === "eraser"
+                    : drawTool === "eraser"
                       ? "none"
                       : isDrawing || isShapeToolActive
                         ? "crosshair"
