@@ -81,6 +81,10 @@ export function ShapeCreationOverlay({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        const session = pointerSessionRef.current;
+        if (session) {
+          pointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+        }
         setDragState(null);
         if (onComplete) onComplete();
       }
@@ -101,9 +105,6 @@ export function ShapeCreationOverlay({
       currentY: y,
       shiftKey: e.shiftKey,
     });
-    if (e.currentTarget) {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -118,8 +119,12 @@ export function ShapeCreationOverlay({
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const session = pointerSessionRef.current;
-    if (!ownsPointerSession(session, e) || !dragState) return;
+    if (!ownsPointerSession(session, e)) return;
     pointerSessionRef.current = endPointerSession(session, e);
+    if (!dragState) {
+      if (onComplete) onComplete();
+      return;
+    }
     e.stopPropagation();
     e.preventDefault();
 
