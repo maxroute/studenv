@@ -221,6 +221,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [fitHintDismissed, setFitHintDismissed] = useState(false);
   const [fitHintEligible, setFitHintEligible] = useState(false);
+  const [workspaceViewIsLost, setWorkspaceViewIsLost] = useState(false);
 
 
   // Derived state booleans to maintain backward compatibility
@@ -432,60 +433,89 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
     transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
   }, [items]);
-  // Measure the rendered item elements against the actual canvas viewport.
-  // This deliberately uses DOM client rects rather than reconstructing screen
-  // coordinates from the saved viewport: TransformWrapper's live transform,
-  // wrapper sizing, and CSS transforms are then reflected in the measurement.
-  const workspaceViewIsLost = useMemo(() => {
+  // Measure after React commits item DOM changes. Measuring in render can see
+  // the previous (empty) DOM immediately after workspace hydration.
+  useEffect(() => {
     const wrapper = wrapperRef.current;
-    if (!wrapper || items.length === 0) return false;
-
-    const viewportRect = wrapper.getBoundingClientRect();
-    if (viewportRect.width <= 0 || viewportRect.height <= 0) return false;
-
-    const itemElements = Array.from(
-      wrapper.querySelectorAll<HTMLElement>('[data-workspace-item="true"]'),
-    );
-    if (itemElements.length === 0) return false;
-
-    let visibleCount = 0;
-    let contentLeft = Infinity;
-    let contentTop = Infinity;
-    let contentRight = -Infinity;
-    let contentBottom = -Infinity;
-
-    for (const element of itemElements) {
-      const rect = element.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) continue;
-
-      contentLeft = Math.min(contentLeft, rect.left);
-      contentTop = Math.min(contentTop, rect.top);
-      contentRight = Math.max(contentRight, rect.right);
-      contentBottom = Math.max(contentBottom, rect.bottom);
-
-      const intersectsViewport =
-        rect.left < viewportRect.right &&
-        rect.right > viewportRect.left &&
-        rect.top < viewportRect.bottom &&
-        rect.bottom > viewportRect.top;
-
-      if (intersectsViewport) visibleCount += 1;
+    if (!wrapper || items.length === 0) {
+      setWorkspaceViewIsLost(false);
+      return;
     }
 
-    const measuredCount = itemElements.length;
-    if (measuredCount === 0 || contentLeft === Infinity) return false;
-    if (visibleCount === 0) return true;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const viewportRect = wrapper.getBoundingClientRect();
+      if (viewportRect.width <= 0 || viewportRect.height <= 0) {
+        setWorkspaceViewIsLost(false);
+        return;
+      }
 
-    const visibleRatio = visibleCount / measuredCount;
-    const viewportCenterX = (viewportRect.left + viewportRect.right) / 2;
-    const viewportCenterY = (viewportRect.top + viewportRect.bottom) / 2;
-    const contentCenterX = (contentLeft + contentRight) / 2;
-    const contentCenterY = (contentTop + contentBottom) / 2;
-    const centerIsFarFromContent =
-      Math.abs(viewportCenterX - contentCenterX) > viewportRect.width * 0.65 ||
-      Math.abs(viewportCenterY - contentCenterY) > viewportRect.height * 0.65;
+      const itemElements = Array.from(
+        wrapper.querySelectorAll<HTMLElement>('[data-workspace-item="true"]'),
+      );
+      let visibleCount = 0;
+      let contentLeft = Infinity;
+      let contentTop = Infinity;
+      let contentRight = -Infinity;
+      let contentBottom = -Infinity;
 
-    return measuredCount > 1 && visibleRatio < 0.25 && centerIsFarFromContent;
+      for (const element of itemElements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        contentLeft = Math.min(contentLeft, rect.left);
+        contentTop = Math.min(contentTop, rect.top);
+        contentRight = Math.max(contentRight, rect.right);
+        contentBottom = Math.max(contentBottom, rect.bottom);
+
+        if (
+          rect.left < viewportRect.right &&
+          rect.right > viewportRect.left &&
+          rect.top < viewportRect.bottom &&
+          rect.bottom > viewportRect.top
+        ) {
+          visibleCount += 1;
+        }
+      }
+
+      if (itemElements.length === 0 || contentLeft === Infinity) {
+        setWorkspaceViewIsLost(false);
+        return;
+      }
+
+      if (visibleCount === 0) {
+        setWorkspaceViewIsLost(true);
+        return;
+      }
+
+      const visibleRatio = visibleCount / itemElements.length;
+      const viewportCenterX = (viewportRect.left + viewportRect.right) / 2;
+      const viewportCenterY = (viewportRect.top + viewportRect.bottom) / 2;
+      const contentCenterX = (contentLeft + contentRight) / 2;
+      const contentCenterY = (contentTop + contentBottom) / 2;
+      const centerIsFarFromContent =
+        Math.abs(viewportCenterX - contentCenterX) > viewportRect.width * 0.65 ||
+        Math.abs(viewportCenterY - contentCenterY) > viewportRect.height * 0.65;
+
+      setWorkspaceViewIsLost(
+        itemElements.length > 1 && visibleRatio < 0.25 && centerIsFarFromContent,
+      );
+    };
+
+    const scheduleMeasure = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    resizeObserver.observe(wrapper);
+    scheduleMeasure();
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
   }, [items, viewport.x, viewport.y, viewport.zoom]);
 
   const dismissFitHint = useCallback(() => setFitHintDismissed(true), []);
