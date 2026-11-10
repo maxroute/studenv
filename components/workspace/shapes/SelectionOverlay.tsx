@@ -8,7 +8,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
-import { computeResize, computeRotation } from "@/lib/workspace/transform-engine";
+import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 
@@ -238,12 +238,11 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
         transformState.startBounds.forEach((startBounds, itemId) => {
           const item = items.find((i) => i.id === itemId);
           if (!item) return;
-          const isAspectLocked =
-            item.type === "shape" &&
-            (item.props.kind === "circle" ||
-              item.props.kind === "star" ||
-              item.props.kind === "pentagon" ||
-              e.shiftKey);
+          const isAspectLocked = shouldLockAspectRatioOnResize(
+            item.type,
+            item.props as Record<string, unknown>,
+            e.shiftKey,
+          );
           const newBounds = computeResize(
             transformState.handle!,
             startBounds,
