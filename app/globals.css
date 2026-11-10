@@ -6744,24 +6744,27 @@ body.shelf-scroll-locked {
 }
 
 
-/* Mobile resource viewers: fit the visible viewport instead of retaining
-   desktop Rnd dimensions/coordinates. Header controls remain outside drag. */
+/* Mobile resource viewers use controlled Rnd geometry. Keep all resize
+   handles inside the viewport and make them easy to grab with a finger. */
 @media (max-width: 767px) {
   .workspace-floating-viewer {
-    position: fixed !important;
-    inset: auto 8px max(8px, env(safe-area-inset-bottom)) 8px !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    min-height: 180px !important;
+    max-width: calc(100vw - 16px) !important;
     max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
-    transform: none !important;
-    touch-action: pan-y;
+    min-width: 280px !important;
+    min-height: 180px !important;
+    touch-action: none;
   }
 
   .workspace-floating-viewer .viewer-drag-handle {
     min-height: 42px;
-    touch-action: pan-y;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer .react-resizable-handle {
+    z-index: 30;
+    width: 22px;
+    height: 22px;
+    touch-action: none;
   }
 
   .workspace-floating-viewer > div {
