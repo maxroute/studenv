@@ -26,7 +26,7 @@ import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
-import { createStrokeOutline, getStrokeBounds, outlineToPath, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
+import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -132,40 +132,9 @@ function buildStrokePath(points: CanvasPoint[]) {
   return `M ${points[0].x} ${points[0].y} ${points.slice(1).map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
 }
 
-function resamplePolyline(points: CanvasPoint[], maxStep = 2): CanvasPoint[] {
-  if (points.length <= 1) return points;
-
-  const sampled: CanvasPoint[] = [points[0]];
-
-  for (let i = 1; i < points.length; i += 1) {
-    const start = points[i - 1];
-    const end = points[i];
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance === 0) {
-      continue;
-    }
-
-    const segments = Math.max(1, Math.ceil(distance / maxStep));
-    for (let step = 1; step <= segments; step += 1) {
-      const t = step / segments;
-      sampled.push({
-        x: start.x + dx * t,
-        y: start.y + dy * t,
-        ...(start.pressure === undefined && end.pressure === undefined
-          ? {}
-          : { pressure: (start.pressure ?? 0.5) + ((end.pressure ?? 0.5) - (start.pressure ?? 0.5)) * t }),
-      });
-    }
-  }
-
-  return sampled;
-}
 
 function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
-  const normalizedPoints = resamplePolyline(points, Math.max(1.5, strokeWidth / 2));
+  const normalizedPoints = resampleStrokePoints(points, Math.max(1.5, strokeWidth / 2));
   const outline = createStrokeOutline(normalizedPoints, strokeWidth);
   const bounds = getStrokeBounds(outline);
   const padding = 2;
@@ -948,7 +917,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const eraseAtPath = useCallback(
     (path: CanvasPoint[]) => {
       if (path.length === 0) return;
-      const eraserSamples = resamplePolyline(path, 3);
+      const eraserSamples = resampleStrokePoints(path, 3);
       const nextItems = items.filter((item) => {
         if (item.type === "shape") {
           const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
@@ -1243,6 +1212,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       ref={wrapperRef}
       className="w-full h-full relative bg-[#f8fafc] overflow-visible"
       data-workspace-canvas="true"
+      data-workspace-tool={activeTool}
       style={{
         cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
         touchAction: "none",
