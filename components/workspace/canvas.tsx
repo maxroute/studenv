@@ -2,7 +2,7 @@
 
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useViewerStore } from "@/hooks/use-viewer-store";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Hand,
   ImagePlus,
@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Type,
+  X,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
@@ -63,9 +64,13 @@ import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 type CanvasPoint = { x: number; y: number; pressure?: number };
 type HistoryEntry = StudioItem[];
 
-function ZoomControls({ utils, onFitToScreen }: { utils: any; onFitToScreen: () => void }) {
+function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void }) {
   const [scale, setScale] = useState(1);
   const zoomAnimationTime = 140;
+  const handleFitToScreen = () => {
+    onFitToScreen();
+    onDismissFitHint();
+  };
 
   useEffect(() => {
     if (!utils.instance) return;
@@ -93,7 +98,21 @@ function ZoomControls({ utils, onFitToScreen }: { utils: any; onFitToScreen: () 
   };
 
   return (
-    <div className="fixed bottom-4 left-4 z-[1200] flex items-center bg-white shadow-lg border rounded-lg overflow-hidden select-none">
+    <div className="fixed bottom-4 left-4 z-[1200] flex flex-col items-stretch overflow-hidden rounded-lg border bg-white shadow-lg select-none">
+      {showFitHint && (
+        <div className="border-b border-slate-100 px-3 py-2.5 animate-in slide-in-from-bottom-1 fade-in duration-200">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold leading-4 text-slate-800">Lost your view?</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">Fit everything back into view.</p>
+            </div>
+            <button type="button" onClick={onDismissFitHint} aria-label="Dismiss Fit to Screen tip" className="-mr-1 -mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center">
       <button
         onClick={() => handleStepZoom(-1)}
         className="p-1.5 hover:bg-slate-50 transition-colors border-r"
@@ -116,12 +135,15 @@ function ZoomControls({ utils, onFitToScreen }: { utils: any; onFitToScreen: () 
         <Plus size={14} className="text-slate-600" />
       </button>
       <button
-        onClick={onFitToScreen}
-        className="p-1.5 hover:bg-slate-50 transition-colors border-l"
+        onClick={handleFitToScreen}
+        className={`flex items-center gap-1.5 border-l px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 ${showFitHint ? "bg-slate-50" : ""}`}
         title="Fit to Screen"
+        aria-label="Fit to Screen"
       >
-        <Maximize2 size={14} className="text-slate-600" />
+        <Maximize2 size={14} className="shrink-0" />
+        {showFitHint && <span className="whitespace-nowrap text-[11px] font-medium">Fit to Screen</span>}
       </button>
+      </div>
     </div>
   );
 }
@@ -197,6 +219,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [activeShapeKind, setActiveShapeKind] = useState<ShapeKind>("rectangle");
   const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [fitHintDismissed, setFitHintDismissed] = useState(false);
+  const [fitHintEligible, setFitHintEligible] = useState(false);
+  const [workspaceViewIsLost, setWorkspaceViewIsLost] = useState(false);
 
 
   // Derived state booleans to maintain backward compatibility
@@ -408,6 +433,104 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
     transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
   }, [items]);
+  // Measure after React commits item DOM changes. Measuring in render can see
+  // the previous (empty) DOM immediately after workspace hydration.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || items.length === 0) {
+      setWorkspaceViewIsLost(false);
+      return;
+    }
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const viewportRect = wrapper.getBoundingClientRect();
+      if (viewportRect.width <= 0 || viewportRect.height <= 0) {
+        setWorkspaceViewIsLost(false);
+        return;
+      }
+
+      const itemElements = Array.from(
+        wrapper.querySelectorAll<HTMLElement>('[data-workspace-item="true"]'),
+      );
+      let visibleCount = 0;
+      let contentLeft = Infinity;
+      let contentTop = Infinity;
+      let contentRight = -Infinity;
+      let contentBottom = -Infinity;
+
+      for (const element of itemElements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        contentLeft = Math.min(contentLeft, rect.left);
+        contentTop = Math.min(contentTop, rect.top);
+        contentRight = Math.max(contentRight, rect.right);
+        contentBottom = Math.max(contentBottom, rect.bottom);
+
+        if (
+          rect.left < viewportRect.right &&
+          rect.right > viewportRect.left &&
+          rect.top < viewportRect.bottom &&
+          rect.bottom > viewportRect.top
+        ) {
+          visibleCount += 1;
+        }
+      }
+
+      if (itemElements.length === 0 || contentLeft === Infinity) {
+        setWorkspaceViewIsLost(false);
+        return;
+      }
+
+      if (visibleCount === 0) {
+        setWorkspaceViewIsLost(true);
+        return;
+      }
+
+      const visibleRatio = visibleCount / itemElements.length;
+      const viewportCenterX = (viewportRect.left + viewportRect.right) / 2;
+      const viewportCenterY = (viewportRect.top + viewportRect.bottom) / 2;
+      const contentCenterX = (contentLeft + contentRight) / 2;
+      const contentCenterY = (contentTop + contentBottom) / 2;
+      const centerIsFarFromContent =
+        Math.abs(viewportCenterX - contentCenterX) > viewportRect.width * 0.65 ||
+        Math.abs(viewportCenterY - contentCenterY) > viewportRect.height * 0.65;
+
+      setWorkspaceViewIsLost(
+        itemElements.length > 1 && visibleRatio < 0.25 && centerIsFarFromContent,
+      );
+    };
+
+    const scheduleMeasure = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    resizeObserver.observe(wrapper);
+    scheduleMeasure();
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
+  }, [items, viewport.x, viewport.y, viewport.zoom]);
+
+  const dismissFitHint = useCallback(() => setFitHintDismissed(true), []);
+
+  useEffect(() => {
+    if (fitHintDismissed || isLoading || items.length === 0 || !workspaceViewIsLost || isDrawing || isPanDragging || editingFreeTextId || editingStickyId) {
+      setFitHintEligible(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setFitHintEligible(true), 700);
+    return () => window.clearTimeout(timeout);
+  }, [fitHintDismissed, isLoading, items.length, workspaceViewIsLost, isDrawing, isPanDragging, editingFreeTextId, editingStickyId]);
+
+  const shouldShowFitHint = fitHintEligible && !fitHintDismissed && !isLoading && items.length > 0 && workspaceViewIsLost && !isDrawing && !isPanDragging && !editingFreeTextId && !editingStickyId;
+
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
   const outsideFreeTextDismissRef = useRef(false);
@@ -1863,7 +1986,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             </TransformComponent>
 
 
-            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} />
+            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} />
             <AssetDrawer />
 
             {isDrawing && (
