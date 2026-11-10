@@ -1,0 +1,25 @@
+name: Workspace drawing tests
+
+on:
+  pull_request:
+    paths:
+      - "components/workspace/canvas.tsx"
+      - "components/workspace/items/DrawingNode.tsx"
+      - "lib/workspace/drawing-geometry.ts"
+      - "lib/workspace/drawing-geometry.test.ts"
+      - "types/workspace.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/workspace-drawing-tests.yml"
+
+jobs:
+  drawing-geometry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:workspace-drawing

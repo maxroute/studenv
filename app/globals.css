@@ -6726,3 +6726,49 @@ body.shelf-scroll-locked {
   pointer-events: none !important;
 }
 
+
+
+/*
+ * On touch-first devices, drawing/editing tools own the canvas gesture.
+ * Workspace objects must not receive touch input unless Select is active;
+ * otherwise react-rnd can drag a sticky note while the user is drawing over it.
+ * The coarse-pointer query keeps desktop mouse interactions unchanged.
+ */
+@media (pointer: coarse) {
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    .workspace-item-rnd,
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    .workspace-item-rnd * {
+    pointer-events: none !important;
+  }
+}
+
+
+/* Mobile resource viewers use controlled Rnd geometry. Keep all resize
+   handles inside the viewport and make them easy to grab with a finger. */
+@media (max-width: 767px) {
+  .workspace-floating-viewer {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    min-width: 280px !important;
+    min-height: 180px !important;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer .viewer-drag-handle {
+    min-height: 42px;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer .react-resizable-handle {
+    z-index: 30;
+    width: 22px;
+    height: 22px;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer > div {
+    min-width: 0;
+    min-height: 0;
+  }
+}

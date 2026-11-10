@@ -153,6 +153,7 @@ export function StudioItemComponent({
 
   return (
     <Rnd
+      className="workspace-item-rnd"
       size={{ width: size.w, height: size.h }}
       position={{ x: pos.x, y: pos.y }}
       scale={canvasScale}

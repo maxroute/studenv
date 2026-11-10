@@ -26,6 +26,7 @@ import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
+import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -59,7 +60,7 @@ import {
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 
 
-type CanvasPoint = { x: number; y: number };
+type CanvasPoint = { x: number; y: number; pressure?: number };
 type HistoryEntry = StudioItem[];
 
 function ZoomControls({ utils }: { utils: any }) {
@@ -131,58 +132,32 @@ function buildStrokePath(points: CanvasPoint[]) {
   return `M ${points[0].x} ${points[0].y} ${points.slice(1).map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
 }
 
-function resamplePolyline(points: CanvasPoint[], maxStep = 2): CanvasPoint[] {
-  if (points.length <= 1) return points;
-
-  const sampled: CanvasPoint[] = [points[0]];
-
-  for (let i = 1; i < points.length; i += 1) {
-    const start = points[i - 1];
-    const end = points[i];
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance === 0) {
-      continue;
-    }
-
-    const segments = Math.max(1, Math.ceil(distance / maxStep));
-    for (let step = 1; step <= segments; step += 1) {
-      const t = step / segments;
-      sampled.push({
-        x: start.x + dx * t,
-        y: start.y + dy * t,
-      });
-    }
-  }
-
-  return sampled;
-}
 
 function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
-  const normalizedPoints = resamplePolyline(points, Math.max(1.5, strokeWidth / 2));
-  const padding = Math.ceil(strokeWidth / 2) + 2;
-  const minX = Math.min(...normalizedPoints.map((point) => point.x));
-  const minY = Math.min(...normalizedPoints.map((point) => point.y));
-  const maxX = Math.max(...normalizedPoints.map((point) => point.x));
-  const maxY = Math.max(...normalizedPoints.map((point) => point.y));
-  const x = minX - padding;
-  const y = minY - padding;
+  // Persist the exact same sample sequence used by the live preview. Re-sampling
+  // here changes the pressure curve at pen-up, making the saved stroke look
+  // different from what the user just drew.
+  const normalizedPoints = points;
+  const outline = createStrokeOutline(normalizedPoints, strokeWidth);
+  const bounds = getStrokeBounds(outline);
+  const padding = 2;
+  const x = bounds.minX - padding;
+  const y = bounds.minY - padding;
   const localPoints = normalizedPoints.map((point) => ({
     x: point.x - x,
     y: point.y - y,
+    ...(point.pressure === undefined ? {} : { pressure: point.pressure }),
   }));
-
+  const localOutline = outline.map((point) => ({ x: point.x - x, y: point.y - y }));
   return {
-    x,
-    y,
-    w: Math.max(maxX - minX + padding * 2, 1),
-    h: Math.max(maxY - minY + padding * 2, 1),
-    d: buildStrokePath(localPoints),
+    x, y,
+    w: Math.max(bounds.maxX - bounds.minX + padding * 2, 1),
+    h: Math.max(bounds.maxY - bounds.minY + padding * 2, 1),
+    d: outlineToPath(localOutline),
     points: localPoints,
     color,
     strokeWidth,
+    outline: true,
   };
 }
 
@@ -293,6 +268,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedFreeTextId(null);
     setEditingFreeTextId(null);
     setSelectedDrawingId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, []);
@@ -359,6 +336,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedDrawingId(null);
     setSelectedImageId(null);
     setSelectedShapeId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, [activeShapeKind]);
@@ -378,6 +357,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [currentPath, setCurrentPath] = useState<CanvasPoint[]>([]);
   const [eraserPath, setEraserPath] = useState<CanvasPoint[]>([]);
+  // Refs are the authoritative pointer samples. React state is only the preview;
+  // pointer-up must never depend on a render having committed the latest move.
+  const currentPathRef = useRef<CanvasPoint[]>([]);
+  const eraserPathRef = useRef<CanvasPoint[]>([]);
   const [drawColor, setDrawColor] = useState("#1e1e1e");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
@@ -439,6 +422,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     if (isDrawing || !drawPointerSessionRef.current) return;
     const session = drawPointerSessionRef.current;
     drawPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, [isDrawing]);
@@ -671,6 +656,50 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     },
     [importFileToWorkspace, screenToWorld],
   );
+
+  useEffect(() => {
+    const handleTouchAssetDrop = async (event: Event) => {
+      const detail = (event as CustomEvent<{
+        asset: { id: string; title: string; kind: string };
+        clientX: number;
+        clientY: number;
+      }>).detail;
+      if (!detail?.asset?.id) return;
+
+      const { x, y } = screenToWorld(detail.clientX, detail.clientY);
+      const asset = detail.asset;
+      registerWorkspaceAsset(asset.id);
+
+      if (asset.kind === "image") {
+        addItem("image", {
+          assetId: asset.id,
+          src: `/api/assets/${asset.id}/content`,
+          alt: asset.title,
+          w: 360,
+          h: 240,
+        }, { x, y });
+        toast.success("Image added to canvas");
+        return;
+      }
+
+      const viewerType = getViewerTypeForAssetKind(asset.kind);
+      if (!viewerType) {
+        toast.error("That asset can't be opened from the canvas yet");
+        return;
+      }
+
+      try {
+        await useViewerStore.getState().open(asset.id, viewerType, 1);
+        toast.success(`${getAssetKindLabel(asset.kind)} opened`);
+      } catch (error) {
+        console.error("Touch asset drop failed", error);
+        toast.error("Couldn't add that asset to the workspace");
+      }
+    };
+
+    window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+    return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+  }, [addItem, registerWorkspaceAsset, screenToWorld]);
 
   useEffect(() => {
     if (syncTimerRef.current) {
@@ -935,105 +964,44 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const eraseAtPath = useCallback(
     (path: CanvasPoint[]) => {
       if (path.length === 0) return;
-
-      const eraserSamples = resamplePolyline(path, 2);
-      const radiusSquared = eraserRadius * eraserRadius;
-      const nextItems = items.flatMap((item) => {
+      const eraserSamples = resampleStrokePoints(path, 3);
+      const nextItems = items.filter((item) => {
         if (item.type === "shape") {
-          // Shapes are atomic vector objects: erase the whole object when the
-          // eraser path intersects its rotated bounds.
           const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
-          const cos = Math.cos(rotation);
-          const sin = Math.sin(rotation);
-          const centerX = item.x + item.w / 2;
-          const centerY = item.y + item.h / 2;
-          const touchedShape = eraserSamples.some((point) => {
-            const dx = point.x - centerX;
-            const dy = point.y - centerY;
+          const cos = Math.cos(rotation), sin = Math.sin(rotation);
+          const centerX = item.x + item.w / 2, centerY = item.y + item.h / 2;
+          return !eraserSamples.some((point) => {
+            const dx = point.x - centerX, dy = point.y - centerY;
             const localX = dx * cos + dy * sin + item.w / 2;
             const localY = -dx * sin + dy * cos + item.h / 2;
             return localX >= -eraserRadius && localX <= item.w + eraserRadius &&
               localY >= -eraserRadius && localY <= item.h + eraserRadius;
           });
-          return touchedShape ? [] : [item];
         }
-
-        if (item.type !== "drawing") {
-          return [item];
-        }
-
+        if (item.type !== "drawing") return true;
         const localPoints = item.props.points;
-        if (!localPoints || localPoints.length < 2) {
-          const touchedLegacyStroke = path.some((pt) => {
-            return (
-              pt.x >= item.x - eraserRadius &&
-              pt.x <= item.x + item.w + eraserRadius &&
-              pt.y >= item.y - eraserRadius &&
-              pt.y <= item.y + item.h + eraserRadius
-            );
-          });
-
-          return touchedLegacyStroke ? [] : [item];
+        if (!localPoints?.length) {
+          // Backward-compatible fallback for old imported drawings that only
+          // contain an SVG path and no source samples.
+          return !eraserSamples.some((point) =>
+            point.x >= item.x - eraserRadius && point.x <= item.x + item.w + eraserRadius &&
+            point.y >= item.y - eraserRadius && point.y <= item.y + item.h + eraserRadius
+          );
         }
-
-        const worldPoints = resamplePolyline(
-          localPoints.map((point) => ({
-            x: item.x + point.x,
-            y: item.y + point.y,
-          })),
-          2,
-        );
-
-        const keptSegments: CanvasPoint[][] = [];
-        let activeSegment: CanvasPoint[] = [];
-        let touched = false;
-
-        for (const point of worldPoints) {
-          const shouldErase = eraserSamples.some((eraserPoint) => {
-            const dx = point.x - eraserPoint.x;
-            const dy = point.y - eraserPoint.y;
-            return dx * dx + dy * dy <= radiusSquared;
-          });
-
-          if (shouldErase) {
-            touched = true;
-            if (activeSegment.length > 1) {
-              keptSegments.push(activeSegment);
-            }
-            activeSegment = [];
-            continue;
-          }
-
-          activeSegment.push(point);
-        }
-
-        if (activeSegment.length > 1) {
-          keptSegments.push(activeSegment);
-        }
-
-        if (!touched) {
-          return [item];
-        }
-
-        return keptSegments
-          .map((segment) => {
-            const drawing = createDrawingFromWorldPoints(segment, item.props.color, item.props.strokeWidth);
-            return createWorkspaceItem("drawing", drawing, {
-              x: drawing.x,
-              y: drawing.y,
-              zIndex: item.zIndex,
-            });
-          })
-          .filter(Boolean) as StudioItem[];
+        const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(rotation), sin = Math.sin(rotation);
+        const centerX = item.w / 2, centerY = item.h / 2;
+        const worldPoints = localPoints.map((point) => {
+          const dx = point.x - centerX, dy = point.y - centerY;
+          return {
+            x: item.x + centerX + dx * cos - dy * sin,
+            y: item.y + centerY + dx * sin + dy * cos,
+            pressure: point.pressure,
+          };
+        });
+        return !strokeIntersectsPolyline(worldPoints, eraserSamples, eraserRadius, item.props.strokeWidth);
       });
-
-      const didChange =
-        nextItems.length !== items.length ||
-        nextItems.some((item, index) => items[index]?.id !== item.id);
-
-      if (didChange) {
-        commitDrawingItems(nextItems);
-      }
+      if (nextItems.length !== items.length) commitDrawingItems(nextItems);
     },
     [commitDrawingItems, eraserRadius, items],
   );
@@ -1073,12 +1041,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       drawPointerSessionRef.current = session;
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
+      const point = { x, y, pressure };
       setMousePos({ x, y });
 
       if (drawTool === "eraser") {
-        setEraserPath([{ x, y }]);
+        eraserPathRef.current = [point];
+        setEraserPath([point]);
       } else {
-        setCurrentPath([{ x, y }]);
+        currentPathRef.current = [point];
+        setCurrentPath([point]);
       }
     },
     [drawTool, screenToWorld],
@@ -1089,18 +1061,32 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       if (!ownsPointerSession(drawPointerSessionRef.current, e)) return;
       e.stopPropagation();
       e.preventDefault();
-      const { x, y } = screenToWorld(e.clientX, e.clientY);
-      setMousePos({ x, y });
+      const nativeEvent = e.nativeEvent;
+      const coalesced = typeof nativeEvent.getCoalescedEvents === "function"
+        ? nativeEvent.getCoalescedEvents()
+        : [];
+      const samples = coalesced.length ? coalesced : [nativeEvent];
+      const points = samples.map((sample) => {
+        const world = screenToWorld(sample.clientX, sample.clientY);
+        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? undefined : sample.pressure;
+        return { ...world, pressure };
+      });
+      const point = points[points.length - 1];
+      if (!point) return;
+      setMousePos({ x: point.x, y: point.y });
 
-      if (drawTool === "pen" && currentPath.length > 0) {
-        setCurrentPath((prev) => [...prev, { x, y }]);
+      if (drawTool === "pen" && currentPathRef.current.length > 0) {
+        const nextPath = [...currentPathRef.current, ...points];
+        currentPathRef.current = nextPath;
+        setCurrentPath(nextPath);
       }
-
-      if (drawTool === "eraser" && eraserPath.length > 0) {
-        setEraserPath((prev) => [...prev, { x, y }]);
+      if (drawTool === "eraser" && eraserPathRef.current.length > 0) {
+        const nextPath = [...eraserPathRef.current, ...points];
+        eraserPathRef.current = nextPath;
+        setEraserPath(nextPath);
       }
     },
-    [currentPath.length, drawTool, eraserPath.length, screenToWorld],
+    [drawTool, screenToWorld],
   );
 
   const handleDrawPointerUp = useCallback(
@@ -1112,18 +1098,30 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.preventDefault();
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const lastPenPoint = currentPath[currentPath.length - 1];
+      const penSamples = currentPathRef.current;
+      const eraserSamples = eraserPathRef.current;
+      const lastPenPoint = penSamples[penSamples.length - 1];
+      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
+      // Pen-up reports zero pressure on many browsers. Preserve the last
+      // actual sample so final geometry matches the pressure-sensitive preview.
+      const pressure = e.pointerType === "mouse"
+        ? undefined
+        : e.pressure > 0
+          ? e.pressure
+          : drawTool === "pen"
+            ? lastPenPoint?.pressure
+            : lastEraserPoint?.pressure;
+      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
       const completedPenPath =
-        currentPath.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
-          ? [...currentPath, { x, y }]
-          : currentPath;
-      const lastEraserPoint = eraserPath[eraserPath.length - 1];
+        penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
+          ? [...penSamples, finalPoint]
+          : penSamples;
       const completedEraserPath =
-        eraserPath.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
-          ? [...eraserPath, { x, y }]
-          : eraserPath;
+        eraserSamples.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
+          ? [...eraserSamples, finalPoint]
+          : eraserSamples;
 
-      if (drawTool === "pen" && completedPenPath.length > 1) {
+      if (drawTool === "pen" && completedPenPath.length > 0) {
         const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
@@ -1135,19 +1133,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           commitDrawingItems([...items, newItem]);
         }
 
-        setCurrentPath([]);
       }
 
       if (drawTool === "eraser" && completedEraserPath.length > 0) {
         eraseAtPath(completedEraserPath);
-        setEraserPath([]);
       }
 
-      if (drawTool === "pen") {
-        setCurrentPath([]);
-      }
+      // Clear both sources only after the owning gesture has been finalized.
+      currentPathRef.current = [];
+      eraserPathRef.current = [];
+      setCurrentPath([]);
+      setEraserPath([]);
     },
-    [commitDrawingItems, currentPath, drawColor, drawStrokeWidth, drawTool, eraserPath, eraseAtPath, items, screenToWorld],
+    [commitDrawingItems, drawColor, drawStrokeWidth, drawTool, eraseAtPath, items, screenToWorld],
   );
 
   const handleTextPointerUp = useCallback(
@@ -1261,6 +1259,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       ref={wrapperRef}
       className="w-full h-full relative bg-[#f8fafc] overflow-visible"
       data-workspace-canvas="true"
+      data-workspace-tool={activeTool}
       style={{
         cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
         touchAction: "none",
@@ -1457,10 +1456,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
         if (gesture.mode === "draw") {
-          const session = drawPointerSessionRef.current;
-          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = endPointerSession(session, e);
-          setCurrentPath([]);
-          setEraserPath([]);
+          // Browsers can interrupt a captured pointer (for example when the
+          // OS takes over input). Treat the last delivered sample as the end
+          // of the stroke instead of throwing away a preview the user saw.
+          // The gesture is cleared above, so a subsequent lost-capture event
+          // cannot commit the same stroke twice.
+          handleDrawPointerUp(e);
         } else if (gesture.mode === "text") {
           const session = textPointerSessionRef.current;
           if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
@@ -1481,10 +1482,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
         if (gesture.mode === "draw") {
-          const session = drawPointerSessionRef.current;
-          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = clearPointerSession(session, e);
-          setCurrentPath([]);
-          setEraserPath([]);
+          // Unexpected capture loss must use the same idempotent finalizer as
+          // pointerup. A real pointerup clears canvasGestureRef first, so this
+          // branch only handles an interrupted gesture.
+          handleDrawPointerUp(e);
         } else if (gesture.mode === "text") {
           const session = textPointerSessionRef.current;
           if (ownsPointerSession(session, e)) textPointerSessionRef.current = clearPointerSession(session, e);
@@ -1544,7 +1545,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           allowLeftClickPan: false,
           excluded: [],
         }}
-        pinch={{ disabled: isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
+        pinch={{ disabled: activeTool === "select" || isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
           wheelDisabled: true,
@@ -1608,15 +1609,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {currentPath.length > 1 && (
+                {currentPath.length > 0 && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
                     <path
-                      d={buildStrokePath(currentPath)}
-                      stroke={drawColor}
-                      strokeWidth={drawStrokeWidth}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      d={outlineToPath(createStrokeOutline(currentPath, drawStrokeWidth))}
+                      fill={drawColor}
+                      
                     />
                   </svg>
                 )}
@@ -1967,7 +1965,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   setEditingFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedShapeId(null);
-                                setCurrentPath([]);
+                  currentPathRef.current = [];
+                  eraserPathRef.current = [];
+                  setCurrentPath([]);
                   setEraserPath([]);
                 }}
                 className={`p-2 rounded-md transition-colors ${isDrawing ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
@@ -2015,7 +2015,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
                 </div>
