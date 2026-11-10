@@ -83,3 +83,16 @@ test("cancellation or lost capture clears only the matching pointer", () => {
   assert.equal(clearPointerSession(session, { pointerId: 8 }), session);
   assert.equal(clearPointerSession(session, { pointerId: 7 }), null);
 });
+
+test("does not activate a transform when pointer capture cannot be acquired", () => {
+  const target = createTarget();
+  target.setPointerCapture = () => {
+    throw new Error("pointer is no longer active");
+  };
+  const event = createEvent(11);
+
+  assert.equal(beginPointerSession(event, target, null), null);
+  assert.equal(target.captured.size, 0);
+  assert.equal(event.calls.prevented, 0);
+  assert.equal(event.calls.stopped, 0);
+});
