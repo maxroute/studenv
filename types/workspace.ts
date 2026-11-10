@@ -436,6 +436,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
                   : undefined,
               label: coerceOptionalString(props.label),
               notes: coerceOptionalString(props.notes),
+              color: coerceString(props.color, "#F8E7A1"),
             },
           })
         : null;
