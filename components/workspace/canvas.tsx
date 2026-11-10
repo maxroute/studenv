@@ -58,6 +58,7 @@ import {
 } from "@/lib/workspace/pointer-session";
 
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
+import { getImageDisplaySizeFromFile } from "@/lib/workspace/image-sizing";
 
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
@@ -515,6 +516,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         y: -viewport.y / viewport.zoom + 120,
       };
       const nextPosition = position ?? fallbackPosition;
+      const imageSize = assetKind === "image" ? await getImageDisplaySizeFromFile(file) : null;
 
       const assetLabel = getAssetKindLabel(assetKind);
       toast.loading(`Uploading ${assetLabel}...`, { id: "upload" });
@@ -550,8 +552,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             assetId,
             src: `/api/assets/${assetId}/content`,
             alt: file.name,
-            w: 360,
-            h: 240,
+            w: imageSize?.w ?? 360,
+            h: imageSize?.h ?? 240,
           },
           nextPosition,
         );
