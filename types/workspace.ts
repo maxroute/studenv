@@ -94,6 +94,7 @@ export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
     endTimeMs: z.number().int().nonnegative().optional(),
     label: z.string().optional(),
     notes: z.string().optional(),
+    color: z.string().default("#F8E7A1"),
   }),
 });
 
@@ -419,6 +420,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
               : undefined,
           label: coerceOptionalString(props.label),
           notes: coerceOptionalString(props.notes),
+          color: coerceString(props.color, "#F8E7A1"),
         },
       }).success
         ? VideoAnchorNodeSchema.parse({
