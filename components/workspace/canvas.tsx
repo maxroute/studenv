@@ -1100,7 +1100,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
           ? [...penSamples, finalPoint]
           : penSamples;
-      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
       const completedEraserPath =
         eraserSamples.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
           ? [...eraserSamples, finalPoint]
