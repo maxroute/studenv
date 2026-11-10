@@ -9,22 +9,25 @@ export function createStrokeOutline(points: StrokePoint[], baseWidth: number): P
   if (!points.length) return [];
   const input = points
     .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-    .map((point) => ({ x: point.x, y: point.y, pressure: pressureOf(point) }));
+    .map((point) => ({
+      x: point.x,
+      y: point.y,
+      ...(point.pressure === undefined
+        ? {}
+        : { pressure: Math.max(0.08, Math.min(1, point.pressure)) }),
+    }));
   if (!input.length) return [];
   const outline = getStroke(input, {
     size: Math.max(0.5, Number.isFinite(baseWidth) ? baseWidth : 3),
     thinning: 0.65,
     smoothing: 0.5,
     streamline: 0.5,
-    simulatePressure: false,
+    simulatePressure: input.some((point) => point.pressure === undefined),
     last: true,
   });
   return outline.map(([x, y]) => ({ x, y }));
 }
 
-function pressureOf(point: StrokePoint) {
-  return Math.max(0.08, Math.min(1, Number.isFinite(point.pressure) ? point.pressure! : 0.5));
-}
 
 /** Smooth closed polygon path using quadratic midpoint interpolation. */
 export function outlineToPath(points: Point[]): string {
