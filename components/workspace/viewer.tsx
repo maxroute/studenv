@@ -933,11 +933,11 @@ export function FloatingViewer({
                       <button
                         type="button"
                         onClick={handlePinConfirm}
-                        style={{ width: "auto", minWidth: 76, minHeight: 36, padding: "7px 11px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#1E293B", color: "#FEF3C7", border: 0, whiteSpace: "nowrap" }}
-                        className="rounded-sm text-[11px] font-semibold hover:!bg-slate-700"
+                        style={{ width: "auto", minWidth: 92, minHeight: 36, padding: "7px 12px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#4F46E5", color: "#FFFFFF", border: "1px solid #4338CA", borderRadius: 6, whiteSpace: "nowrap", opacity: 1, visibility: "visible" }}
+                        className="!text-white rounded-md text-[12px] font-semibold shadow-sm hover:!bg-indigo-700"
                       >
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span>Pin Note</span>
+                        <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "#FFFFFF" }} />
+                        <span style={{ display: "inline-block", color: "#FFFFFF", opacity: 1, visibility: "visible", whiteSpace: "nowrap", lineHeight: "18px" }}>Pin Note</span>
                       </button>
                     </div>
                   </div>
