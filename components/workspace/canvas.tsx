@@ -154,6 +154,9 @@ function resamplePolyline(points: CanvasPoint[], maxStep = 2): CanvasPoint[] {
       sampled.push({
         x: start.x + dx * t,
         y: start.y + dy * t,
+        ...(start.pressure === undefined && end.pressure === undefined
+          ? {}
+          : { pressure: (start.pressure ?? 0.5) + ((end.pressure ?? 0.5) - (start.pressure ?? 0.5)) * t }),
       });
     }
   }
@@ -1024,7 +1027,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       const point = { x, y, pressure };
       setMousePos({ x, y });
 
-      if ((drawTool === "pen" || drawTool === "highlighter") && currentPath.length > 0) {
+      if (drawTool === "pen" && currentPath.length > 0) {
         setCurrentPath((prev) => [...prev, point]);
       }
       if (drawTool === "eraser" && eraserPath.length > 0) {
@@ -1056,7 +1059,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           ? [...eraserPath, finalPoint]
           : eraserPath;
 
-      if ((drawTool === "pen" || drawTool === "highlighter") && completedPenPath.length > 0) {
+      if (drawTool === "pen" && completedPenPath.length > 0) {
         const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
@@ -1546,7 +1549,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     <path
                       d={outlineToPath(createStrokeOutline(currentPath, drawStrokeWidth))}
                       fill={drawColor}
-                      fillOpacity={drawTool === "highlighter" ? 0.35 : 1}
+                      
                     />
                   </svg>
                 )}
