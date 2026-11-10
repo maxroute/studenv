@@ -872,6 +872,11 @@ export function FloatingViewer({
             <button
               ref={pinButtonRef}
               type="button"
+              data-no-viewer-drag
+              onPointerDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              style={{ touchAction: "manipulation" }}
               onClick={() => {
                 if (!assetId) return;
                 const ms = getCurrentTimeMs();
