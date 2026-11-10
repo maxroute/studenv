@@ -22,7 +22,9 @@ export function resampleStrokePoints(points: StrokePoint[], maxStep = 2): Stroke
         y: start.y + dy * t,
         ...(typeof start.pressure === "number" && typeof end.pressure === "number"
           ? { pressure: start.pressure + (end.pressure - start.pressure) * t }
-          : {}),
+          : step === segments && typeof end.pressure === "number"
+            ? { pressure: end.pressure }
+            : {}),
       });
     }
   }
