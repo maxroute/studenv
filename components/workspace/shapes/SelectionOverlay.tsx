@@ -11,6 +11,7 @@ import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
 import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { beginPointerSession, clearPointerSession, endPointerSession, ownsPointerSession, type PointerSession } from "@/lib/workspace/pointer-session";
 
 interface SelectionOverlayProps {
   canvasScale: number;
@@ -52,6 +53,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
   const { selectedIds, rotationPreviews } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
+  const transformSessionRef = useRef<PointerSession | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const groupDragRef = useRef<{
     pointerId: number;
@@ -125,12 +127,16 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     itemId: string,
     handle: ResizeHandle
   ) => {
-    e.stopPropagation();
-    e.preventDefault();
     const targets = allSelectedItems.length > 1
       ? allSelectedItems.filter((item) => !(item.props as { locked?: boolean }).locked)
       : items.filter((item) => item.id === itemId && !(item.props as { locked?: boolean }).locked);
     if (targets.length === 0) return;
+
+    // Capture must succeed before a transform can become active. This also
+    // rejects secondary pointers/buttons and prevents stale hover-driven moves.
+    const session = beginPointerSession(e, e.currentTarget as HTMLElement, transformSessionRef.current);
+    if (!session) return;
+    transformSessionRef.current = session;
 
     const startPointer = screenToWorld(e.clientX, e.clientY);
     const startBounds = new Map<string, Bounds>();
@@ -147,7 +153,6 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       startRotations,
       startPointer,
     });
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   // Handle pointer down on line/arrow endpoints
@@ -156,10 +161,12 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     itemId: string,
     type: "endpoint-start" | "endpoint-end"
   ) => {
-    e.stopPropagation();
-    e.preventDefault();
     const item = items.find((i) => i.id === itemId);
     if (!item || (item.props as { locked?: boolean }).locked) return;
+
+    const session = beginPointerSession(e, e.currentTarget as HTMLElement, transformSessionRef.current);
+    if (!session) return;
+    transformSessionRef.current = session;
 
     const startPointer = screenToWorld(e.clientX, e.clientY);
     const startBounds = new Map<string, Bounds>();
@@ -171,13 +178,10 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       startRotations: new Map([[itemId, item.rotation]]),
       startPointer,
     });
-    if (e.currentTarget) {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!transformState) return;
+    if (!transformState || !ownsPointerSession(transformSessionRef.current, e)) return;
     e.stopPropagation();
     e.preventDefault();
 
@@ -317,13 +321,17 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!transformState) return;
+    if (!ownsPointerSession(transformSessionRef.current, e)) return;
     e.stopPropagation();
     e.preventDefault();
-    const target = e.currentTarget as HTMLElement;
-    if (target.hasPointerCapture(e.pointerId)) {
-      target.releasePointerCapture(e.pointerId);
-    }
+    transformSessionRef.current = endPointerSession(transformSessionRef.current, e);
+    setTransformState(null);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    if (!ownsPointerSession(transformSessionRef.current, e)) return;
+    e.stopPropagation();
+    transformSessionRef.current = clearPointerSession(transformSessionRef.current, e);
     setTransformState(null);
   };
 
@@ -383,7 +391,8 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               onPointerDown={(event) => handleResizeStart(event, allSelectedItems[0].id, handle)}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              onLostPointerCapture={handlePointerCancel}
             />
           ))}
         </div>
@@ -511,6 +520,8 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
                   onPointerDown={(e) => handleEndpointDragStart(e, item.id, "endpoint-start")}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
+                  onLostPointerCapture={handlePointerCancel}
                 />
               )}
 
@@ -530,6 +541,8 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
                   onPointerDown={(e) => handleEndpointDragStart(e, item.id, "endpoint-end")}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
+                  onLostPointerCapture={handlePointerCancel}
                 />
               )}
             </div>
