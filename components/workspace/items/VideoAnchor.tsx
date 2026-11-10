@@ -3,11 +3,31 @@
 import { VideoAnchorNode } from "@/types/workspace";
 import { useViewerStore } from "@/hooks/use-viewer-store";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
-import { Play, Clock, StickyNote, Pencil, Check, X, GripHorizontal } from "lucide-react";
+import { Play, Check, X, GripHorizontal } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface VideoAnchorProps {
   item: VideoAnchorNode;
+}
+
+const NOTE_COLORS = [
+  "#F8E7A1",
+  "#CDEBDD",
+  "#F6D7DE",
+  "#D6E8F8",
+  "#E6DDF7",
+  "#F8DDC8",
+];
+
+function getContrastingTextColor(hexColor: string) {
+  const hex = hexColor.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return "#1F2937";
+  const channels = [0, 2, 4].map((offset) => {
+    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  return luminance > 0.42 ? "#1F2937" : "#FFFFFF";
 }
 
 function formatTimestamp(ms: number) {
@@ -26,16 +46,22 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
   const [opening, setOpening] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editNotes, setEditNotes] = useState(item.props.notes ?? "");
+  const [noteColor, setNoteColor] = useState(item.props.color || NOTE_COLORS[0]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textColor = getContrastingTextColor(noteColor);
 
   useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(
-        textareaRef.current.value.length,
-        textareaRef.current.value.length
-      );
-    }
+    setEditNotes(item.props.notes ?? "");
+    setNoteColor(item.props.color || NOTE_COLORS[0]);
+  }, [item.id, item.props.notes, item.props.color]);
+
+  useEffect(() => {
+    if (!isEditing || !textareaRef.current) return;
+    textareaRef.current.focus();
+    textareaRef.current.setSelectionRange(
+      textareaRef.current.value.length,
+      textareaRef.current.value.length,
+    );
   }, [isEditing]);
 
   const handlePlay = async (e: React.MouseEvent) => {
@@ -47,7 +73,6 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
     const existingViewer = viewers.find(
       (viewer) => viewer.id === assetId || viewer.assetId === assetId,
     );
-
     if (existingViewer) {
       seekTo(assetId, startTimeMs);
       return;
@@ -57,10 +82,8 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
       setOpening(true);
       const response = await fetch(`/api/assets/${assetId}`);
       if (!response.ok) throw new Error("Failed to load linked video");
-
       const asset = await response.json();
       if (asset.kind !== "video") throw new Error("Linked asset is not a video");
-
       openViewer({
         id: asset.id,
         title: asset.title,
@@ -70,7 +93,6 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
         revisionId: asset.currentRevisionId ?? undefined,
         currentTime: startTimeMs,
       });
-
       seekTo(asset.id, startTimeMs);
     } catch (error) {
       console.warn("Failed to reopen video viewer from anchor", error);
@@ -83,16 +105,15 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
     e?.stopPropagation();
     const { items, updateItems } = useWorkspaceStore.getState();
     const updatedItems = items.map((i) => {
-      if (i.id === item.id && i.type === "video-anchor") {
-        return {
-          ...i,
-          props: {
-            ...i.props,
-            notes: editNotes.trim() || undefined,
-          },
-        };
-      }
-      return i;
+      if (i.id !== item.id || i.type !== "video-anchor") return i;
+      return {
+        ...i,
+        props: {
+          ...i.props,
+          notes: editNotes.trim() || undefined,
+          color: noteColor,
+        },
+      };
     });
     updateItems(updatedItems as any);
     setIsEditing(false);
@@ -101,49 +122,41 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
   const handleCancelEdit = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     setEditNotes(item.props.notes ?? "");
+    setNoteColor(item.props.color || NOTE_COLORS[0]);
     setIsEditing(false);
   };
 
-  const hasNotes = Boolean(item.props.notes);
-
   return (
-    <div className="w-full h-full flex flex-col bg-white overflow-hidden">
-      {/* Drag Handle Header — this is the movable area */}
-      <div className="drag-handle bg-gradient-to-r from-slate-800 to-slate-700 px-2 py-1.5 flex items-center justify-between gap-1 shrink-0 cursor-move select-none">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <GripHorizontal className="w-3 h-3 text-slate-400 shrink-0" />
-          <span className="text-[11px] font-medium text-white truncate leading-tight">
-            {item.props.label || "Video Anchor"}
+    <div
+      className="relative flex h-full w-full flex-col overflow-hidden rounded-sm shadow-md"
+      style={{ backgroundColor: noteColor, color: textColor }}
+    >
+      <div className="drag-handle flex shrink-0 items-center justify-between gap-2 border-b border-black/10 px-2.5 py-2 cursor-move select-none">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <GripHorizontal className="h-3.5 w-3.5 shrink-0 opacity-50" />
+          <span className="truncate text-[11px] font-semibold">
+            {item.props.label || "Video note"}
           </span>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Play button */}
+        <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={handlePlay}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors"
+            className="flex items-center gap-1 rounded-md bg-black/10 px-2 py-1 transition-colors hover:bg-black/15"
             title={`Jump to ${formatTimestamp(item.props.startTimeMs)}`}
+            aria-label={`Jump to ${formatTimestamp(item.props.startTimeMs)}`}
           >
-            <Play className="w-2.5 h-2.5 fill-white text-white" />
-            <span className="text-[10px] font-mono text-indigo-300 font-semibold">
+            <Play className="h-3 w-3 fill-current" />
+            <span className="text-[11px] font-mono font-semibold">
               {formatTimestamp(item.props.startTimeMs)}
             </span>
           </button>
-          {/* Edit / Save / Cancel in header */}
           {isEditing ? (
             <>
-              <button
-                onClick={handleCancelEdit}
-                className="p-0.5 hover:bg-white/20 rounded text-slate-300 transition-colors"
-                title="Cancel (Esc)"
-              >
-                <X className="w-3 h-3" />
+              <button onClick={handleCancelEdit} className="rounded p-1 hover:bg-black/10" title="Cancel edit">
+                <X className="h-3.5 w-3.5" />
               </button>
-              <button
-                onClick={handleSaveNotes}
-                className="p-0.5 hover:bg-green-500/30 rounded text-green-400 transition-colors"
-                title="Save (Ctrl+Enter)"
-              >
-                <Check className="w-3 h-3" />
+              <button onClick={handleSaveNotes} className="rounded p-1 hover:bg-black/10" title="Save note">
+                <Check className="h-3.5 w-3.5" />
               </button>
             </>
           ) : (
@@ -151,53 +164,66 @@ export function VideoAnchor({ item }: VideoAnchorProps) {
               onClick={(e) => {
                 e.stopPropagation();
                 setEditNotes(item.props.notes ?? "");
+                setNoteColor(item.props.color || NOTE_COLORS[0]);
                 setIsEditing(true);
               }}
-              className="p-0.5 hover:bg-white/20 rounded text-slate-400 transition-colors"
+              className="rounded px-1.5 py-1 text-[10px] font-semibold hover:bg-black/10"
               title="Edit note"
             >
-              <Pencil className="w-2.5 h-2.5" />
+              Edit
             </button>
           )}
         </div>
       </div>
-      
-      {/* Notes Area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {isEditing ? (
-          <div className="flex-1 flex flex-col p-1.5" onClick={(e) => e.stopPropagation()}>
-            <textarea
-              ref={textareaRef}
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              placeholder="Add your notes..."
-              className="flex-1 text-[11px] leading-relaxed text-slate-700 bg-amber-50/50 border border-amber-200/60 rounded px-2 py-1.5 resize-none focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 min-h-0"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  handleSaveNotes();
-                }
-                if (e.key === "Escape") {
-                  handleCancelEdit();
-                }
+
+      {isEditing && (
+        <div
+          className="flex shrink-0 items-center gap-2 border-b border-black/10 px-2.5 py-2"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {NOTE_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setNoteColor(color);
               }}
+              className={`h-5 w-5 rounded-full border border-black/15 transition-transform hover:scale-110 ${noteColor === color ? "ring-2 ring-indigo-500 ring-offset-2" : ""}`}
+              style={{ backgroundColor: color }}
+              aria-label={`Set note color ${color}`}
+              aria-pressed={noteColor === color}
             />
-          </div>
-        ) : hasNotes ? (
-          <div className="flex-1 flex flex-col p-2 min-h-0 overflow-hidden">
-            <div className="flex items-center gap-1 mb-1 shrink-0">
-              <StickyNote className="w-2.5 h-2.5 text-amber-500" />
-              <span className="text-[9px] font-semibold text-amber-600 uppercase tracking-wider">Note</span>
-            </div>
-            <p className="text-[11px] leading-relaxed text-slate-600 overflow-y-auto flex-1 whitespace-pre-wrap min-h-0">
-              {item.props.notes}
-            </p>
-          </div>
+          ))}
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 p-2.5">
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={editNotes}
+            onChange={(event) => setEditNotes(event.target.value)}
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                handleSaveNotes();
+              }
+              if (event.key === "Escape") handleCancelEdit();
+              event.stopPropagation();
+            }}
+            placeholder="Write something..."
+            aria-label="Video timestamp note"
+            className="h-full w-full resize-none border-0 bg-transparent text-sm leading-relaxed outline-none placeholder:opacity-50"
+            style={{ color: textColor }}
+          />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-2 text-center">
-            <span className="text-[10px] text-slate-400">
-              {opening ? "Opening..." : "Click ▶ to jump"}
-            </span>
+          <div
+            className="h-full w-full overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed"
+            style={{ color: textColor }}
+          >
+            {item.props.notes || (opening ? "Opening..." : "Write a note for this moment")}
           </div>
         )}
       </div>
