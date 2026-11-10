@@ -6752,7 +6752,6 @@ body.shelf-scroll-locked {
     inset: auto 8px max(8px, env(safe-area-inset-bottom)) 8px !important;
     width: auto !important;
     max-width: none !important;
-    height: min(64dvh, 620px) !important;
     min-width: 0 !important;
     min-height: 180px !important;
     max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
