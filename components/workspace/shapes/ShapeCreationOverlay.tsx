@@ -17,10 +17,19 @@ import {
   type PointerSession,
 } from "@/lib/workspace/pointer-session";
 
+export interface ShapePointerHandlers {
+  down: (event: React.PointerEvent<HTMLDivElement>) => void;
+  move: (event: React.PointerEvent<HTMLDivElement>) => void;
+  up: (event: React.PointerEvent<HTMLDivElement>) => void;
+  cancel: (event: React.PointerEvent<HTMLDivElement>) => void;
+  lostCapture: (event: React.PointerEvent<HTMLDivElement>) => void;
+}
+
 interface ShapeCreationOverlayProps {
   activeShapeKind: ShapeKind;
   screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
   onComplete?: () => void;
+  pointerHandlersRef?: React.MutableRefObject<ShapePointerHandlers | null>;
 }
 
 interface DragState {
@@ -71,6 +80,7 @@ export function ShapeCreationOverlay({
   activeShapeKind,
   screenToWorld,
   onComplete,
+  pointerHandlersRef,
 }: ShapeCreationOverlayProps) {
   const { addItem } = useWorkspaceStore();
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -234,6 +244,16 @@ export function ShapeCreationOverlay({
       onComplete();
     }
   };
+
+  if (pointerHandlersRef) {
+    pointerHandlersRef.current = {
+      down: handlePointerDown,
+      move: handlePointerMove,
+      up: handlePointerUp,
+      cancel: handlePointerCancel,
+      lostCapture: handleLostPointerCapture,
+    };
+  }
 
   // Live preview calculations
   let previewComponent = null;
