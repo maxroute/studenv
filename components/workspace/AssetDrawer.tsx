@@ -51,10 +51,10 @@ export function AssetDrawer() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [scope, setScope] = useState<DrawerScope>("workspace");
-  const [touchDragPreview, setTouchDragPreview] = useState<{ asset: Asset; x: number; y: number } | null>(null);
+  const [touchDragPreview, setTouchDragPreview] = useState<{ assetId: string; x: number; y: number; width: number; height: number } | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
-  const touchDragRef = useRef<{ asset: Asset; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
+  const touchDragRef = useRef<{ asset: Asset; pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number; width: number; height: number; moved: boolean } | null>(null);
   const workspaceItems = useWorkspaceStore((state) => state.items);
   const workspaceCoverAssetId = useWorkspaceStore((state) => state.coverAssetId);
   const workspaceAssetIdsFromStore = useWorkspaceStore((state) => state.workspaceAssetIds);
@@ -299,19 +299,6 @@ export function AssetDrawer() {
         onChange={handleAssetSelected}
       />
 
-      {touchDragPreview && typeof document !== "undefined" ? createPortal(
-        <div
-          className="pointer-events-none fixed z-[10000] flex max-w-[220px] items-center gap-2 rounded-xl border border-indigo-200 bg-white/95 px-3 py-2 text-sm font-medium text-slate-700 shadow-xl"
-          style={{ left: touchDragPreview.x + 12, top: touchDragPreview.y + 12 }}
-        >
-          <span className={`rounded-md p-1.5 ${getAssetIconClassName(touchDragPreview.asset)}`}>
-            {renderAssetIcon(touchDragPreview.asset)}
-          </span>
-          <span className="truncate">{touchDragPreview.asset.title}</span>
-        </div>,
-        document.body,
-      ) : null}
-
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(true)}
@@ -335,7 +322,7 @@ export function AssetDrawer() {
               if (!drag || drag.pointerId !== event.pointerId) return;
               if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
                 drag.moved = true;
-                setTouchDragPreview({ asset: drag.asset, x: event.clientX, y: event.clientY });
+                setTouchDragPreview({ assetId: drag.asset.id, x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY, width: drag.width, height: drag.height });
               }
               event.stopPropagation();
             }}
@@ -506,40 +493,50 @@ export function AssetDrawer() {
                   <div
                     key={asset.id}
                     draggable
-                    style={{ touchAction: "none" }}
+                    style={{
+                      touchAction: "none",
+                      ...(touchDragPreview?.assetId === asset.id ? {
+                        position: "fixed" as const,
+                        left: touchDragPreview.x,
+                        top: touchDragPreview.y,
+                        width: touchDragPreview.width,
+                        height: touchDragPreview.height,
+                        zIndex: 10002,
+                        pointerEvents: "none" as const,
+                        boxShadow: "0 16px 40px rgba(15,23,42,.22)",
+                        transform: "scale(1.02)",
+                      } : {}),
+                    }}
                     onPointerDown={(event) => {
                       if (event.pointerType !== "touch") return;
                       event.preventDefault();
                       event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
                       event.currentTarget.setPointerCapture(event.pointerId);
                       touchDragRef.current = {
                         asset,
                         pointerId: event.pointerId,
                         startX: event.clientX,
                         startY: event.clientY,
+                        offsetX: event.clientX - rect.left,
+                        offsetY: event.clientY - rect.top,
+                        width: rect.width,
+                        height: rect.height,
                         moved: false,
                       };
-                      setTouchDragPreview({ asset, x: event.clientX, y: event.clientY });
                     }}
                     onPointerMove={(event) => {
                       const drag = touchDragRef.current;
                       if (!drag || drag.pointerId !== event.pointerId) return;
                       if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
                         drag.moved = true;
-                      }
-                    }}
-                    onPointerUp={(event) => {
-                      const drag = touchDragRef.current;
-                      if (!drag || drag.pointerId !== event.pointerId) return;
-                      touchDragRef.current = null;
-                      setTouchDragPreview(null);
-                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                      }
-                      if (drag.moved) {
-                        window.dispatchEvent(new CustomEvent("workspace-asset-touch-drop", {
-                          detail: { asset: drag.asset, clientX: event.clientX, clientY: event.clientY },
-                        }));
+                        setTouchDragPreview({
+                          assetId: asset.id,
+                          x: event.clientX - drag.offsetX,
+                          y: event.clientY - drag.offsetY,
+                          width: drag.width,
+                          height: drag.height,
+                        });
                       }
                     }}
                     onPointerCancel={(event) => {
