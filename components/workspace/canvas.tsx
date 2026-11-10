@@ -1422,12 +1422,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onLostPointerCapture={(e) => {
-                  const stickySession = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(stickySession, e)) {
-                    stickyPointerSessionRef.current = clearPointerSession(stickySession, e);
-                  }
-                }}
-                onLostPointerCapture={(e) => {
                   if (panPointerRef.current?.pointerId === e.pointerId) {
                     panPointerRef.current = null;
                     setIsPanDragging(false);
