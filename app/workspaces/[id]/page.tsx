@@ -114,6 +114,30 @@ export default function WorkspacePage() {
   }, [isDirty]);
 
   // Handle keyboard shortcuts
+  // A workspace is an app-like full-screen surface. Lock document scrolling
+  // while it is mounted and use the dynamic viewport so mobile browser chrome
+  // cannot make the page taller than the actually visible screen.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverscroll: body.style.overscrollBehavior,
+    };
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overflow = previous.htmlOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      html.style.overscrollBehavior = previous.htmlOverscroll;
+      body.style.overscrollBehavior = previous.bodyOverscroll;
+    };
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -258,9 +282,9 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden flex flex-col">
+    <div data-workspace-page="true" className="relative w-screen h-[100dvh] min-h-0 overflow-hidden overscroll-none flex flex-col">
       {/* Header */}
-      <header className="h-14 border-b bg-white flex items-center px-4 justify-between shrink-0 z-20 shadow-sm">
+      <header className="h-14 min-h-14 border-b bg-white flex items-center px-3 sm:px-4 justify-between shrink-0 z-20 shadow-sm overflow-hidden">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => router.back()}
@@ -272,7 +296,7 @@ export default function WorkspacePage() {
           
           <div className="h-6 w-px bg-slate-200" />
           
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {editingTitle ? (
               <div className="flex items-center gap-1">
                 <input
@@ -303,7 +327,7 @@ export default function WorkspacePage() {
             ) : (
               <h1 
                 onClick={startEditingTitle}
-                className="font-semibold text-slate-800 cursor-pointer hover:bg-slate-100 px-2 py-1 rounded -ml-2 transition-colors max-w-sm truncate"
+                className="min-w-0 max-w-full font-semibold text-slate-800 cursor-pointer hover:bg-slate-100 px-2 py-1 rounded transition-colors truncate"
                 title="Click to rename"
               >
                 {title}
@@ -314,7 +338,7 @@ export default function WorkspacePage() {
 
         <div className="flex items-center gap-4">
           {/* Minimized Viewers */}
-          <div className="flex items-center gap-2 border-r border-slate-200 pr-4 mr-2">
+          <div className="hidden sm:flex items-center gap-2 border-r border-slate-200 pr-4 mr-2">
             {viewers.filter(v => v.minimized).map(viewer => (
               <div key={viewer.id} className="relative group">
                 <button
@@ -342,7 +366,7 @@ export default function WorkspacePage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2 text-sm">
             {isSaving ? (
               <span className="text-slate-400 flex items-center gap-1.5 text-xs font-medium">
                 <Loader2 size={12} className="animate-spin" />
