@@ -1279,10 +1279,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if ((activeTool === "select" || isStickyToolActive) && target?.closest('[data-workspace-item="true"]')) return;
 
         if (activeTool === "select" && editingStickyId) {
+          // Dismiss sticky editing and clear the shared selection in this same
+          // outside-pointer interaction. The textarea's blur handler only ends
+          // editing; it must not leave the sticky selected for an extra click.
           const activeElement = document.activeElement;
           if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
-          else setEditingStickyId(null);
+          setEditingStickyId(null);
           setSelectedStickyId(null);
+          useSelectionStore.getState().deselectAll();
           e.preventDefault();
           e.stopPropagation();
           return;
