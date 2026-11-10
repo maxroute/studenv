@@ -104,6 +104,14 @@ export function FloatingViewer({
   const currentZIndex = zIndex ?? 100;
   const isTopViewer = currentZIndex >= highestViewerZIndex;
   const [maximized, setMaximized] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const [hasError, setHasError] = useState(false);
   const [mediaErrorText, setMediaErrorText] = useState("The format may not be supported or the file is corrupted.");
   const [showPinForm, setShowPinForm] = useState(false);
@@ -678,7 +686,9 @@ export function FloatingViewer({
       bounds="window"
       cancel="button, input, textarea, select, a, [data-no-viewer-drag]"
       disableDragging={maximized}
-      enableResizing={!maximized && !minimized}
+      enableResizing={!maximized && !minimized && (isMobileViewport
+        ? { top: true, right: false, bottom: true, left: false, topRight: false, bottomRight: false, bottomLeft: false, topLeft: false }
+        : true)}
       style={{
         display: minimized ? "none" : undefined,
         zIndex: currentZIndex,
