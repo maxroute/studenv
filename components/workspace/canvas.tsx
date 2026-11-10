@@ -1520,7 +1520,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           allowLeftClickPan: false,
           excluded: [],
         }}
-        pinch={{ disabled: isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
+        pinch={{ disabled: activeTool === "select" || isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
           wheelDisabled: true,
