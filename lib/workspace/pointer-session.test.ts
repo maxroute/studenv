@@ -54,7 +54,6 @@ test("does not allow a second pointer to replace an active gesture", () => {
   assert.equal(target.captured.has(8), false);
   assert.equal(secondEvent.calls.prevented, 1);
   assert.equal(secondEvent.calls.stopped, 1);
-  assert.equal(secondEvent.calls.prevented, 0);
 });
 
 test("rejects non-primary pointers and non-primary buttons", () => {
