@@ -381,6 +381,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [currentPath, setCurrentPath] = useState<CanvasPoint[]>([]);
   const [eraserPath, setEraserPath] = useState<CanvasPoint[]>([]);
+  // Refs are the authoritative pointer samples. React state is only the preview;
+  // pointer-up must never depend on a render having committed the latest move.
+  const currentPathRef = useRef<CanvasPoint[]>([]);
+  const eraserPathRef = useRef<CanvasPoint[]>([]);
   const [drawColor, setDrawColor] = useState("#1e1e1e");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
@@ -442,6 +446,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     if (isDrawing || !drawPointerSessionRef.current) return;
     const session = drawPointerSessionRef.current;
     drawPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, [isDrawing]);
@@ -1019,8 +1025,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       const point = { x, y, pressure };
       setMousePos({ x, y });
 
-      if (drawTool === "eraser") setEraserPath([point]);
-      else setCurrentPath([point]);
+      if (drawTool === "eraser") {
+        eraserPathRef.current = [point];
+        setEraserPath([point]);
+      } else {
+        currentPathRef.current = [point];
+        setCurrentPath([point]);
+      }
     },
     [drawTool, screenToWorld],
   );
@@ -1044,14 +1055,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       if (!point) return;
       setMousePos({ x: point.x, y: point.y });
 
-      if (drawTool === "pen" && currentPath.length > 0) {
-        setCurrentPath((prev) => [...prev, ...points]);
+      if (drawTool === "pen" && currentPathRef.current.length > 0) {
+        const nextPath = [...currentPathRef.current, ...points];
+        currentPathRef.current = nextPath;
+        setCurrentPath(nextPath);
       }
-      if (drawTool === "eraser" && eraserPath.length > 0) {
-        setEraserPath((prev) => [...prev, ...points]);
+      if (drawTool === "eraser" && eraserPathRef.current.length > 0) {
+        const nextPath = [...eraserPathRef.current, ...points];
+        eraserPathRef.current = nextPath;
+        setEraserPath(nextPath);
       }
     },
-    [currentPath.length, drawTool, eraserPath.length, screenToWorld],
+    [drawTool, screenToWorld],
   );
 
   const handleDrawPointerUp = useCallback(
@@ -1063,18 +1078,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.preventDefault();
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
-      const finalPoint = { x, y, pressure };
-      const lastPenPoint = currentPath[currentPath.length - 1];
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
+      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
+      const penSamples = currentPathRef.current;
+      const eraserSamples = eraserPathRef.current;
+      const lastPenPoint = penSamples[penSamples.length - 1];
       const completedPenPath =
-        currentPath.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
-          ? [...currentPath, finalPoint]
-          : currentPath;
-      const lastEraserPoint = eraserPath[eraserPath.length - 1];
+        penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
+          ? [...penSamples, finalPoint]
+          : penSamples;
+      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
       const completedEraserPath =
-        eraserPath.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
-          ? [...eraserPath, finalPoint]
-          : eraserPath;
+        eraserSamples.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
+          ? [...eraserSamples, finalPoint]
+          : eraserSamples;
 
       if (drawTool === "pen" && completedPenPath.length > 0) {
         const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
@@ -1088,19 +1105,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           commitDrawingItems([...items, newItem]);
         }
 
-        setCurrentPath([]);
       }
 
       if (drawTool === "eraser" && completedEraserPath.length > 0) {
         eraseAtPath(completedEraserPath);
-        setEraserPath([]);
       }
 
-      if (drawTool === "pen") {
-        setCurrentPath([]);
-      }
+      // Clear both sources only after the owning gesture has been finalized.
+      currentPathRef.current = [];
+      eraserPathRef.current = [];
+      setCurrentPath([]);
+      setEraserPath([]);
     },
-    [commitDrawingItems, currentPath, drawColor, drawStrokeWidth, drawTool, eraserPath, eraseAtPath, items, screenToWorld],
+    [commitDrawingItems, drawColor, drawStrokeWidth, drawTool, eraseAtPath, items, screenToWorld],
   );
 
   const handleTextPointerUp = useCallback(
@@ -1412,6 +1429,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (gesture.mode === "draw") {
           const session = drawPointerSessionRef.current;
           if (ownsPointerSession(session, e)) drawPointerSessionRef.current = endPointerSession(session, e);
+          currentPathRef.current = [];
+          eraserPathRef.current = [];
+          currentPathRef.current = [];
+          eraserPathRef.current = [];
           setCurrentPath([]);
           setEraserPath([]);
         } else if (gesture.mode === "text") {
