@@ -313,10 +313,10 @@ export function AssetDrawer() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute top-4 right-4 bottom-4 w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex flex-col overflow-hidden"
+            className="fixed top-[4.5rem] right-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] w-[min(20rem,calc(100vw-1.5rem))] sm:right-4 sm:top-[4.5rem] sm:bottom-4 sm:w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex min-h-0 flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b flex items-center justify-between bg-slate-50/50">
+            <div className="shrink-0 p-4 border-b flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2 min-w-0">
                 <Library className="w-4 h-4 text-indigo-500 shrink-0" />
                 <h3 className="font-bold text-slate-800 truncate">Vault Library</h3>
@@ -414,7 +414,7 @@ export function AssetDrawer() {
             ) : null}
 
             {/* Search */}
-            <div className="p-3 border-b">
+            <div className="shrink-0 p-3 border-b">
               <div className="mb-3 grid grid-cols-2 gap-2">
                 <button
                   className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "workspace"
@@ -450,7 +450,7 @@ export function AssetDrawer() {
             </div>
 
             {/* Asset List */}
-            <div className="flex-1 overflow-auto p-2 space-y-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -515,7 +515,7 @@ export function AssetDrawer() {
             </div>
 
             {/* Footer / Tip */}
-            <div className="p-4 bg-slate-50 border-t">
+            <div className="shrink-0 p-4 bg-slate-50 border-t">
               <div className="flex items-start gap-3">
                 <div className="p-1.5 bg-indigo-50 rounded text-indigo-600">
                   <Plus className="w-3 h-3" />
