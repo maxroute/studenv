@@ -673,16 +673,17 @@ export function FloatingViewer({
       }}
       size={maximized ? { width: "100%", height: "100%" } : undefined}
       position={maximized ? { x: 0, y: 0 } : undefined}
-      minWidth={300}
-      minHeight={200}
+      minWidth={280}
+      minHeight={180}
       bounds="window"
+      cancel="button, input, textarea, select, a, [data-no-viewer-drag]"
       disableDragging={maximized}
       enableResizing={!maximized && !minimized}
       style={{
         display: minimized ? "none" : undefined,
         zIndex: currentZIndex,
       }}
-      className={`bg-white shadow-2xl rounded-lg border overflow-hidden flex flex-col pointer-events-auto ${
+      className={`workspace-floating-viewer bg-white shadow-2xl rounded-lg border overflow-hidden flex flex-col pointer-events-auto ${
         maximized ? "rounded-none! border-none!" : ""
       }`}
       dragHandleClassName="viewer-drag-handle"
