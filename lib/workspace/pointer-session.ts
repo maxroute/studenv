@@ -26,7 +26,14 @@ export function beginPointerSession(
   target: PointerSessionTarget,
   current: PointerSession | null,
 ): PointerSession | null {
-  if (current || !event.isPrimary || event.button !== 0) return null;
+  if (current) {
+    // Keep a second pointer from reaching the transform/pinch layer while
+    // another tool already owns the active gesture.
+    event.preventDefault();
+    event.stopPropagation();
+    return null;
+  }
+  if (!event.isPrimary || event.button !== 0) return null;
 
   try {
     target.setPointerCapture(event.pointerId);
