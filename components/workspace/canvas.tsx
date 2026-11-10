@@ -1390,7 +1390,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       data-workspace-canvas="true"
       data-workspace-tool={activeTool}
       style={{
-        cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
+        // Keep the active tool cursor on the canvas interaction boundary as
+        // well as the transformed world. This covers empty canvas space and
+        // avoids depending on the zoom/pan wrapper's inherited cursor.
+        cursor: isPanning
+          ? (isPanDragging ? "grabbing" : "grab")
+          : activeTool === "eraser"
+            ? "none"
+            : isDrawing || isShapeToolActive
+              ? "crosshair"
+              : isTextToolActive
+                ? "text"
+                : undefined,
         touchAction: "none",
       }}
       onPointerDownCapture={(e) => {
@@ -1504,7 +1515,21 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       }}
       onPointerMoveCapture={(e) => {
         const gesture = canvasGestureRef.current;
-        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        if (!gesture || gesture.pointerId !== e.pointerId) {
+          // The eraser preview is a hover cursor, not part of an erase gesture.
+          // Keep its world-space position current without starting or extending
+          // an erase session.
+          if (activeTool === "eraser" && e.pointerType === "mouse") {
+            // This handler is attached to the canvas boundary, so every
+            // bubbled move inside the workspace is a valid hover sample.
+            // Do not gate on the event target: transformed children and
+            // transparent overlays can change the target without changing
+            // the pointer's position relative to the canvas.
+            const world = screenToWorld(e.clientX, e.clientY);
+            setMousePos(world);
+          }
+          return;
+        }
         if (gesture.mode === "draw") {
           handleDrawPointerMove(e);
           return;
@@ -1694,7 +1719,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 data-workspace-interaction={isPanning ? "pan" : "select"}
                 data-pan-dragging={isPanDragging ? "true" : "false"}
                 style={{
-                  cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default",
+                  cursor: isPanning
+                    ? (isPanDragging ? "grabbing" : "grab")
+                    : activeTool === "eraser"
+                      ? "none"
+                      : isDrawing || isShapeToolActive
+                        ? "crosshair"
+                        : isTextToolActive
+                          ? "text"
+                          : "default",
                   backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
                   backgroundSize: "40px 40px",
                   touchAction: "none",
@@ -1986,7 +2019,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   canvasScale={viewport.zoom}
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
-                  interactive={!isPanning}
+                  interactive={activeTool === "select"}
                 />
               </div>
             </TransformComponent>
