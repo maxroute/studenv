@@ -184,6 +184,22 @@ export function StickyNode({
         }}
       >
 
+        {/* Dedicated drag grip remains available while the note text is being edited. */}
+        {isEditing && (
+          <div
+            aria-label="Move sticky note"
+            title="Drag to move note"
+            className="drag-handle absolute right-3 top-2 z-30 flex h-7 w-10 cursor-grab touch-none items-center justify-center rounded-md bg-black/5 text-slate-600/70 active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+          >
+            <span aria-hidden="true" className="flex gap-1">
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+            </span>
+          </div>
+        )}
+
         {/* Editable text */}
         {isEditing ? (
           <textarea
@@ -212,7 +228,7 @@ export function StickyNode({
           /* Display text */
           <div
             ref={displayRef}
-            className={`${patrickHand.className} relative z-10 h-full w-full overflow-hidden whitespace-pre-wrap break-words p-5 text-slate-800`}
+            className={`${patrickHand.className} drag-handle relative z-10 h-full w-full overflow-hidden whitespace-pre-wrap break-words p-5 text-slate-800 cursor-move`}
             style={textStyle}
           >
             {item.props.text || (

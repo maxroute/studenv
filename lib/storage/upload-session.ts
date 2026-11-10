@@ -14,10 +14,15 @@ export type UploadSession = {
 };
 
 function getSecret() {
-    const secret = process.env.NEXTAUTH_SECRET;
+    // Keep upload-session signing aligned with the application's NextAuth
+    // secret resolution. Some deployments configure JWT_SECRET as the
+    // canonical auth secret instead of NEXTAUTH_SECRET.
+    const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
 
     if (!secret || secret.length < 32) {
-        throw new Error("NEXTAUTH_SECRET must be configured with at least 32 characters.");
+        throw new Error(
+            "Authentication signing secret is missing or must contain at least 32 characters.",
+        );
     }
 
     return secret;

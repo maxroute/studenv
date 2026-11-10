@@ -94,6 +94,7 @@ export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
     endTimeMs: z.number().int().nonnegative().optional(),
     label: z.string().optional(),
     notes: z.string().optional(),
+    color: z.string().default("#F8E7A1"),
   }),
 });
 
@@ -116,6 +117,7 @@ export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
 const DrawingPointSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
+  pressure: z.number().finite().min(0).max(1).optional(),
 });
 
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
@@ -125,6 +127,7 @@ export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
     points: z.array(DrawingPointSchema).optional(),
+    outline: z.boolean().default(false),
   }),
 });
 
@@ -163,14 +166,6 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
-export const ConnectionSchema = z.object({
-  id: z.string().min(1),
-  fromId: z.string().min(1),
-  toId: z.string().min(1),
-  label: z.string().optional(),
-  color: z.string().optional(),
-});
-
 export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   TextNodeSchema,
   FreeTextNodeSchema,
@@ -188,12 +183,10 @@ export const WorkspaceSceneSchema = z.object({
   format: z.literal(WORKSPACE_SCENE_FORMAT),
   version: z.literal(WORKSPACE_SCENE_VERSION),
   items: z.array(WorkspaceNodeSchema),
-  connections: z.array(ConnectionSchema).default([]),
   workspaceAssetIds: z.array(z.string().min(1)).default([]),
   viewport: WorkspaceViewportSchema,
 });
 
-export type Connection = z.infer<typeof ConnectionSchema>;
 export type WorkspaceViewport = z.infer<typeof WorkspaceViewportSchema>;
 export type PdfCrop = z.infer<typeof PdfCropSchema>;
 export type TextNode = z.infer<typeof TextNodeSchema>;
@@ -282,7 +275,10 @@ function coercePointArray(value: unknown) {
         return null;
       }
 
-      return { x, y };
+      const pressure = typeof record.pressure === "number" && Number.isFinite(record.pressure)
+        ? Math.max(0, Math.min(1, record.pressure))
+        : undefined;
+      return { x, y, ...(pressure === undefined ? {} : { pressure }) };
     })
     .filter(Boolean) as Array<{ x: number; y: number }>;
 
@@ -424,6 +420,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
               : undefined,
           label: coerceOptionalString(props.label),
           notes: coerceOptionalString(props.notes),
+          color: coerceString(props.color, "#F8E7A1"),
         },
       }).success
         ? VideoAnchorNodeSchema.parse({
@@ -439,6 +436,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
                   : undefined,
               label: coerceOptionalString(props.label),
               notes: coerceOptionalString(props.notes),
+              color: coerceString(props.color, "#F8E7A1"),
             },
           })
         : null;
@@ -469,6 +467,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
           points: coercePointArray(props.points),
+          outline: props.outline === true,
         },
       });
     case "shape": {
@@ -520,12 +519,6 @@ export function parseWorkspaceScene(value: unknown): WorkspaceScene {
     ? record.items.map(parseWorkspaceNode).filter(Boolean)
     : [];
   
-  const connections = Array.isArray(record?.connections)
-    ? record.connections.map((c: any) => {
-        const p = ConnectionSchema.safeParse(c);
-        return p.success ? p.data : null;
-      }).filter(Boolean) as Connection[]
-    : [];
   const workspaceAssetIds = Array.isArray(record?.workspaceAssetIds)
     ? record.workspaceAssetIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
@@ -534,7 +527,6 @@ export function parseWorkspaceScene(value: unknown): WorkspaceScene {
     format: WORKSPACE_SCENE_FORMAT,
     version: WORKSPACE_SCENE_VERSION,
     items,
-    connections,
     workspaceAssetIds,
     viewport: coerceViewport(record?.viewport),
   });
@@ -553,20 +545,19 @@ export function parseWorkspaceSceneJson(sceneJson?: string | null): WorkspaceSce
 }
 
 export function createWorkspaceScene(
-  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "connections" | "workspaceAssetIds">>,
+  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "workspaceAssetIds">>,
 ) {
   return WorkspaceSceneSchema.parse({
     format: WORKSPACE_SCENE_FORMAT,
     version: WORKSPACE_SCENE_VERSION,
     items: input?.items ?? [],
-    connections: input?.connections ?? [],
     workspaceAssetIds: input?.workspaceAssetIds ?? [],
     viewport: input?.viewport ?? DEFAULT_WORKSPACE_VIEWPORT,
   });
 }
 
 export function serializeWorkspaceScene(
-  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "connections" | "workspaceAssetIds">>,
+  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "workspaceAssetIds">>,
 ) {
   return JSON.stringify(createWorkspaceScene(input));
 }

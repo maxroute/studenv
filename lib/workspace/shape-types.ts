@@ -63,7 +63,7 @@ export function getDefaultShapeStyle(kind: ShapeKind): ShapeStyle {
 
   return {
     fill: {
-      type: isLine ? "transparent" : "solid",
+      type: "transparent",
       color: isLine ? "transparent" : "#e0e7ff", // indigo-100
     },
     stroke: {

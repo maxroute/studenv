@@ -7,7 +7,6 @@ import {
   Hand,
   ImagePlus,
   StickyNote,
-  Link2,
   Lock,
   Maximize2,
   Minus,
@@ -25,9 +24,9 @@ import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
 import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
-import { ConnectionsLayer } from "./ConnectionsLayer";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
+import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -38,24 +37,30 @@ import {
 } from "@/lib/utils/media-assets";
 import { ImageNode } from "./items/ImageNode";
 import { ShapeNode } from "./items/ShapeNode";
-import { ShapeCreationOverlay } from "./shapes/ShapeCreationOverlay";
-import { ShapeToolButton } from "./shapes/ShapeToolButton";
+import { ShapeCreationOverlay, type ShapePointerHandlers } from "./shapes/ShapeCreationOverlay";
+import { ShapeToolButton, ShapeToolIcon } from "./shapes/ShapeToolButton";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
-import { SelectionBox } from "./shapes/ShapeInteractionLayer";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import {
+  beginPointerSession,
+  clearPointerSession,
+  endPointerSession,
+  ownsPointerSession,
+  type PointerSession,
+} from "@/lib/workspace/pointer-session";
 
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 
 
-type CanvasPoint = { x: number; y: number };
+type CanvasPoint = { x: number; y: number; pressure?: number };
 type HistoryEntry = StudioItem[];
 
 function ZoomControls({ utils }: { utils: any }) {
@@ -127,58 +132,32 @@ function buildStrokePath(points: CanvasPoint[]) {
   return `M ${points[0].x} ${points[0].y} ${points.slice(1).map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
 }
 
-function resamplePolyline(points: CanvasPoint[], maxStep = 2): CanvasPoint[] {
-  if (points.length <= 1) return points;
-
-  const sampled: CanvasPoint[] = [points[0]];
-
-  for (let i = 1; i < points.length; i += 1) {
-    const start = points[i - 1];
-    const end = points[i];
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance === 0) {
-      continue;
-    }
-
-    const segments = Math.max(1, Math.ceil(distance / maxStep));
-    for (let step = 1; step <= segments; step += 1) {
-      const t = step / segments;
-      sampled.push({
-        x: start.x + dx * t,
-        y: start.y + dy * t,
-      });
-    }
-  }
-
-  return sampled;
-}
 
 function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
-  const normalizedPoints = resamplePolyline(points, Math.max(1.5, strokeWidth / 2));
-  const padding = Math.ceil(strokeWidth / 2) + 2;
-  const minX = Math.min(...normalizedPoints.map((point) => point.x));
-  const minY = Math.min(...normalizedPoints.map((point) => point.y));
-  const maxX = Math.max(...normalizedPoints.map((point) => point.x));
-  const maxY = Math.max(...normalizedPoints.map((point) => point.y));
-  const x = minX - padding;
-  const y = minY - padding;
+  // Persist the exact same sample sequence used by the live preview. Re-sampling
+  // here changes the pressure curve at pen-up, making the saved stroke look
+  // different from what the user just drew.
+  const normalizedPoints = points;
+  const outline = createStrokeOutline(normalizedPoints, strokeWidth);
+  const bounds = getStrokeBounds(outline);
+  const padding = 2;
+  const x = bounds.minX - padding;
+  const y = bounds.minY - padding;
   const localPoints = normalizedPoints.map((point) => ({
     x: point.x - x,
     y: point.y - y,
+    ...(point.pressure === undefined ? {} : { pressure: point.pressure }),
   }));
-
+  const localOutline = outline.map((point) => ({ x: point.x - x, y: point.y - y }));
   return {
-    x,
-    y,
-    w: Math.max(maxX - minX + padding * 2, 1),
-    h: Math.max(maxY - minY + padding * 2, 1),
-    d: buildStrokePath(localPoints),
+    x, y,
+    w: Math.max(bounds.maxX - bounds.minX + padding * 2, 1),
+    h: Math.max(bounds.maxY - bounds.minY + padding * 2, 1),
+    d: outlineToPath(localOutline),
     points: localPoints,
     color,
     strokeWidth,
+    outline: true,
   };
 }
 
@@ -201,7 +180,6 @@ type WorkspaceTool =
   | "eraser"
   | "text"
   | "sticky"
-  | "connect"
   | ShapeKind;
 
 interface StudioCanvasProps {
@@ -209,7 +187,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { items, viewport, workspaceAssetIds, addItem, updateItem, updateItems, updateViewport, syncWithServer, addConnection, registerWorkspaceAsset } =
+  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -217,10 +195,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [isTextToolLocked, setIsTextToolLocked] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("pen");
   const [activeShapeKind, setActiveShapeKind] = useState<ShapeKind>("rectangle");
+  const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+
 
   // Derived state booleans to maintain backward compatibility
   const isPanning = activeTool === "pan";
-  const isConnecting = activeTool === "connect";
+  const [isPanDragging, setIsPanDragging] = useState(false);
+
+
+  useEffect(() => {
+    if (!isPanDragging) return;
+    const finishPanGesture = () => setIsPanDragging(false);
+    window.addEventListener("pointerup", finishPanGesture);
+    window.addEventListener("pointercancel", finishPanGesture);
+    return () => {
+      window.removeEventListener("pointerup", finishPanGesture);
+      window.removeEventListener("pointercancel", finishPanGesture);
+    };
+  }, [isPanDragging]);
+
   const isDrawing = activeTool === "pen" || activeTool === "highlighter" || activeTool === "eraser";
   const isTextToolActive = activeTool === "text";
   const isStickyToolActive = activeTool === "sticky";
@@ -235,14 +229,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       setActiveTool("pan");
     } else {
       setActiveTool((prev) => (prev === "pan" ? "select" : prev));
-    }
-  }, []);
-
-  const setIsConnecting = useCallback((val: boolean) => {
-    if (val) {
-      setActiveTool("connect");
-    } else {
-      setActiveTool((prev) => (prev === "connect" ? "select" : prev));
     }
   }, []);
 
@@ -282,7 +268,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedFreeTextId(null);
     setEditingFreeTextId(null);
     setSelectedDrawingId(null);
-    setConnectingFromId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, []);
@@ -296,7 +283,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [stickyColor, setStickyColor] = useState<string>(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPanning) return;
+    setHoveredItemId(null);
+    setIsPanDragging(false);
+  }, [isPanning]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const [selectionScreenBox, setSelectionScreenBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const shapePointerHandlersRef = useRef<ShapePointerHandlers | null>(null);
+  const canvasGestureRef = useRef<{
+    pointerId: number;
+    mode: "pan" | "select" | "dismiss-text" | "draw" | "text" | "shape" | "sticky";
+    startClientX: number;
+    startClientY: number;
+    startWorldX: number;
+    startWorldY: number;
+    startTransformX: number;
+    startTransformY: number;
+    scale: number;
+  } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
@@ -323,13 +329,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       setActiveShapeKind(kind);
     }
     setActiveTool(targetKind);
+    useSelectionStore.getState().deselectAll();
     setIsTextToolLocked(false);
     setSelectedFreeTextId(null);
     setEditingFreeTextId(null);
     setSelectedDrawingId(null);
     setSelectedImageId(null);
     setSelectedShapeId(null);
-    setConnectingFromId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, [activeShapeKind]);
@@ -346,10 +354,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     onActivateShapeTool: handleActivateShapeShortcut,
   });
 
-  const [connectingFromId, setConnectingFromId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [currentPath, setCurrentPath] = useState<CanvasPoint[]>([]);
   const [eraserPath, setEraserPath] = useState<CanvasPoint[]>([]);
+  // Refs are the authoritative pointer samples. React state is only the preview;
+  // pointer-up must never depend on a render having committed the latest move.
+  const currentPathRef = useRef<CanvasPoint[]>([]);
+  const eraserPathRef = useRef<CanvasPoint[]>([]);
   const [drawColor, setDrawColor] = useState("#1e1e1e");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
@@ -360,9 +371,97 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
+  const hasAppliedInitialFitRef = useRef(false);
+  const fitWorkspaceToViewport = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    const instance = transformRef.current?.instance;
+    if (!wrapper || !instance || items.length === 0) return;
+
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const bounds = items.reduce(
+      (acc, item) => {
+        const radians = ((item.rotation ?? 0) * Math.PI) / 180;
+        const rotatedWidth = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
+        const rotatedHeight = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
+        const centerX = item.x + item.w / 2;
+        const centerY = item.y + item.h / 2;
+        const left = centerX - rotatedWidth / 2;
+        const top = centerY - rotatedHeight / 2;
+        return {
+          left: Math.min(acc.left, left),
+          top: Math.min(acc.top, top),
+          right: Math.max(acc.right, left + rotatedWidth),
+          bottom: Math.max(acc.bottom, top + rotatedHeight),
+        };
+      },
+      { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
+    );
+
+    const contentWidth = Math.max(1, bounds.right - bounds.left);
+    const contentHeight = Math.max(1, bounds.bottom - bounds.top);
+    const padding = Math.min(48, Math.max(20, Math.min(rect.width, rect.height) * 0.06));
+    const scale = clampScale(Math.min((rect.width - padding * 2) / contentWidth, (rect.height - padding * 2) / contentHeight, 1));
+    const positionX = (rect.width - contentWidth * scale) / 2 - bounds.left * scale;
+    const positionY = (rect.height - contentHeight * scale) / 2 - bounds.top * scale;
+
+    transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
+  }, [items]);
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
   const outsideFreeTextDismissRef = useRef(false);
+  const drawPointerSessionRef = useRef<PointerSession | null>(null);
+  const textPointerSessionRef = useRef<PointerSession | null>(null);
+  const stickyPointerSessionRef = useRef<PointerSession | null>(null);
+
+  // If the user changes tools mid-gesture, release the old creation tool's
+  // capture and discard its unfinished preview instead of leaving a stale
+  // pointer session that blocks the next gesture.
+  useEffect(() => {
+    if (isDrawing || !drawPointerSessionRef.current) return;
+    const session = drawPointerSessionRef.current;
+    drawPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
+    setCurrentPath([]);
+    setEraserPath([]);
+  }, [isDrawing]);
+
+  useEffect(() => {
+    if (isTextToolActive || !textPointerSessionRef.current) return;
+    const session = textPointerSessionRef.current;
+    textPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+  }, [isTextToolActive]);
+
+  // Fit only a fresh/default workspace view. A saved non-default viewport is
+  // respected, and this ref prevents resize/content updates from refitting it.
+  useEffect(() => {
+    hasAppliedInitialFitRef.current = false;
+  }, [_workspaceId]);
+
+  useEffect(() => {
+    if (isLoading || workspaceId !== _workspaceId || hasAppliedInitialFitRef.current) return;
+
+    // Mark an intentionally empty workspace as initialized too, so adding its
+    // first object later does not unexpectedly move the user's canvas.
+    if (items.length === 0) {
+      hasAppliedInitialFitRef.current = true;
+      return;
+    }
+
+    const isDefaultViewport = viewport.x === 0 && viewport.y === 0 && viewport.zoom === 1;
+    if (!isDefaultViewport) {
+      hasAppliedInitialFitRef.current = true;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      fitWorkspaceToViewport();
+      hasAppliedInitialFitRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [items, isLoading, workspaceId, _workspaceId, viewport.x, viewport.y, viewport.zoom, fitWorkspaceToViewport]);
 
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
@@ -557,6 +656,50 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     },
     [importFileToWorkspace, screenToWorld],
   );
+
+  useEffect(() => {
+    const handleTouchAssetDrop = async (event: Event) => {
+      const detail = (event as CustomEvent<{
+        asset: { id: string; title: string; kind: string };
+        clientX: number;
+        clientY: number;
+      }>).detail;
+      if (!detail?.asset?.id) return;
+
+      const { x, y } = screenToWorld(detail.clientX, detail.clientY);
+      const asset = detail.asset;
+      registerWorkspaceAsset(asset.id);
+
+      if (asset.kind === "image") {
+        addItem("image", {
+          assetId: asset.id,
+          src: `/api/assets/${asset.id}/content`,
+          alt: asset.title,
+          w: 360,
+          h: 240,
+        }, { x, y });
+        toast.success("Image added to canvas");
+        return;
+      }
+
+      const viewerType = getViewerTypeForAssetKind(asset.kind);
+      if (!viewerType) {
+        toast.error("That asset can't be opened from the canvas yet");
+        return;
+      }
+
+      try {
+        await useViewerStore.getState().open(asset.id, viewerType, 1);
+        toast.success(`${getAssetKindLabel(asset.kind)} opened`);
+      } catch (error) {
+        console.error("Touch asset drop failed", error);
+        toast.error("Couldn't add that asset to the workspace");
+      }
+    };
+
+    window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+    return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
+  }, [addItem, registerWorkspaceAsset, screenToWorld]);
 
   useEffect(() => {
     if (syncTimerRef.current) {
@@ -821,86 +964,44 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const eraseAtPath = useCallback(
     (path: CanvasPoint[]) => {
       if (path.length === 0) return;
-
-      const eraserSamples = resamplePolyline(path, 2);
-      const radiusSquared = eraserRadius * eraserRadius;
-      const nextItems = items.flatMap((item) => {
-        if (item.type !== "drawing") {
-          return [item];
+      const eraserSamples = resampleStrokePoints(path, 3);
+      const nextItems = items.filter((item) => {
+        if (item.type === "shape") {
+          const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
+          const cos = Math.cos(rotation), sin = Math.sin(rotation);
+          const centerX = item.x + item.w / 2, centerY = item.y + item.h / 2;
+          return !eraserSamples.some((point) => {
+            const dx = point.x - centerX, dy = point.y - centerY;
+            const localX = dx * cos + dy * sin + item.w / 2;
+            const localY = -dx * sin + dy * cos + item.h / 2;
+            return localX >= -eraserRadius && localX <= item.w + eraserRadius &&
+              localY >= -eraserRadius && localY <= item.h + eraserRadius;
+          });
         }
-
+        if (item.type !== "drawing") return true;
         const localPoints = item.props.points;
-        if (!localPoints || localPoints.length < 2) {
-          const touchedLegacyStroke = path.some((pt) => {
-            return (
-              pt.x >= item.x - eraserRadius &&
-              pt.x <= item.x + item.w + eraserRadius &&
-              pt.y >= item.y - eraserRadius &&
-              pt.y <= item.y + item.h + eraserRadius
-            );
-          });
-
-          return touchedLegacyStroke ? [] : [item];
+        if (!localPoints?.length) {
+          // Backward-compatible fallback for old imported drawings that only
+          // contain an SVG path and no source samples.
+          return !eraserSamples.some((point) =>
+            point.x >= item.x - eraserRadius && point.x <= item.x + item.w + eraserRadius &&
+            point.y >= item.y - eraserRadius && point.y <= item.y + item.h + eraserRadius
+          );
         }
-
-        const worldPoints = resamplePolyline(
-          localPoints.map((point) => ({
-            x: item.x + point.x,
-            y: item.y + point.y,
-          })),
-          2,
-        );
-
-        const keptSegments: CanvasPoint[][] = [];
-        let activeSegment: CanvasPoint[] = [];
-        let touched = false;
-
-        for (const point of worldPoints) {
-          const shouldErase = eraserSamples.some((eraserPoint) => {
-            const dx = point.x - eraserPoint.x;
-            const dy = point.y - eraserPoint.y;
-            return dx * dx + dy * dy <= radiusSquared;
-          });
-
-          if (shouldErase) {
-            touched = true;
-            if (activeSegment.length > 1) {
-              keptSegments.push(activeSegment);
-            }
-            activeSegment = [];
-            continue;
-          }
-
-          activeSegment.push(point);
-        }
-
-        if (activeSegment.length > 1) {
-          keptSegments.push(activeSegment);
-        }
-
-        if (!touched) {
-          return [item];
-        }
-
-        return keptSegments
-          .map((segment) => {
-            const drawing = createDrawingFromWorldPoints(segment, item.props.color, item.props.strokeWidth);
-            return createWorkspaceItem("drawing", drawing, {
-              x: drawing.x,
-              y: drawing.y,
-              zIndex: item.zIndex,
-            });
-          })
-          .filter(Boolean) as StudioItem[];
+        const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(rotation), sin = Math.sin(rotation);
+        const centerX = item.w / 2, centerY = item.h / 2;
+        const worldPoints = localPoints.map((point) => {
+          const dx = point.x - centerX, dy = point.y - centerY;
+          return {
+            x: item.x + centerX + dx * cos - dy * sin,
+            y: item.y + centerY + dx * sin + dy * cos,
+            pressure: point.pressure,
+          };
+        });
+        return !strokeIntersectsPolyline(worldPoints, eraserSamples, eraserRadius, item.props.strokeWidth);
       });
-
-      const didChange =
-        nextItems.length !== items.length ||
-        nextItems.some((item, index) => items[index]?.id !== item.id);
-
-      if (didChange) {
-        commitDrawingItems(nextItems);
-      }
+      if (nextItems.length !== items.length) commitDrawingItems(nextItems);
     },
     [commitDrawingItems, eraserRadius, items],
   );
@@ -935,47 +1036,93 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const handleDrawPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      e.stopPropagation();
+      const session = beginPointerSession(e, e.currentTarget, drawPointerSessionRef.current);
+      if (!session) return;
+      drawPointerSessionRef.current = session;
+
       const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
+      const point = { x, y, pressure };
       setMousePos({ x, y });
 
       if (drawTool === "eraser") {
-        setEraserPath([{ x, y }]);
+        eraserPathRef.current = [point];
+        setEraserPath([point]);
       } else {
-        setCurrentPath([{ x, y }]);
+        currentPathRef.current = [point];
+        setCurrentPath([point]);
       }
-
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
     [drawTool, screenToWorld],
   );
 
   const handleDrawPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!ownsPointerSession(drawPointerSessionRef.current, e)) return;
       e.stopPropagation();
-      const { x, y } = screenToWorld(e.clientX, e.clientY);
-      setMousePos({ x, y });
+      e.preventDefault();
+      const nativeEvent = e.nativeEvent;
+      const coalesced = typeof nativeEvent.getCoalescedEvents === "function"
+        ? nativeEvent.getCoalescedEvents()
+        : [];
+      const samples = coalesced.length ? coalesced : [nativeEvent];
+      const points = samples.map((sample) => {
+        const world = screenToWorld(sample.clientX, sample.clientY);
+        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? undefined : sample.pressure;
+        return { ...world, pressure };
+      });
+      const point = points[points.length - 1];
+      if (!point) return;
+      setMousePos({ x: point.x, y: point.y });
 
-      if (drawTool === "pen" && currentPath.length > 0) {
-        setCurrentPath((prev) => [...prev, { x, y }]);
+      if (drawTool === "pen" && currentPathRef.current.length > 0) {
+        const nextPath = [...currentPathRef.current, ...points];
+        currentPathRef.current = nextPath;
+        setCurrentPath(nextPath);
       }
-
-      if (drawTool === "eraser" && eraserPath.length > 0) {
-        setEraserPath((prev) => [...prev, { x, y }]);
+      if (drawTool === "eraser" && eraserPathRef.current.length > 0) {
+        const nextPath = [...eraserPathRef.current, ...points];
+        eraserPathRef.current = nextPath;
+        setEraserPath(nextPath);
       }
     },
-    [currentPath.length, drawTool, eraserPath.length, screenToWorld],
+    [drawTool, screenToWorld],
   );
 
   const handleDrawPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      const session = drawPointerSessionRef.current;
+      if (!ownsPointerSession(session, e)) return;
+      drawPointerSessionRef.current = endPointerSession(session, e);
       e.stopPropagation();
+      e.preventDefault();
 
-      if (drawTool === "pen" && currentPath.length > 1) {
-        const { x, y } = screenToWorld(e.clientX, e.clientY);
-        const lastPoint = currentPath[currentPath.length - 1];
-        const points = lastPoint && lastPoint.x === x && lastPoint.y === y ? currentPath : [...currentPath, { x, y }];
-        const drawing = createDrawingFromWorldPoints(points, drawColor, drawStrokeWidth);
+      const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const penSamples = currentPathRef.current;
+      const eraserSamples = eraserPathRef.current;
+      const lastPenPoint = penSamples[penSamples.length - 1];
+      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
+      // Pen-up reports zero pressure on many browsers. Preserve the last
+      // actual sample so final geometry matches the pressure-sensitive preview.
+      const pressure = e.pointerType === "mouse"
+        ? undefined
+        : e.pressure > 0
+          ? e.pressure
+          : drawTool === "pen"
+            ? lastPenPoint?.pressure
+            : lastEraserPoint?.pressure;
+      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
+      const completedPenPath =
+        penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
+          ? [...penSamples, finalPoint]
+          : penSamples;
+      const completedEraserPath =
+        eraserSamples.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
+          ? [...eraserSamples, finalPoint]
+          : eraserSamples;
+
+      if (drawTool === "pen" && completedPenPath.length > 0) {
+        const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
           y: drawing.y,
@@ -986,19 +1133,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           commitDrawingItems([...items, newItem]);
         }
 
-        setCurrentPath([]);
       }
 
-      if (drawTool === "eraser" && eraserPath.length > 0) {
-        eraseAtPath(eraserPath);
-        setEraserPath([]);
+      if (drawTool === "eraser" && completedEraserPath.length > 0) {
+        eraseAtPath(completedEraserPath);
       }
 
-      if (drawTool === "pen" && currentPath.length <= 1) {
-        setCurrentPath([]);
-      }
+      // Clear both sources only after the owning gesture has been finalized.
+      currentPathRef.current = [];
+      eraserPathRef.current = [];
+      setCurrentPath([]);
+      setEraserPath([]);
     },
-    [commitDrawingItems, currentPath, drawColor, drawStrokeWidth, drawTool, eraserPath, eraseAtPath, items, screenToWorld],
+    [commitDrawingItems, drawColor, drawStrokeWidth, drawTool, eraseAtPath, items, screenToWorld],
   );
 
   const handleTextPointerUp = useCallback(
@@ -1086,9 +1233,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   );
 
   const handleFreeTextSelect = useCallback((itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    const groupId = item ? (item.props as { groupId?: string }).groupId : undefined;
+    const groupIds = groupId
+      ? items
+          .filter((candidate) => (candidate.props as { groupId?: string }).groupId === groupId)
+          .map((candidate) => candidate.id)
+      : [itemId];
+    const selection = useSelectionStore.getState();
+    if (!selection.selectedIds.includes(itemId)) {
+      selection.clearAndSelectIds(groupIds);
+    }
     setSelectedFreeTextId(itemId);
     setEditingFreeTextId(null);
-  }, []);
+  }, [items]);
 
   const startFreeTextEditing = useCallback((itemId: string) => {
     setIsTextToolActive(true);
@@ -1101,9 +1259,245 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       ref={wrapperRef}
       className="w-full h-full relative bg-[#f8fafc] overflow-visible"
       data-workspace-canvas="true"
+      data-workspace-tool={activeTool}
       style={{
         cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
         touchAction: "none",
+      }}
+      onPointerDownCapture={(e) => {
+        if (!e.isPrimary || e.button !== 0 || canvasGestureRef.current) return;
+        const target = e.target instanceof Element ? e.target : null;
+        const isControl = !!target?.closest(
+          'button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-canvas-gesture]'
+        );
+        if (isControl) return;
+
+        const isCanvasTool = activeTool === "select" || activeTool === "pan" ||
+          isDrawing || isTextToolActive || isShapeToolActive || isStickyToolActive;
+        if (!isCanvasTool) return;
+        if ((activeTool === "select" || isStickyToolActive) && target?.closest('[data-workspace-item="true"]')) return;
+
+        if (activeTool === "select" && editingStickyId) {
+          // Dismiss sticky editing and clear the shared selection in this same
+          // outside-pointer interaction. The textarea's blur handler only ends
+          // editing; it must not leave the sticky selected for an extra click.
+          const activeElement = document.activeElement;
+          if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
+          setEditingStickyId(null);
+          setSelectedStickyId(null);
+          useSelectionStore.getState().deselectAll();
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
+        const rect = wrapperRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const world = screenToWorld(e.clientX, e.clientY);
+        const transformState = transformRef.current?.instance?.transformState;
+        const mode: "pan" | "select" | "dismiss-text" | "draw" | "text" | "shape" | "sticky" =
+          editingFreeTextId && !target?.closest("[data-free-text-root]")
+            ? "dismiss-text"
+            : isPanning ? "pan"
+            : isDrawing ? "draw"
+            : isTextToolActive ? "text"
+            : isShapeToolActive ? "shape"
+            : isStickyToolActive ? "sticky"
+            : "select";
+
+        canvasGestureRef.current = {
+          pointerId: e.pointerId,
+          mode,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          startWorldX: world.x,
+          startWorldY: world.y,
+          startTransformX: transformState?.positionX ?? 0,
+          startTransformY: transformState?.positionY ?? 0,
+          scale: transformState?.scale ?? viewport.zoom ?? 1,
+        };
+
+        if (mode === "select") {
+          setContextMenu(null);
+          setSelectedStickyId(null);
+          setEditingStickyId(null);
+          setSelectedFreeTextId(null);
+          setSelectedDrawingId(null);
+          setSelectedImageId(null);
+          useSelectionStore.getState().deselectAll();
+          setSelectionBox({ startX: world.x, startY: world.y, currentX: world.x, currentY: world.y });
+          setSelectionScreenBox({
+            startX: e.clientX - rect.left,
+            startY: e.clientY - rect.top,
+            currentX: e.clientX - rect.left,
+            currentY: e.clientY - rect.top,
+          });
+        } else if (mode === "pan") {
+          setIsPanDragging(true);
+        } else if (mode === "draw") {
+          handleDrawPointerDown(e);
+        } else if (mode === "text") {
+          const session = beginPointerSession(e, e.currentTarget, textPointerSessionRef.current);
+          if (!session) {
+            canvasGestureRef.current = null;
+            return;
+          }
+          textPointerSessionRef.current = session;
+        } else if (mode === "shape") {
+          shapePointerHandlersRef.current?.down(e);
+        } else if (mode === "sticky") {
+          const session = beginPointerSession(e, e.currentTarget, stickyPointerSessionRef.current);
+          if (!session) {
+            canvasGestureRef.current = null;
+            return;
+          }
+          stickyPointerSessionRef.current = session;
+          const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? "item-" + crypto.randomUUID()
+            : "item-" + Math.random().toString(36).slice(2, 11);
+          const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
+            id,
+            x: world.x,
+            y: world.y,
+            zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
+          });
+          if (note) updateItems([...items, note]);
+          setSelectedStickyId(id);
+          setEditingStickyId(id);
+          setActiveTool("select");
+        } else {
+          pendingFreeTextDismissPointerRef.current = e.pointerId;
+        }
+
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onPointerMoveCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        if (gesture.mode === "draw") {
+          handleDrawPointerMove(e);
+          return;
+        }
+        if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.move(e);
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (gesture.mode === "dismiss-text" || gesture.mode === "text" || gesture.mode === "sticky") return;
+        if (gesture.mode === "pan") {
+          transformRef.current?.setTransform(
+            gesture.startTransformX + (e.clientX - gesture.startClientX),
+            gesture.startTransformY + (e.clientY - gesture.startClientY),
+            gesture.scale,
+            0,
+          );
+          return;
+        }
+
+        const world = screenToWorld(e.clientX, e.clientY);
+        const rect = wrapperRef.current?.getBoundingClientRect();
+        setSelectionBox((prev) => prev ? { ...prev, currentX: world.x, currentY: world.y } : null);
+        if (rect) {
+          const sx = e.clientX - rect.left;
+          const sy = e.clientY - rect.top;
+          setSelectionScreenBox((prev) => prev ? { ...prev, currentX: sx, currentY: sy } : null);
+        }
+        const x = Math.min(gesture.startWorldX, world.x);
+        const y = Math.min(gesture.startWorldY, world.y);
+        const w = Math.abs(gesture.startWorldX - world.x);
+        const h = Math.abs(gesture.startWorldY - world.y);
+        const collidingIds = items
+          .filter((item) => isIntersecting(
+            { x: item.x, y: item.y, w: item.w, h: item.h },
+            { x, y, w, h },
+          ))
+          .map((item) => item.id);
+        useSelectionStore.getState().clearAndSelectIds(collidingIds);
+      }}
+      onPointerUpCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        if (gesture.mode === "draw") {
+          handleDrawPointerUp(e);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
+          handleTextPointerUp(e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.up(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
+        } else if (gesture.mode === "select") {
+          setSelectionBox(null);
+          setSelectionScreenBox(null);
+        } else if (gesture.mode === "pan") {
+          setIsPanDragging(false);
+        } else {
+          pendingFreeTextDismissPointerRef.current = null;
+          e.preventDefault();
+          e.stopPropagation();
+          outsideFreeTextDismissRef.current = true;
+          const activeElement = document.activeElement;
+          if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
+          outsideFreeTextDismissRef.current = false;
+          setEditingFreeTextId(null);
+          setSelectedFreeTextId(null);
+          if (!isTextToolLocked) setIsTextToolActive(false);
+        }
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancelCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        if (gesture.mode === "draw") {
+          // Browsers can interrupt a captured pointer (for example when the
+          // OS takes over input). Treat the last delivered sample as the end
+          // of the stroke instead of throwing away a preview the user saw.
+          // The gesture is cleared above, so a subsequent lost-capture event
+          // cannot commit the same stroke twice.
+          handleDrawPointerUp(e);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.cancel(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
+        }
+        setSelectionBox(null);
+        setSelectionScreenBox(null);
+        setIsPanDragging(false);
+        if (pendingFreeTextDismissPointerRef.current === e.pointerId) pendingFreeTextDismissPointerRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onLostPointerCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        if (gesture.mode === "draw") {
+          // Unexpected capture loss must use the same idempotent finalizer as
+          // pointerup. A real pointerup clears canvasGestureRef first, so this
+          // branch only handles an interrupted gesture.
+          handleDrawPointerUp(e);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = clearPointerSession(session, e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.lostCapture(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = clearPointerSession(session, e);
+        }
+        setSelectionBox(null);
+        setSelectionScreenBox(null);
+        setIsPanDragging(false);
       }}
     >
       <svg className="absolute w-0 h-0 pointer-events-none" style={{ position: "absolute", width: 0, height: 0, visibility: "hidden" }}>
@@ -1145,14 +1539,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         smooth
         doubleClick={{ disabled: true }}
         panning={{
-          disabled: isDrawing,
+          // All pan gestures are routed through the canvas Pointer Events controller.
+          disabled: true,
           wheelPanning: true,
-          allowLeftClickPan: isPanning,
-          // A text item's drag handle owns single-touch gestures. This keeps
-          // the canvas from starting a pan before the text can select/edit/move.
-          excluded: ["drag-handle"],
+          allowLeftClickPan: false,
+          excluded: [],
         }}
-        pinch={{ disabled: isDrawing }}
+        pinch={{ disabled: activeTool === "select" || isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
           wheelDisabled: true,
@@ -1169,189 +1562,39 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             <TransformComponent wrapperClass="!w-full !h-full">
               <div
                 className="relative w-[10000px] h-[10000px]"
+                data-workspace-interaction={isPanning ? "pan" : "select"}
+                data-pan-dragging={isPanDragging ? "true" : "false"}
+                style={{
+                  cursor: isPanning ? (isPanDragging ? "grabbing" : "grab") : "default",
+                  backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
+                  backgroundSize: "40px 40px",
+                  touchAction: "none",
+                }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
-                onPointerDownCapture={(e) => {
-                  // Keep the editor mounted for the entire outside gesture.
-                  // Blurring on pointer-down remounts the Rnd drag handle under
-                  // the same gesture, which can interpret the press as a drag.
-                  if (
-                    editingFreeTextId &&
-                    !(e.target instanceof Element &&
-                      e.target.closest("[data-free-text-root]"))
-                  ) {
-                    pendingFreeTextDismissPointerRef.current = e.pointerId;
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }
-                }}
-                onPointerUpCapture={(e) => {
-                  if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
-                    return;
-                  }
-
-                  pendingFreeTextDismissPointerRef.current = null;
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  // Commit only after the outside gesture is fully consumed.
-                  // The textarea's onBlur also completes editing. Mark this
-                  // specific completion as an outside dismissal so its callback
-                  // does not re-select the text item.
-                  outsideFreeTextDismissRef.current = true;
-                  const activeElement = document.activeElement;
-                  if (activeElement instanceof HTMLTextAreaElement) {
-                    activeElement.blur();
-                  }
-                  outsideFreeTextDismissRef.current = false;
-
-                  setEditingFreeTextId(null);
-                  setSelectedFreeTextId(null);
-                  if (!isTextToolLocked) {
-                    setIsTextToolActive(false);
-                  }
-                }}
-                onPointerCancelCapture={(e) => {
-                  if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
-                    pendingFreeTextDismissPointerRef.current = null;
-                  }
-                }}
-                onPointerDown={(e) => {
-                  setContextMenu(null);
-                  if (e.target !== e.currentTarget || isDrawing || isConnecting) {
-                    return;
-                  }
-
-                  if (editingStickyId) {
-                    const activeElement = document.activeElement;
-
-                    if (activeElement instanceof HTMLTextAreaElement) {
-                      activeElement.blur();
-                    } else {
-                      setEditingStickyId(null);
-                    }
-
-                    // Exit editing and deselect the sticky note in the same click.
-                    setSelectedStickyId(null);
-                    return;
-                  }
-
-                  if (isStickyToolActive) {
-                    const { x, y } = screenToWorld(e.clientX, e.clientY);
-                    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                      ? `item-${crypto.randomUUID()}`
-                      : `item-${Math.random().toString(36).slice(2, 11)}`;
-                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
-                      id, x, y,
-                      zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
-                    });
-                    if (note) updateItems([...items, note]);
-                    setSelectedStickyId(id);
-                    setEditingStickyId(id);
-                    setActiveTool("select");
-                    return;
-                  }
-
-                  if (isTextToolActive || isShapeToolActive || isPanning) {
-                    return;
-                  }
-
-                  setSelectedStickyId(null);
-                  setEditingStickyId(null);
-                  setSelectedFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedImageId(null);
-
-                  // Selection box start
-                  useSelectionStore.getState().deselectAll();
-                  const { x, y } = screenToWorld(e.clientX, e.clientY);
-                  setSelectionBox({
-                    startX: x,
-                    startY: y,
-                    currentX: x,
-                    currentY: y,
-                  });
-                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                }}
-                onPointerMove={(e) => {
-                  if (selectionBox) {
-                    e.stopPropagation();
-                    const { x, y } = screenToWorld(e.clientX, e.clientY);
-                    setSelectionBox((prev) => (prev ? { ...prev, currentX: x, currentY: y } : null));
-
-                    const rectX = Math.min(selectionBox.startX, x);
-                    const rectY = Math.min(selectionBox.startY, y);
-                    const rectW = Math.abs(selectionBox.startX - x);
-                    const rectH = Math.abs(selectionBox.startY - y);
-
-                    const collidingIds = items
-                      .filter((item) => {
-                        const bounds = { x: item.x, y: item.y, w: item.w, h: item.h };
-                        const rect = { x: rectX, y: rectY, w: rectW, h: rectH };
-                        return isIntersecting(bounds, rect);
-                      })
-                      .map((item) => item.id);
-
-                    useSelectionStore.getState().clearAndSelectIds(collidingIds);
-                  }
-                }}
-                onPointerUp={(e) => {
-                  if (selectionBox) {
-                    e.stopPropagation();
-                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                    setSelectionBox(null);
-                  }
-                }}
                 onDoubleClick={(e) => {
                   if (e.target === e.currentTarget && !isDrawing) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     addItem("text", { text: "" }, { x, y });
                   }
                 }}
-                style={{
-                  backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
-                  backgroundSize: "40px 40px",
-                  touchAction: "none",
-                }}
+                
               >
-                {selectionBox && (
-                  <SelectionBox
-                    x={Math.min(selectionBox.startX, selectionBox.currentX)}
-                    y={Math.min(selectionBox.startY, selectionBox.currentY)}
-                    w={Math.abs(selectionBox.startX - selectionBox.currentX)}
-                    h={Math.abs(selectionBox.startY - selectionBox.currentY)}
-                  />
-                )}
-
-                <ConnectionsLayer />
-
                 {isDrawing && (
                   <div
-                    className="absolute inset-0 z-[10000]"
-                    onPointerDown={handleDrawPointerDown}
-                    onPointerMove={handleDrawPointerMove}
-                    onPointerUp={handleDrawPointerUp}
-                    onPointerCancel={(e) => {
-                      if (e.currentTarget) {
-                        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                      }
-                      setCurrentPath([]);
-                      setEraserPath([]);
+                    className="pointer-events-none absolute inset-0 z-[10000]"
+                    style={{
+                      cursor: drawTool === "eraser" ? "none" : "crosshair",
+                      touchAction: "none",
                     }}
-                    style={{ cursor: drawTool === "eraser" ? "none" : "crosshair" }}
                   />
                 )}
 
                 {isTextToolActive && !isDrawing && !editingFreeTextId && (
                   <div
-                    className="absolute inset-0 z-[0]"
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onPointerUp={handleTextPointerUp}
-                    style={{ cursor: "text" }}
+                    className="pointer-events-none absolute inset-0 z-[10000]"
+                    style={{ cursor: "text", touchAction: "none" }}
                   />
                 )}
 
@@ -1359,35 +1602,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <ShapeCreationOverlay
                     activeShapeKind={activeShapeKind}
                     screenToWorld={screenToWorld}
+                    pointerHandlersRef={shapePointerHandlersRef}
                     onComplete={() => {
                       setIsShapeToolActive(false);
                     }}
                   />
                 )}
 
-                {isConnecting && connectingFromId && (
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
-                    <line
-                      x1={items.find((item) => item.id === connectingFromId)!.x + items.find((item) => item.id === connectingFromId)!.w / 2}
-                      y1={items.find((item) => item.id === connectingFromId)!.y + items.find((item) => item.id === connectingFromId)!.h / 2}
-                      x2={mousePos.x}
-                      y2={mousePos.y}
-                      stroke="#6366f1"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
-                    />
-                  </svg>
-                )}
-
-                {currentPath.length > 1 && (
+                {currentPath.length > 0 && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
                     <path
-                      d={buildStrokePath(currentPath)}
-                      stroke={drawColor}
-                      strokeWidth={drawStrokeWidth}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      d={outlineToPath(createStrokeOutline(currentPath, drawStrokeWidth))}
+                      fill={drawColor}
+                      
                     />
                   </svg>
                 )}
@@ -1408,12 +1635,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <StudioItemComponent
                     key={item.id}
                     item={item}
-                    isConnecting={isConnecting}
                     // Sticky notes own their text input; other tools must never disable their pointer events.
                     isDrawingMode={item.type === "sticky" ? false : isDrawing || (isTextToolActive && !editingFreeTextId) || isShapeToolActive}
                     canvasScale={viewport.zoom}
                     onPointerEnter={() => {
-                      if (!isDrawing && !isConnecting && !isShapeToolActive && !isTextToolActive) {
+                      if (!isPanning && !isDrawing && !isShapeToolActive && !isTextToolActive) {
                         setHoveredItemId(item.id);
                       }
                     }}
@@ -1421,40 +1647,31 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       setHoveredItemId((prev) => (prev === item.id ? null : prev));
                     }}
                     disableDragging={
-                      item.type === "sticky"
-                        ? editingStickyId === item.id
-                        : item.type === "free-text"
-                          ? editingFreeTextId === item.id || selectedFreeTextId !== item.id
-                          : item.type === "drawing"
-                            ? false
-                            : isMigratedToSelectionOverlay(item.type)
-                              ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
-                              : undefined
+                      isPanning || (
+                        item.type === "sticky"
+                          ? false
+                          : item.type === "free-text"
+                            ? editingFreeTextId === item.id || (!selectedIds.includes(item.id) && selectedFreeTextId !== item.id)
+                            : item.type === "drawing"
+                              ? false
+                              : isMigratedToSelectionOverlay(item.type)
+                                ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
+                                : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
+                      )
                     }
                     enableResizing={
-                      item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
+                      isPanning
+                        ? false
+                        : item.type === "sticky" || item.type === "free-text" || item.type === "drawing" || isMigratedToSelectionOverlay(item.type)
                         ? false
                         : undefined
                     }
-                    showConnectionHandle={item.type !== "sticky" && item.type !== "free-text" && item.type !== "drawing" && !isMigratedToSelectionOverlay(item.type)}
-                    showDeleteButton={
-                      item.type === "sticky"
-                        ? selectedStickyId === item.id
-                        : item.type === "free-text"
-                          ? selectedFreeTextId === item.id
-                          : item.type === "drawing"
-                            ? selectedDrawingId === item.id
-                            : item.type === "image"
-                              ? selectedImageId === item.id
-                              : isMigratedToSelectionOverlay(item.type)
-                                ? selectedIds.includes(item.id)
-                                : true
-                    }
-                    passThrough={item.type === "drawing"}
+                    showDeleteButton={!isPanning && selectedIds.includes(item.id)}
+                    passThrough={isPanning}
                     showRotateButton={
-                      (item.type === "drawing" && selectedDrawingId === item.id) ||
+                      !isPanning && ((item.type === "drawing" && selectedDrawingId === item.id) ||
                       (item.type === "image" && selectedImageId === item.id) ||
-                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !('locked' in item.props && item.props.locked))
+                      (isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id) && !('locked' in item.props && item.props.locked)))
                     }
                     onRotateChange={(rotation) => {
                       updateItem(item.id, { rotation });
@@ -1486,8 +1703,34 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     }}
                     onDragStop={() => setSnapGuides([])}
                     onPointerDown={(event) => {
+                      if (isPanning) return;
+                      const selection = useSelectionStore.getState();
+                      const selectedBeforePointer = selection.selectedIds;
+                      const targetIds = [item.id];
+                      const groupId = (item.props as { groupId?: string }).groupId;
+                      if (groupId) {
+                        const groupMembers = items
+                          .filter((candidate) => (candidate.props as { groupId?: string }).groupId === groupId)
+                          .map((candidate) => candidate.id);
+                        targetIds.push(...groupMembers.filter((id) => id !== item.id));
+                      }
+
+                      const isAlreadySelected = targetIds.some((id) => selectedBeforePointer.includes(id));
+                      if (event.shiftKey) {
+                        if (isAlreadySelected) {
+                          selection.clearAndSelectIds(selectedBeforePointer.filter((id) => !targetIds.includes(id)));
+                        } else {
+                          selection.selectIds(targetIds);
+                        }
+                      } else if (!isAlreadySelected || selectedBeforePointer.length === 0) {
+                        selection.clearAndSelectIds(targetIds);
+                      }
+
+                      // Editing is a separate intent from selecting. Never enter an
+                      // editor when the pointer is operating on a multi-selection.
+                      const nextSelection = useSelectionStore.getState().selectedIds;
+                      const isSingleSelection = nextSelection.length === 1 && nextSelection[0] === item.id;
                       if (item.type === "sticky") {
-                        // Sticky-note editing is self-contained and must not inherit Text tool state.
                         setActiveTool("select");
                         setIsTextToolLocked(false);
                         setSelectedFreeTextId(null);
@@ -1495,90 +1738,53 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedImageId(null);
                         setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
-
-                        if (selectedStickyId === item.id) {
-                          setEditingStickyId(item.id);
-                        } else {
-                          setSelectedStickyId(item.id);
-                          setEditingStickyId(null);
-                        }
+                        setSelectedStickyId(item.id);
+                        setEditingStickyId(
+                          !event.shiftKey && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
+                            ? item.id
+                            : null
+                        );
                         return;
                       }
-                      const { select, toggle, selectedIds: selIds } = useSelectionStore.getState();
 
-                      const targetIds = [item.id];
-                      if (item.props && (item.props as any).groupId) {
-                        const gId = (item.props as any).groupId;
-                        const groupMembers = items.filter(i => i.props && (i.props as any).groupId === gId).map(i => i.id);
-                        if (groupMembers.length > 0) {
-                          targetIds.push(...groupMembers.filter(id => id !== item.id));
-                        }
-                      }
+                      setSelectedStickyId(null);
+                      setEditingStickyId(null);
+                      setSelectedImageId(null);
+                      setSelectedShapeId(null);
 
                       if (item.type === "free-text") {
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
                         setSelectedDrawingId(null);
-                        setSelectedImageId(null);
-                        setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
-                        handleFreeTextSelect(item.id);
-                      } else if (item.type === "drawing") {
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
+                        setSelectedFreeTextId(item.id);
+                        setEditingFreeTextId(
+                          !event.shiftKey && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
+                            ? item.id
+                            : null
+                        );
+                      } else {
                         setSelectedFreeTextId(null);
                         setEditingFreeTextId(null);
-                        setIsTextToolActive(false);
-                        setSelectedImageId(null);
-                        setSelectedShapeId(null);
-                        useSelectionStore.getState().deselectAll();
-                        setSelectedDrawingId(item.id);
-                      } else if (item.type === "shape" || item.type === "text" || item.type === "image") {
-                        setSelectedStickyId(null);
-                        setEditingStickyId(null);
-                        setSelectedFreeTextId(null);
-                        setEditingFreeTextId(null);
-                        setIsTextToolActive(false);
-                        setSelectedDrawingId(null);
-                        setSelectedImageId(null);
-                        if (event?.shiftKey) {
-                          const isSomeSelected = targetIds.some(id => selIds.includes(id));
-                          if (isSomeSelected) {
-                            useSelectionStore.getState().clearAndSelectIds(selIds.filter(id => !targetIds.includes(id)));
-                          } else {
-                            useSelectionStore.getState().selectIds(targetIds);
-                          }
+                        if (item.type === "drawing") {
+                          setSelectedDrawingId(item.id);
                         } else {
-                          useSelectionStore.getState().clearAndSelectIds(targetIds);
+                          setSelectedDrawingId(null);
                         }
                       }
-                    }}
-                    onClick={() => {
-                      if (!isConnecting) return;
-                      if (!connectingFromId) {
-                        setConnectingFromId(item.id);
-                        toast.success("Select target node to connect");
-                        return;
-                      }
-                      if (connectingFromId !== item.id) {
-                        addConnection(connectingFromId, item.id);
-                        setConnectingFromId(null);
-                        setIsConnecting(false);
-                        toast.success("Nodes connected!");
+                      if (item.type !== "free-text") {
+                        setIsTextToolActive(false);
                       }
                     }}
-                    className={
-                      connectingFromId === item.id
-                        ? "ring-4 ring-indigo-500 rounded-lg"
-                        : item.type === "drawing" && selectedDrawingId === item.id
+                    className={[
+                      item.type === "drawing" && selectedDrawingId === item.id
                           ? "rounded-md ring-2 ring-slate-500/60"
                           : isMigratedToSelectionOverlay(item.type)
                             ? ""
                             : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
                               ? "rounded-md ring-2 ring-indigo-400/70"
-                              : ""
-                    }
+                              : "",
+                      !isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id)
+                        ? "ring-2 ring-[#f5a623] ring-offset-1 rounded-md"
+                        : "",
+                    ].filter(Boolean).join(" ")}
                   >
                     {item.type === "pdf-fragment" && <PdfFragment item={item} />}
                     {item.type === "video-anchor" && <VideoAnchor item={item} />}
@@ -1586,7 +1792,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "sticky" && (
                       <StickyNode
                         item={item as any}
-                        isSelected={selectedStickyId === item.id}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         isEditing={editingStickyId === item.id}
                         onColorChange={(color) => {
                           setStickyColor(color);
@@ -1598,12 +1804,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "free-text" && (
                       <FreeTextNode
                         item={item as any}
-                        isSelected={selectedFreeTextId === item.id}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         isEditing={editingFreeTextId === item.id}
                         onSelect={() => {
+                          if (isPanning) return;
                           handleFreeTextSelect(item.id);
                         }}
                         onStartEditing={() => {
+                          if (isPanning) return;
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {
@@ -1622,8 +1830,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "drawing" && (
                       <DrawingNode
                         item={item as any}
-                        isSelected={selectedDrawingId === item.id}
+                        isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         onSelect={() => {
+                          if (isPanning) return;
                           setSelectedFreeTextId(null);
                           setEditingFreeTextId(null);
                           setIsTextToolActive(false);
@@ -1643,14 +1852,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 <SnapGuidesOverlay guides={snapGuides} />
 
-                {/* Bounding handles selection overlay */}
+                {/* Keep selection outlines visible in Pan mode, but disable their handles. */}
                 <SelectionOverlay
                   canvasScale={viewport.zoom}
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
+                  interactive={!isPanning}
                 />
               </div>
             </TransformComponent>
+
 
             <ZoomControls utils={utils} />
             <AssetDrawer />
@@ -1681,7 +1892,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               />
             )}
 
-            {(isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
+            {selectedIds.length <= 1 && (isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
               <TextToolbar
                 color={textColor}
                 onColorChange={handleFreeTextColorChange}
@@ -1690,118 +1901,141 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               />
             )}
 
-            <div className="fixed top-20 left-4 z-[1200] flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
+            {/* Full tool rail for desktop and tablet */}
+            <div className="fixed top-20 left-4 z-[11000] hidden sm:flex flex-col gap-2 bg-white shadow-lg border rounded-lg p-1">
               <button
                 onClick={() => {
                   setActiveTool("select");
                   setIsTextToolLocked(false);
                   setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedShapeId(null);
                 }}
                 className={`p-2 rounded-md transition-colors ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Select Mode"
-              >
-                <MousePointer2 size={18} />
-              </button>
+              ><MousePointer2 size={18} /></button>
               <button
                 onClick={() => {
                   setActiveTool("pan");
                   setIsTextToolLocked(false);
                   setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedShapeId(null);
                 }}
                 className={`p-2 rounded-md transition-colors ${isPanning ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Pan Mode"
-              >
-                <Hand size={18} />
-              </button>
+              ><Hand size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <ShapeToolButton
                 activeShapeKind={activeShapeKind}
                 isActive={isShapeToolActive}
                 onSelectShapeKind={handleSelectShapeKind}
-                onClick={() => {
-                  if (isShapeToolActive) {
-                    setActiveTool("select");
-                  } else {
-                    activateShapeTool(activeShapeKind);
-                  }
-                }}
+                onOpen={() => handleSelectShapeKind(activeShapeKind)}
               />
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
                 onClick={() => {
                   setActiveTool(activeTool === "sticky" ? "select" : "sticky");
+                  useSelectionStore.getState().deselectAll();
+                  setSelectedShapeId(null);
+                  setSelectedImageId(null);
+                  setSelectedDrawingId(null);
+                  setSelectedFreeTextId(null);
+                  setEditingFreeTextId(null);
                   setEditingStickyId(null);
                   setSelectedStickyId(null);
                   setIsTextToolLocked(false);
                 }}
                 className={`p-2 rounded-md transition-colors ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Sticky Note — click the canvas to place"
-              >
-                <StickyNote size={18} />
-              </button>
+              ><StickyNote size={18} /></button>
               <button
-                onClick={() => activateTextTool(false)}
+                onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); }}
                 onDoubleClick={() => activateTextTool(true)}
-                className={`relative p-2 rounded-md transition-colors ${isTextToolActive
-                  ? isTextToolLocked
-                    ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50"
-                    : "bg-indigo-50 text-indigo-600"
-                  : "hover:bg-slate-50 text-slate-400"
-                  }`}
+                className={`relative p-2 rounded-md transition-colors ${isTextToolActive ? (isTextToolLocked ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50" : "bg-indigo-50 text-indigo-600") : "hover:bg-slate-50 text-slate-400"}`}
                 title="Text Tool (T) - Double-click to lock"
               >
                 <Type size={18} />
-                {isTextToolLocked && (
-                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white shadow-sm ring-1 ring-white">
-                    <Lock size={8} strokeWidth={3} />
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTool(isConnecting ? "select" : "connect");
-                  setConnectingFromId(null);
-                  setIsTextToolLocked(false);
-                  setEditingFreeTextId(null);
-                  setSelectedDrawingId(null);
-                }}
-                className={`p-2 rounded-md transition-colors ${isConnecting ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
-                title="Connect Nodes"
-              >
-                <Link2 size={18} />
+                {isTextToolLocked && <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white shadow-sm ring-1 ring-white"><Lock size={8} strokeWidth={3} /></span>}
               </button>
               <button
                 onClick={() => {
                   setActiveTool(isDrawing ? "select" : drawTool);
+                  useSelectionStore.getState().deselectAll();
+                  setSelectedImageId(null);
+                  setSelectedStickyId(null);
+                  setSelectedFreeTextId(null);
                   setIsTextToolLocked(false);
                   setEditingFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedShapeId(null);
-                  setConnectingFromId(null);
+                  currentPathRef.current = [];
+                  eraserPathRef.current = [];
                   setCurrentPath([]);
                   setEraserPath([]);
                 }}
                 className={`p-2 rounded-md transition-colors ${isDrawing ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
                 title="Draw Tool"
-              >
-                <Pencil size={18} />
-              </button>
+              ><Pencil size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
-              <button
-                onClick={handleToolbarImageUpload}
-                className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600"
-                title="Upload Image"
-              >
-                <ImagePlus size={18} />
-              </button>
+              <button onClick={handleToolbarImageUpload} className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400 hover:text-emerald-600" title="Upload Image"><ImagePlus size={18} /></button>
+            </div>
+
+            {/* Mobile dock: collapsed state is only the active tool button;
+                expanded state adds the surrounding scrollable toolbar shell. */}
+            <div
+              className={`fixed top-20 left-3 z-[11000] flex sm:hidden flex-col items-center transition-all duration-200 ease-out ${
+                mobileToolbarOpen
+                  ? "w-11 max-h-[calc(100dvh-7rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-xl backdrop-blur"
+                  : "h-9 w-9 overflow-visible"
+              }`}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {!mobileToolbarOpen ? (
+                <button
+                  type="button"
+                  aria-label="Open tools"
+                  aria-expanded={false}
+                  onClick={() => setMobileToolbarOpen(true)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-lg transition-colors hover:bg-slate-50"
+                >
+                  {isPanning
+                    ? <Hand size={20} />
+                    : isDrawing
+                      ? <Pencil size={20} />
+                      : isTextToolActive
+                        ? <Type size={20} />
+                        : isStickyToolActive
+                          ? <StickyNote size={20} />
+                          : isShapeToolActive
+                            ? <ShapeToolIcon kind={activeShapeKind} size={20} />
+                            : <MousePointer2 size={20} />}
+                </button>
+              ) : (
+                <div className="flex max-h-[calc(100dvh-7.5rem)] w-full flex-col items-center gap-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+                  <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
+                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} compact />
+                  <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
+                  <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
+                  <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
+                </div>
+              )}
             </div>
           </>
         )}
       </TransformWrapper>
+      {selectionScreenBox && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-[2147483000] rounded border-2 border-indigo-600 bg-indigo-500/15"
+          style={{
+            left: Math.min(selectionScreenBox.startX, selectionScreenBox.currentX),
+            top: Math.min(selectionScreenBox.startY, selectionScreenBox.currentY),
+            width: Math.abs(selectionScreenBox.startX - selectionScreenBox.currentX),
+            height: Math.abs(selectionScreenBox.startY - selectionScreenBox.currentY),
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ interface SelectionOverlayProps {
   canvasScale: number;
   screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
   hoveredItemId?: string | null;
+  interactive?: boolean;
 }
 
 interface TransformState {
@@ -47,14 +48,75 @@ function getRotatedCursor(handle: ResizeHandle, rotation: number): string {
   }
 }
 
-export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: SelectionOverlayProps) {
-  const { selectedIds } = useSelectionStore();
+export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, interactive = true }: SelectionOverlayProps) {
+  const { selectedIds, rotationPreviews } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const groupDragRef = useRef<{
+    pointerId: number;
+    startPointer: { x: number; y: number };
+    startPositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
 
-  // Filter selected items that are migrated to this overlay
-  const selectedItems = items.filter((item) => selectedIds.includes(item.id) && isMigratedToSelectionOverlay(item.type));
+  const handleGroupDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (allSelectedItems.length < 2 || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startPositions = new Map<string, { x: number; y: number }>();
+    allSelectedItems.forEach((item) => {
+      if (!(item.props as { locked?: boolean }).locked) {
+        startPositions.set(item.id, { x: item.x, y: item.y });
+      }
+    });
+    if (startPositions.size === 0) return;
+    groupDragRef.current = {
+      pointerId: event.pointerId,
+      startPointer: screenToWorld(event.clientX, event.clientY),
+      startPositions,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleGroupDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = groupDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const currentPointer = screenToWorld(event.clientX, event.clientY);
+    const dx = currentPointer.x - drag.startPointer.x;
+    const dy = currentPointer.y - drag.startPointer.y;
+    batchUpdateItems(Array.from(drag.startPositions, ([id, position]) => ({
+      id,
+      changes: { x: position.x + dx, y: position.y + dy },
+    })));
+  };
+
+  const handleGroupDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (groupDragRef.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    groupDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  // Keep individual object handles for migrated items, while deriving one
+  // shared axis-aligned boundary from every selected workspace object.
+  const allSelectedItems = items.filter((item) => selectedIds.includes(item.id));
+  const selectedItems = allSelectedItems.filter((item) => isMigratedToSelectionOverlay(item.type));
+  const selectionBounds = allSelectedItems.length > 1
+    ? allSelectedItems.reduce(
+        (bounds, item) => ({
+          left: Math.min(bounds.left, item.x),
+          top: Math.min(bounds.top, item.y),
+          right: Math.max(bounds.right, item.x + item.w),
+          bottom: Math.max(bounds.bottom, item.y + item.h),
+        }),
+        { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
+      )
+    : null;
   const hoveredItem = hoveredItemId ? items.find((i) => i.id === hoveredItemId) : null;
 
   // Handle pointer down on a resize handle
@@ -65,45 +127,27 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
   ) => {
     e.stopPropagation();
     e.preventDefault();
-    const item = items.find((i) => i.id === itemId);
-    if (!item || (item.props as { locked?: boolean }).locked) return;
+    const targets = allSelectedItems.length > 1
+      ? allSelectedItems.filter((item) => !(item.props as { locked?: boolean }).locked)
+      : items.filter((item) => item.id === itemId && !(item.props as { locked?: boolean }).locked);
+    if (targets.length === 0) return;
 
     const startPointer = screenToWorld(e.clientX, e.clientY);
     const startBounds = new Map<string, Bounds>();
-    startBounds.set(itemId, { x: item.x, y: item.y, w: item.w, h: item.h });
+    const startRotations = new Map<string, number>();
+    targets.forEach((item) => {
+      startBounds.set(item.id, { x: item.x, y: item.y, w: item.w, h: item.h });
+      startRotations.set(item.id, item.rotation ?? 0);
+    });
 
     setTransformState({
       type: "resize",
       handle,
       startBounds,
-      startRotations: new Map([[itemId, item.rotation]]),
+      startRotations,
       startPointer,
     });
-    if (containerRef.current) {
-      containerRef.current.setPointerCapture(e.pointerId);
-    }
-  };
-
-  // Handle pointer down on rotation knob
-  const handleRotateStart = (e: React.PointerEvent, itemId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const item = items.find((i) => i.id === itemId);
-    if (!item || (item.props as { locked?: boolean }).locked) return;
-
-    const startPointer = screenToWorld(e.clientX, e.clientY);
-    const startBounds = new Map<string, Bounds>();
-    startBounds.set(itemId, { x: item.x, y: item.y, w: item.w, h: item.h });
-
-    setTransformState({
-      type: "rotate",
-      startBounds,
-      startRotations: new Map([[itemId, item.rotation]]),
-      startPointer,
-    });
-    if (containerRef.current) {
-      containerRef.current.setPointerCapture(e.pointerId);
-    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   // Handle pointer down on line/arrow endpoints
@@ -142,38 +186,78 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     const deltaY = currentPointer.y - transformState.startPointer.y;
 
     if (transformState.type === "resize" && transformState.handle) {
-      const updates: Array<{ id: string; changes: any }> = [];
-      transformState.startBounds.forEach((startBounds, itemId) => {
-        const item = items.find((i) => i.id === itemId);
-        if (!item) return;
-
-        // Force lock aspect ratio for perfect circles, shapes holding shift
-        const isAspectLocked =
-          item.type === "shape" &&
-          (item.props.kind === "circle" ||
-            item.props.kind === "star" ||
-            item.props.kind === "pentagon" ||
-            e.shiftKey);
-
-        const newBounds = computeResize(
-          transformState.handle!,
-          startBounds,
-          deltaX,
-          deltaY,
-          isAspectLocked,
-          item.rotation ?? 0
+      const updates: Array<{ id: string; changes: any; props?: Record<string, unknown> }> = [];
+      if (transformState.startBounds.size > 1) {
+        const starts = Array.from(transformState.startBounds.entries());
+        const group = starts.reduce(
+          (bounds, [, itemBounds]) => ({
+            left: Math.min(bounds.left, itemBounds.x),
+            top: Math.min(bounds.top, itemBounds.y),
+            right: Math.max(bounds.right, itemBounds.x + itemBounds.w),
+            bottom: Math.max(bounds.bottom, itemBounds.y + itemBounds.h),
+          }),
+          { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
         );
-
-        updates.push({
-          id: itemId,
-          changes: {
-            x: newBounds.x,
-            y: newBounds.y,
-            w: newBounds.w,
-            h: newBounds.h,
-          },
+        const startW = Math.max(1, group.right - group.left);
+        const startH = Math.max(1, group.bottom - group.top);
+        const anchorX = transformState.handle.includes("w") ? group.right
+          : transformState.handle.includes("e") ? group.left : group.left + startW / 2;
+        const anchorY = transformState.handle.includes("n") ? group.bottom
+          : transformState.handle.includes("s") ? group.top : group.top + startH / 2;
+        const nextLeft = transformState.handle.includes("w") ? group.left + deltaX
+          : transformState.handle.includes("e") ? group.left : group.left;
+        const nextRight = transformState.handle.includes("e") ? group.right + deltaX
+          : transformState.handle.includes("w") ? group.right : group.right;
+        const nextTop = transformState.handle.includes("n") ? group.top + deltaY
+          : transformState.handle.includes("s") ? group.top : group.top;
+        const nextBottom = transformState.handle.includes("s") ? group.bottom + deltaY
+          : transformState.handle.includes("n") ? group.bottom : group.bottom;
+        const nextW = Math.max(10, nextRight - nextLeft);
+        const nextH = Math.max(10, nextBottom - nextTop);
+        const scaleX = nextW / startW;
+        const scaleY = nextH / startH;
+        starts.forEach(([itemId, bounds]) => {
+          const item = items.find((candidate) => candidate.id === itemId);
+          if (!item) return;
+          const nextX = anchorX + (bounds.x - anchorX) * scaleX;
+          const nextY = anchorY + (bounds.y - anchorY) * scaleY;
+          const nextItemW = Math.max(1, bounds.w * scaleX);
+          const nextItemH = Math.max(1, bounds.h * scaleY);
+          const props = { ...item.props } as Record<string, unknown>;
+          const startPoint = props.startPoint as { x: number; y: number } | undefined;
+          const endPoint = props.endPoint as { x: number; y: number } | undefined;
+          if (startPoint) props.startPoint = { x: anchorX + (startPoint.x - anchorX) * scaleX, y: anchorY + (startPoint.y - anchorY) * scaleY };
+          if (endPoint) props.endPoint = { x: anchorX + (endPoint.x - anchorX) * scaleX, y: anchorY + (endPoint.y - anchorY) * scaleY };
+          updates.push({
+            id: itemId,
+            changes: { x: nextX, y: nextY, w: nextItemW, h: nextItemH },
+            props,
+          });
         });
-      });
+      } else {
+        transformState.startBounds.forEach((startBounds, itemId) => {
+          const item = items.find((i) => i.id === itemId);
+          if (!item) return;
+          const isAspectLocked =
+            item.type === "shape" &&
+            (item.props.kind === "circle" ||
+              item.props.kind === "star" ||
+              item.props.kind === "pentagon" ||
+              e.shiftKey);
+          const newBounds = computeResize(
+            transformState.handle!,
+            startBounds,
+            deltaX,
+            deltaY,
+            isAspectLocked,
+            transformState.startRotations.get(itemId) ?? 0
+          );
+          updates.push({
+            id: itemId,
+            changes: { x: newBounds.x, y: newBounds.y, w: newBounds.w, h: newBounds.h },
+          });
+        });
+      }
       batchUpdateItems(updates);
     } else if (transformState.type === "rotate") {
       transformState.startBounds.forEach((startBounds, itemId) => {
@@ -237,8 +321,9 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
     if (!transformState) return;
     e.stopPropagation();
     e.preventDefault();
-    if (containerRef.current) {
-      containerRef.current.releasePointerCapture(e.pointerId);
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
     }
     setTransformState(null);
   };
@@ -263,6 +348,46 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
 
   return (
     <div ref={containerRef} className="absolute inset-0 pointer-events-none z-[1100]">
+      {selectionBounds && (
+        <div
+          aria-label={`${allSelectedItems.length} objects selected — drag to move selection`}
+          data-no-canvas-gesture="true"
+          className="absolute border-2 border-[#f5a623] border-dashed rounded-sm"
+          style={{
+            left: selectionBounds.left,
+            top: selectionBounds.top,
+            width: Math.max(1, selectionBounds.right - selectionBounds.left),
+            height: Math.max(1, selectionBounds.bottom - selectionBounds.top),
+            pointerEvents: interactive ? "auto" : "none",
+            cursor: groupDragRef.current ? "grabbing" : "move",
+            touchAction: "none",
+            background: "transparent",
+          }}
+          onPointerDown={interactive ? handleGroupDragStart : undefined}
+          onPointerMove={interactive ? handleGroupDragMove : undefined}
+          onPointerUp={interactive ? handleGroupDragEnd : undefined}
+          onPointerCancel={interactive ? handleGroupDragEnd : undefined}
+        >
+          {interactive && baseHandles.map((handle) => (
+            <div
+              key={`group-handle-${handle}`}
+              className="absolute rounded-full border border-[#f5a623] bg-white shadow-sm"
+              style={{
+                width: handleSize,
+                height: handleSize,
+                zIndex: 12,
+                cursor: getRotatedCursor(handle, 0),
+                pointerEvents: "auto",
+                ...handleStyles[handle],
+              }}
+              onPointerDown={(event) => handleResizeStart(event, allSelectedItems[0].id, handle)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            />
+          ))}
+        </div>
+      )}
       {/* SVG Hover Outline */}
       {hoveredItem && !selectedIds.includes(hoveredItem.id) && !('locked' in hoveredItem.props && hoveredItem.props.locked) && isMigratedToSelectionOverlay(hoveredItem.type) && (
         <div
@@ -370,7 +495,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                 />
               </svg>
 
-              {!isLocked && (
+              {interactive && !isLocked && (
                 <div
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
@@ -388,7 +513,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                 />
               )}
 
-              {!isLocked && (
+              {interactive && !isLocked && (
                 <div
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
@@ -419,7 +544,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
               top: item.y,
               width: item.w,
               height: item.h,
-              transform: `rotate(${item.rotation ?? 0}deg)`,
+              transform: `rotate(${rotationPreviews[item.id] ?? item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
           >
@@ -434,7 +559,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
             />
 
             {/* Resize Handles (Hidden if locked) */}
-            {!isLocked &&
+            {interactive && selectedIds.length === 1 && !isLocked &&
               baseHandles.map((hType) => (
                 <div
                   key={hType}
@@ -442,7 +567,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                   style={{
                     width: handleSize,
                     height: handleSize,
-                    cursor: getRotatedCursor(hType, item.rotation ?? 0),
+                    cursor: getRotatedCursor(hType, rotationPreviews[item.id] ?? item.rotation ?? 0),
                     zIndex: 10,
                     borderWidth: Math.max(1, 1.5 / canvasScale),
                     ...handleStyles[hType],
@@ -453,40 +578,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId }: 
                 />
               ))}
 
-            {/* Rotation Handle (Hidden if locked) */}
-            {!isLocked && (
-              <div
-                className="absolute flex flex-col items-center pointer-events-auto"
-                style={{
-                  left: "50%",
-                  top: -20 / canvasScale - handleSize,
-                  transform: "translateX(-50%)",
-                  width: handleSize * 2,
-                  zIndex: 10,
-                }}
-              >
-                {/* Knob */}
-                <div
-                  className="bg-white border border-[#f5a623] rounded-full shadow-sm hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100 cursor-alias"
-                  style={{
-                    width: handleSize * 1.3,
-                    height: handleSize * 1.3,
-                    borderWidth: Math.max(1, 1.5 / canvasScale),
-                  }}
-                  onPointerDown={(e) => handleRotateStart(e, item.id)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                />
-                {/* Connecting Line */}
-                <div
-                  className="bg-[#f5a623]"
-                  style={{
-                    width: Math.max(1, 1.5 / canvasScale),
-                    height: 20 / canvasScale,
-                  }}
-                />
-              </div>
-            )}
+
           </div>
         );
       })}

@@ -16,13 +16,11 @@ interface StudioItemComponentProps {
   onPointerEnter?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerLeave?: (event: React.PointerEvent<HTMLDivElement>) => void;
   className?: string;
-  isConnecting?: boolean;
   isDrawingMode?: boolean;
   canvasScale?: number;
   disableDragging?: boolean;
   enableResizing?: boolean;
   showDeleteButton?: boolean;
-  showConnectionHandle?: boolean;
   passThrough?: boolean;
   showRotateButton?: boolean;
   onRotateChange?: (rotation: number) => void;
@@ -30,32 +28,44 @@ interface StudioItemComponentProps {
   onDragStop?: () => void;
 }
 
-export function StudioItemComponent({ 
-  item, 
-  children, 
-  onClick, 
+export function StudioItemComponent({
+  item,
+  children,
+  onClick,
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
   className,
-  isConnecting,
   isDrawingMode,
   canvasScale = 1,
   disableDragging,
   enableResizing,
   showDeleteButton = true,
-  showConnectionHandle = true,
   passThrough = false,
   showRotateButton = false,
   onRotateChange,
   onDrag,
   onDragStop,
 }: StudioItemComponentProps) {
-  const { updateItem, removeItem } = useWorkspaceStore();
+  const { updateItem } = useWorkspaceStore();
   const [pos, setPos] = useState({ x: item.x, y: item.y });
   const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const rotationStartRef = useRef<{
+    centerX: number;
+    centerY: number;
+    lastAngle: number;
+    accumulatedDelta: number;
+    startRotation: number;
+  } | null>(null);
+  const rotationPreviewRef = useRef<number>(item.rotation ?? 0);
+  const rotationFrameRef = useRef<number | null>(null);
+  const pendingRotationRef = useRef<number | null>(null);
+  const rotatedContentRef = useRef<HTMLDivElement>(null);
+  const rotationControlsRef = useRef<HTMLDivElement>(null);
+  const onRotateChangeRef = useRef(onRotateChange);
+  onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const dragMovedRef = useRef(false);
 
@@ -66,43 +76,84 @@ export function StudioItemComponent({
     setSize({ w: item.w, h: item.h });
   }, [item.x, item.y, item.w, item.h]);
 
-  const disableInteraction = isDrawingMode || isConnecting;
+  const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
   const resizingEnabled = enableResizing ?? (!disableInteraction && !isLocked);
 
   useEffect(() => {
     if (!isRotating) return;
 
-    const handlePointerMove = (event: PointerEvent) => {
-      if (!rootRef.current || !onRotateChange) {
-        return;
-      }
-
-      const rect = rootRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const angle = Math.atan2(event.clientY - centerY, event.clientX - centerX);
-      const degrees = (angle * 180) / Math.PI + 90;
-      const normalized = (degrees + 360) % 360;
-
-      onRotateChange(normalized);
+    const applyPreview = () => {
+      rotationFrameRef.current = null;
+      const rotation = pendingRotationRef.current;
+      if (rotation === null) return;
+      const transform = `rotate(${rotation}deg)`;
+      if (rotatedContentRef.current) rotatedContentRef.current.style.transform = transform;
+      if (rotationControlsRef.current) rotationControlsRef.current.style.transform = transform;
     };
 
-    const handlePointerUp = () => {
+    const finishRotation = () => {
+      const start = rotationStartRef.current;
+      if (!start) return;
+
+      if (rotationFrameRef.current !== null) {
+        cancelAnimationFrame(rotationFrameRef.current);
+        rotationFrameRef.current = null;
+      }
+      applyPreview();
+
+      // Keep the accumulated angle unwrapped. Normalizing 360° to 0° here
+      // changes the numeric transform at pointer-up and can make the visual
+      // rotation snap/reverse even though both angles represent the same pose.
+      const finalRotation = rotationPreviewRef.current;
+      rotationStartRef.current = null;
+      pendingRotationRef.current = null;
       setIsRotating(false);
+      onRotateChangeRef.current?.(finalRotation);
+      requestAnimationFrame(() => useSelectionStore.getState().clearRotationPreview(item.id));
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const start = rotationStartRef.current;
+      if (!start) return;
+
+      const angle = Math.atan2(
+        event.clientY - start.centerY,
+        event.clientX - start.centerX
+      );
+      const delta = Math.atan2(
+        Math.sin(angle - start.lastAngle),
+        Math.cos(angle - start.lastAngle)
+      );
+      start.accumulatedDelta += delta;
+      start.lastAngle = angle;
+
+      rotationPreviewRef.current = start.startRotation + (start.accumulatedDelta * 180) / Math.PI;
+      pendingRotationRef.current = rotationPreviewRef.current;
+      useSelectionStore.getState().setRotationPreview(item.id, rotationPreviewRef.current);
+      if (rotationFrameRef.current === null) {
+        rotationFrameRef.current = requestAnimationFrame(applyPreview);
+      }
     };
 
     document.addEventListener("pointermove", handlePointerMove, true);
-    document.addEventListener("pointerup", handlePointerUp, true);
+    document.addEventListener("pointerup", finishRotation, true);
+    document.addEventListener("pointercancel", finishRotation, true);
 
     return () => {
       document.removeEventListener("pointermove", handlePointerMove, true);
-      document.removeEventListener("pointerup", handlePointerUp, true);
+      document.removeEventListener("pointerup", finishRotation, true);
+      document.removeEventListener("pointercancel", finishRotation, true);
+      if (rotationFrameRef.current !== null) {
+        cancelAnimationFrame(rotationFrameRef.current);
+        rotationFrameRef.current = null;
+      }
     };
-  }, [isRotating, onRotateChange]);
+  }, [isRotating]);
 
   return (
     <Rnd
+      className="workspace-item-rnd"
       size={{ width: size.w, height: size.h }}
       position={{ x: pos.x, y: pos.y }}
       scale={canvasScale}
@@ -116,7 +167,7 @@ export function StudioItemComponent({
         dragMovedRef.current = false;
         const { selectedIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
-        
+
         if (selectedIds.includes(item.id)) {
           const positions = new Map<string, { x: number; y: number }>();
           items.forEach((itm) => {
@@ -223,50 +274,44 @@ export function StudioItemComponent({
           ...position,
         });
       }}
-      style={{ 
+      style={{
         zIndex: item.zIndex,
         pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
       }}
       dragHandleClassName="drag-handle"
     >
-      <div 
+      <div
         ref={rootRef}
         className={`w-full h-full relative group ${className ?? ""}`}
         onClick={onClick}
         onPointerDown={onPointerDown}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
+        data-workspace-item="true"
+        data-workspace-item-id={item.id}
+        data-workspace-item-type={item.type}
         data-drawing-id={item.type === "drawing" ? item.id : undefined}
         data-image-id={item.type === "image" ? item.id : undefined}
         data-shape-id={item.type === "shape" ? item.id : undefined}
       >
-        <div className={`w-full h-full relative ${
-          isCanvasPrimitive(item.type)
-            ? "overflow-visible bg-transparent border-0 shadow-none"
-            : "overflow-hidden bg-white border shadow-md rounded"
-        }`}>
-          {!isConnecting && !isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
-          {isConnecting && (
-            <div 
-              className="absolute inset-0 z-50 cursor-crosshair bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick?.();
-              }}
-            />
-          )}
+        <div className={`w-full h-full relative ${isCanvasPrimitive(item.type)
+          ? "overflow-visible bg-transparent border-0 shadow-none"
+          : "overflow-hidden bg-white border shadow-md rounded"
+          }`}>
+          {!isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           <div
+            ref={rotatedContentRef}
             className="relative z-10 w-full h-full"
             style={{
               pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
               cursor: isDrawingMode ? "inherit" : undefined,
-              transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
+              transform: `rotate(${item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
           >
-             {children}
+            {children}
           </div>
-          {!isConnecting && !isDrawingMode && item.type === "image" && (
+          {!isDrawingMode && item.type === "image" && (
             <div
               aria-hidden="true"
               className="drag-handle absolute inset-0 z-20 cursor-move"
@@ -274,17 +319,44 @@ export function StudioItemComponent({
           )}
         </div>
 
-        {/* Connection Handle (Right Side) */}
-        {!isConnecting && !isDrawingMode && showConnectionHandle && (
-           <button
-             onClick={(e) => {
-               e.stopPropagation();
-               // Trigger connection mode and select this node
-               // We need a way to tell the parent, but for now just a UI cue
-             }}
-             className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-30 hover:scale-125"
-             title="Click to start connection"
-           />
+        {!isDrawingMode && showRotateButton && !isLocked && (
+          <div
+            ref={rotationControlsRef}
+            className="pointer-events-none absolute inset-0 z-30"
+            style={{
+              transform: `rotate(${item.rotation ?? 0}deg)`,
+              transformOrigin: "center",
+            }}
+          >
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const rect = rootRef.current?.getBoundingClientRect();
+                if (!rect) return;
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                const startRotation = item.rotation ?? 0;
+                rotationPreviewRef.current = startRotation;
+                pendingRotationRef.current = startRotation;
+                rotationStartRef.current = {
+                  centerX,
+                  centerY,
+                  lastAngle: startAngle,
+                  accumulatedDelta: 0,
+                  startRotation,
+                };
+                setIsRotating(true);
+              }}
+              className={`pointer-events-auto absolute -top-[25px] left-1/2 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
+                }`}
+              style={{ transform: `translateX(-50%) rotate(-${item.rotation ?? 0}deg)` }}
+              title="Drag to rotate"
+            >
+              <RotateCw className="w-3 h-3 text-white" />
+            </button>
+          </div>
         )}
 
         {!isDrawingMode && showDeleteButton && !isLocked && (
@@ -295,29 +367,18 @@ export function StudioItemComponent({
             }}
             onClick={(e) => {
               e.stopPropagation();
-              removeItem(item.id);
+              const selectedIds = useSelectionStore.getState().selectedIds;
+              const idsToRemove = selectedIds.includes(item.id) ? selectedIds : [item.id];
+              useWorkspaceStore.getState().removeItems(idsToRemove);
+              useSelectionStore.getState().deselectAll();
             }}
-            className="pointer-events-auto absolute -top-2.5 -right-2.5 z-20 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
+            className="pointer-events-auto absolute -top-[20px] -right-[20px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
           >
             <X className="w-3 h-3 text-white" />
           </button>
         )}
 
-        {!isDrawingMode && showRotateButton && !isLocked && (
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              setIsRotating(true);
-            }}
-            className={`pointer-events-auto absolute -top-2.5 left-1/2 z-20 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${
-              isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
-            }`}
-            title="Drag to rotate"
-          >
-            <RotateCw className="w-3 h-3 text-white" />
-          </button>
-        )}
+
       </div>
     </Rnd>
   );

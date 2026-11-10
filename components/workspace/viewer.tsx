@@ -104,12 +104,65 @@ export function FloatingViewer({
   const currentZIndex = zIndex ?? 100;
   const isTopViewer = currentZIndex >= highestViewerZIndex;
   const [maximized, setMaximized] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobileViewerSize, setMobileViewerSize] = useState<{ width: number; height: number } | null>(null);
+  const [mobileViewerPosition, setMobileViewerPosition] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => {
+      const mobile = media.matches;
+      setIsMobileViewport(mobile);
+      if (mobile) {
+        const width = Math.max(280, Math.min(window.innerWidth - 16, 560));
+        const height = Math.max(220, Math.min(Math.round(window.innerHeight * 0.62), window.innerHeight - 100));
+        setMobileViewerSize((current) => current ?? { width, height });
+        setMobileViewerPosition((current) => current ?? {
+          x: Math.max(8, Math.round((window.innerWidth - width) / 2)),
+          y: Math.max(8, window.innerHeight - height - 24),
+        });
+      }
+    };
+    update();
+    media.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
   const [hasError, setHasError] = useState(false);
   const [mediaErrorText, setMediaErrorText] = useState("The format may not be supported or the file is corrupted.");
   const [showPinForm, setShowPinForm] = useState(false);
   const [pinNote, setPinNote] = useState("");
-  const [pinLabel, setPinLabel] = useState("");
   const [pinTimestampMs, setPinTimestampMs] = useState(0);
+  const pinButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [pinPopoverPosition, setPinPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!showPinForm) {
+      setPinPopoverPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchor = pinButtonRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(288, window.innerWidth - 24);
+      const estimatedHeight = 230;
+      const left = Math.max(12, Math.min(anchor.right - width, window.innerWidth - width - 12));
+      const below = anchor.bottom + 8;
+      const top = below + estimatedHeight <= window.innerHeight - 12
+        ? below
+        : Math.max(12, anchor.top - estimatedHeight - 8);
+      setPinPopoverPosition({ top, left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [showPinForm]);
+
   const livePlaybackTimeRef = useRef<number>(currentTime ?? 0);
   const playbackPollRef = useRef<number | null>(null);
   const [youTubeHost, setYouTubeHost] = useState<"youtube" | "youtube-nocookie">("youtube");
@@ -615,7 +668,25 @@ export function FloatingViewer({
 
   /** Get the current playback time in milliseconds */
   const getCurrentTimeMs = useCallback((): number => {
-    return livePlaybackTimeRef.current;
+    // Read directly from the active player at click time. The polling ref can
+    // still be zero briefly while the YouTube iframe is initializing on mobile.
+    const youtubeTime = ytPlayerRef.current?.getCurrentTime?.();
+    if (typeof youtubeTime === "number" && Number.isFinite(youtubeTime) && youtubeTime >= 0) {
+      const exactMs = Math.round(youtubeTime * 1000);
+      livePlaybackTimeRef.current = exactMs;
+      return exactMs;
+    }
+
+    const nativePlayer = audioPlayerRef.current ?? videoPlayerRef.current;
+    if (nativePlayer && Number.isFinite(nativePlayer.currentTime) && nativePlayer.currentTime >= 0) {
+      const exactMs = Math.round(nativePlayer.currentTime * 1000);
+      livePlaybackTimeRef.current = exactMs;
+      return exactMs;
+    }
+
+    return Number.isFinite(livePlaybackTimeRef.current) && livePlaybackTimeRef.current >= 0
+      ? livePlaybackTimeRef.current
+      : 0;
   }, []);
 
   function formatTimestamp(ms: number) {
@@ -646,12 +717,12 @@ export function FloatingViewer({
       startTimeMs: pinTimestampMs,
       w: 240,
       h: pinNote.trim() ? 160 : 120,
-      label: pinLabel.trim() || title,
+      label: title,
       notes: pinNote.trim() || undefined,
+      color: "#F8E7A1",
     }, { x, y });
     setShowPinForm(false);
     setPinNote("");
-    setPinLabel("");
   }
 
   // This should be rendered in a portal
@@ -671,18 +742,29 @@ export function FloatingViewer({
         width: 500,
         height: 400,
       }}
-      size={maximized ? { width: "100%", height: "100%" } : undefined}
-      position={maximized ? { x: 0, y: 0 } : undefined}
-      minWidth={300}
-      minHeight={200}
+      size={maximized ? { width: "100%", height: "100%" } : isMobileViewport ? (mobileViewerSize ?? undefined) : undefined}
+      position={maximized ? { x: 0, y: 0 } : isMobileViewport ? (mobileViewerPosition ?? undefined) : undefined}
+      onDrag={isMobileViewport ? (_event, data) => setMobileViewerPosition({ x: data.x, y: data.y }) : undefined}
+      onDragStop={isMobileViewport ? (_event, data) => setMobileViewerPosition({ x: data.x, y: data.y }) : undefined}
+      onResize={isMobileViewport ? (_event, _direction, ref, _delta, position) => {
+        setMobileViewerSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+        setMobileViewerPosition(position);
+      } : undefined}
+      onResizeStop={isMobileViewport ? (_event, _direction, ref, _delta, position) => {
+        setMobileViewerSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+        setMobileViewerPosition(position);
+      } : undefined}
+      minWidth={280}
+      minHeight={180}
       bounds="window"
+      cancel="button, input, textarea, select, a, [data-no-viewer-drag]"
       disableDragging={maximized}
       enableResizing={!maximized && !minimized}
       style={{
         display: minimized ? "none" : undefined,
         zIndex: currentZIndex,
       }}
-      className={`bg-white shadow-2xl rounded-lg border overflow-hidden flex flex-col pointer-events-auto ${
+      className={`workspace-floating-viewer bg-white shadow-2xl rounded-lg border overflow-hidden flex flex-col pointer-events-auto ${
         maximized ? "rounded-none! border-none!" : ""
       }`}
       dragHandleClassName="viewer-drag-handle"
@@ -787,12 +869,18 @@ export function FloatingViewer({
                 Page Stamp
               </button>
             ) : (
-            <button 
+            <button
+              ref={pinButtonRef}
+              type="button"
+              data-no-viewer-drag
+              onPointerDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              style={{ touchAction: "manipulation" }}
               onClick={() => {
                 if (!assetId) return;
                 const ms = getCurrentTimeMs();
                 setPinTimestampMs(ms);
-                setPinLabel("");
                 setPinNote("");
                 setShowPinForm(true);
               }} 
@@ -804,41 +892,48 @@ export function FloatingViewer({
             </button>
             )}
 
-            {/* Pin Timestamp Note Popover */}
-            {showPinForm && (
-              <div className="absolute top-full right-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] overflow-hidden">
-                <div className="bg-slate-800 px-3 py-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="text-xs font-semibold text-white">Pin Timestamp Note</span>
+            {/* Portal keeps the note popover clear of the viewer's clipped header/surface. */}
+            {showPinForm && pinPopoverPosition && typeof document !== "undefined" && createPortal(
+              <div
+                role="dialog"
+                aria-label="Pin timestamp note"
+                onPointerDown={(event) => event.stopPropagation()}
+                className="fixed z-[10000] w-[min(288px,calc(100vw-24px))] overflow-hidden rounded-sm border border-amber-900/15 bg-[#F8E7A1] text-slate-800 shadow-[0_10px_24px_rgba(40,34,20,0.18)]"
+                style={{ top: pinPopoverPosition.top, left: pinPopoverPosition.left }}
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-amber-900/10 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <MapPin className="h-3 w-3 shrink-0 text-slate-700/70" />
+                    <span className="truncate text-[11px] font-semibold text-slate-800">Pin Timestamp Note</span>
                   </div>
-                  <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded">
+                  <span className="shrink-0 whitespace-nowrap rounded-md bg-slate-900/10 px-2 py-1 text-[10px] font-mono font-semibold tabular-nums text-slate-800">
                     {formatTimestamp(pinTimestampMs)}
                   </span>
                 </div>
-                <div className="p-3 space-y-2">
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Label (e.g. Key concept)"
-                    value={pinLabel}
-                    onChange={(e) => setPinLabel(e.target.value)}
-                    className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 bg-slate-50 placeholder:text-slate-400"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        const textarea = e.currentTarget.parentElement?.querySelector("textarea");
-                        textarea?.focus();
-                      }
-                      if (e.key === "Escape") setShowPinForm(false);
-                    }}
-                  />
+                <div className="space-y-2 p-2.5">
                   <textarea
-                    placeholder="Add a note about this moment... (optional)"
+                    autoFocus
+                    placeholder="Write something..."
                     value={pinNote}
                     onChange={(e) => setPinNote(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 bg-slate-50 resize-none placeholder:text-slate-400"
+                    rows={4}
+                    style={{
+                      width: "100%",
+                      minHeight: 108,
+                      height: 108,
+                      margin: 0,
+                      padding: "8px 2px",
+                      border: "0",
+                      borderRadius: 0,
+                      outline: "none",
+                      boxShadow: "none",
+                      background: "transparent",
+                      color: "#1F2937",
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      resize: "none",
+                    }}
+                    className="!border-0 !bg-transparent !shadow-none focus:!border-0 focus:!shadow-none focus:!outline-none placeholder:!text-slate-700/40"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                         e.preventDefault();
@@ -847,28 +942,31 @@ export function FloatingViewer({
                       if (e.key === "Escape") setShowPinForm(false);
                     }}
                   />
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-slate-400">
-                      Ctrl+Enter to confirm
-                    </span>
-                    <div className="flex gap-1.5">
+                  <div className="flex items-center justify-between gap-2 border-t border-amber-900/10 pt-2">
+                    <span className="text-[10px] leading-tight text-slate-700/65">Ctrl+Enter to confirm</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button
+                        type="button"
                         onClick={() => setShowPinForm(false)}
-                        className="px-2.5 py-1.5 text-[11px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors font-medium"
+                        style={{ width: "auto", minHeight: 32, padding: "6px 10px", background: "transparent", color: "#334155", border: 0 }}
+                        className="rounded-sm text-[11px] font-medium hover:bg-black/5"
                       >
                         Cancel
                       </button>
                       <button
+                        type="button"
                         onClick={handlePinConfirm}
-                        className="px-3 py-1.5 text-[11px] bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-colors font-semibold flex items-center gap-1"
+                        style={{ width: "auto", minWidth: 92, minHeight: 36, padding: "7px 12px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#4F46E5", color: "#FFFFFF", border: "1px solid #4338CA", borderRadius: 6, whiteSpace: "nowrap", opacity: 1, visibility: "visible" }}
+                        className="!text-white rounded-md text-[12px] font-semibold shadow-sm hover:!bg-indigo-700"
                       >
-                        <MapPin className="w-3 h-3" />
-                        Pin Note
+                        <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "#FFFFFF" }} />
+                        <span style={{ display: "inline-block", color: "#FFFFFF", opacity: 1, visibility: "visible", whiteSpace: "nowrap", lineHeight: "18px" }}>Pin Note</span>
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
           <div className="w-px h-4 bg-slate-300 mx-1" />

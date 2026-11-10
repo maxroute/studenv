@@ -18,7 +18,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.mjs",
-    "test:security": "tsx --test lib/security/request.test.ts"
+    "test:security": "tsx --test lib/security/request.test.ts",
+    "test:workspace-pointer": "tsx --test lib/workspace/pointer-session.test.ts",
+    "test:workspace-drawing": "tsx --test lib/workspace/drawing-geometry.test.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
@@ -63,7 +65,8 @@
     "youtube-transcript": "^1.3.1",
     "yt-dlp-exec": "^1.0.2",
     "zod": "^3.24.1",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.2",
+    "perfect-freehand": "^1.2.3"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.0",

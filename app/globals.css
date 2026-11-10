@@ -6685,3 +6685,90 @@ body.shelf-scroll-locked {
   min-height: 0;
 }
 
+
+/* Workspace interaction cursors are owned by the active canvas tool. */
+[data-workspace-interaction="pan"],
+[data-workspace-interaction="pan"] * {
+  cursor: grab !important;
+}
+
+[data-workspace-interaction="pan"][data-pan-dragging="true"],
+[data-workspace-interaction="pan"][data-pan-dragging="true"] * {
+  cursor: grabbing !important;
+}
+
+/* Select mode: keep the canvas as an arrow, and use the four-way move
+   cursor only while hovering a workspace object. Preserve text editing
+   and native controls inside sticky notes and other editable objects. */
+[data-workspace-interaction="select"] {
+  cursor: default !important;
+}
+
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover,
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover :not(button):not(input):not(textarea):not(select):not([contenteditable="true"]) {
+  cursor: move !important;
+}
+
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover input,
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover textarea,
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover [contenteditable="true"] {
+  cursor: text !important;
+}
+
+[data-workspace-interaction="select"] [data-workspace-item="true"]:hover button {
+  cursor: pointer !important;
+}
+
+/* Pan mode owns the gesture before it reaches any object implementation.
+   !important also neutralizes SVG paths that explicitly opt back into hit-testing. */
+[data-workspace-interaction="pan"] [data-workspace-item="true"],
+[data-workspace-interaction="pan"] [data-workspace-item="true"] * {
+  pointer-events: none !important;
+}
+
+
+
+/*
+ * On touch-first devices, drawing/editing tools own the canvas gesture.
+ * Workspace objects must not receive touch input unless Select is active;
+ * otherwise react-rnd can drag a sticky note while the user is drawing over it.
+ * The coarse-pointer query keeps desktop mouse interactions unchanged.
+ */
+@media (pointer: coarse) {
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    .workspace-item-rnd,
+  [data-workspace-canvas][data-workspace-tool]:not([data-workspace-tool="select"])
+    .workspace-item-rnd * {
+    pointer-events: none !important;
+  }
+}
+
+
+/* Mobile resource viewers use controlled Rnd geometry. Keep all resize
+   handles inside the viewport and make them easy to grab with a finger. */
+@media (max-width: 767px) {
+  .workspace-floating-viewer {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    min-width: 280px !important;
+    min-height: 180px !important;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer .viewer-drag-handle {
+    min-height: 42px;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer .react-resizable-handle {
+    z-index: 30;
+    width: 22px;
+    height: 22px;
+    touch-action: none;
+  }
+
+  .workspace-floating-viewer > div {
+    min-width: 0;
+    min-height: 0;
+  }
+}

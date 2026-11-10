@@ -98,6 +98,15 @@ export function DrawingToolbar({
           overflow: visible;
         }
 
+        /* Keep the centered drawing toolbar clear of the bottom-left zoom controls
+           on compact viewports, where the two controls can otherwise overlap. */
+        @media (max-width: 640px), (max-height: 480px) {
+          .drawing-toolbar {
+            bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+            max-width: calc(100vw - 16px);
+          }
+        }
+
         @keyframes toolbar-slide-up {
           from {
             opacity: 0;

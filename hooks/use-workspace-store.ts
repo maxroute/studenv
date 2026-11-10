@@ -7,7 +7,6 @@ import {
   createWorkspaceItem,
   parseWorkspaceSceneJson,
   serializeWorkspaceScene,
-  Connection,
 } from "@/types/workspace";
 
 type StudioItemUpdate = Partial<
@@ -20,7 +19,6 @@ interface WorkspaceState {
   coverAssetId: string | null;
   workspaceAssetIds: string[];
   items: StudioItem[];
-  connections: Connection[];
   viewport: WorkspaceViewport;
   version: number;
   isLoading: boolean;
@@ -57,8 +55,6 @@ interface WorkspaceState {
   cutItems: (ids: string[]) => void;
   pasteItems: (offset?: { x: number; y: number }) => void;
   
-  addConnection: (fromId: string, toId: string) => void;
-  removeConnection: (id: string) => void;
 
   syncWithServer: () => Promise<void>;
   saveNow: () => Promise<void>;
@@ -91,7 +87,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     coverAssetId: null,
     workspaceAssetIds: [],
     items: [],
-    connections: [],
     viewport: { ...DEFAULT_WORKSPACE_VIEWPORT },
     version: 0,
     isLoading: false,
@@ -123,7 +118,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           coverAssetId: typeof data.coverAssetId === "string" ? data.coverAssetId : null,
           workspaceAssetIds: parsedScene.workspaceAssetIds ?? [],
           items: parsedScene.items,
-          connections: parsedScene.connections,
           viewport: parsedScene.viewport,
           version: data.version,
           isLoading: false,
@@ -145,7 +139,6 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           typeof payload.coverAssetId === "string" ? payload.coverAssetId : null,
         workspaceAssetIds: parsedScene.workspaceAssetIds ?? [],
         items: parsedScene.items,
-        connections: parsedScene.connections,
         viewport: parsedScene.viewport,
         version: payload.version ?? 0,
         isLoading: false,
@@ -311,21 +304,18 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     removeItem: (id: string) => {
-      const { items, connections } = get();
+      const { items } = get();
       set({ 
         items: items.filter((item: StudioItem) => item.id !== id),
-        // Also remove any connections linked to this item
-        connections: connections.filter(c => c.fromId !== id && c.toId !== id),
         isDirty: true 
       });
     },
 
     removeItems: (ids) => {
-      const { items, connections } = get();
+      const { items } = get();
       const idSet = new Set(ids);
       set({
         items: items.filter((item: StudioItem) => !idSet.has(item.id)),
-        connections: connections.filter(c => !idSet.has(c.fromId) && !idSet.has(c.toId)),
         isDirty: true,
       });
     },
@@ -364,12 +354,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     cutItems: (ids) => {
-      const { items, connections, copyItems } = get();
+      const { items, copyItems } = get();
       copyItems(ids);
       const idSet = new Set(ids);
       set({
         items: items.filter(item => !idSet.has(item.id)),
-        connections: connections.filter(c => !idSet.has(c.fromId) && !idSet.has(c.toId)),
         isDirty: true,
       });
     },
@@ -401,32 +390,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       });
     },
 
-    addConnection: (fromId: string, toId: string) => {
-      const { connections } = get();
-      // Avoid duplicate connections
-      if (connections.some(c => (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId))) {
-        return;
-      }
-
-      const newConnection: Connection = {
-        id: `conn-${Math.random().toString(36).slice(2, 11)}`,
-        fromId,
-        toId,
-      };
-
-      set({ connections: [...connections, newConnection], isDirty: true });
-    },
-
-    removeConnection: (id: string) => {
-      const { connections } = get();
-      set({ connections: connections.filter(c => c.id !== id), isDirty: true });
-    },
-
     syncWithServer: async () => {
-      const { workspaceId, items, connections, viewport, workspaceAssetIds, version, isSaving } = get();
+      const { workspaceId, items, viewport, workspaceAssetIds, version, isSaving } = get();
       if (!workspaceId || isSaving) return;
 
-      const sceneJson = serializeWorkspaceScene({ items, connections, viewport, workspaceAssetIds });
+      const sceneJson = serializeWorkspaceScene({ items, viewport, workspaceAssetIds });
       
       set({ isSaving: true });
       try {

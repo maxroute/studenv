@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import {
   Library,
   Search,
@@ -50,8 +50,10 @@ export function AssetDrawer() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [scope, setScope] = useState<DrawerScope>("workspace");
+  const [touchDragPreview, setTouchDragPreview] = useState<{ assetId: string; x: number; y: number; width: number; height: number } | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const touchDragRef = useRef<{ asset: Asset; pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number; width: number; height: number; moved: boolean } | null>(null);
   const workspaceItems = useWorkspaceStore((state) => state.items);
   const workspaceCoverAssetId = useWorkspaceStore((state) => state.coverAssetId);
   const workspaceAssetIdsFromStore = useWorkspaceStore((state) => state.workspaceAssetIds);
@@ -299,7 +301,7 @@ export function AssetDrawer() {
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="absolute top-4 right-4 z-[1000] p-3 bg-white shadow-lg border rounded-full text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all group"
+        className="fixed top-20 right-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border bg-white p-0 text-slate-600 shadow-lg transition-all hover:bg-indigo-50 hover:text-indigo-600 group"
         title="Asset Library"
       >
         <Library className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -313,10 +315,39 @@ export function AssetDrawer() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute top-4 right-4 bottom-4 w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex flex-col overflow-hidden"
+            data-no-canvas-gesture="true"
+            onPointerMoveCapture={(event) => {
+              const drag = touchDragRef.current;
+              if (!drag || drag.pointerId !== event.pointerId) return;
+              if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+                drag.moved = true;
+                setTouchDragPreview({ assetId: drag.asset.id, x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY, width: drag.width, height: drag.height });
+              }
+              event.stopPropagation();
+            }}
+            onPointerUpCapture={(event) => {
+              const drag = touchDragRef.current;
+              if (!drag || drag.pointerId !== event.pointerId) return;
+              touchDragRef.current = null;
+              setTouchDragPreview(null);
+              event.stopPropagation();
+              const dropTarget = document.elementFromPoint(event.clientX, event.clientY);
+              const droppedOnCanvas = !!dropTarget?.closest('[data-workspace-canvas="true"]');
+              if (drag.moved && droppedOnCanvas) {
+                window.dispatchEvent(new CustomEvent("workspace-asset-touch-drop", {
+                  detail: { asset: drag.asset, clientX: event.clientX, clientY: event.clientY },
+                }));
+              }
+            }}
+            onPointerCancelCapture={(event) => {
+              if (touchDragRef.current?.pointerId === event.pointerId) touchDragRef.current = null;
+              setTouchDragPreview(null);
+              event.stopPropagation();
+            }}
+            className="fixed top-[4.5rem] right-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] w-[min(20rem,calc(100vw-1.5rem))] sm:right-4 sm:top-[4.5rem] sm:bottom-4 sm:w-80 bg-white shadow-2xl border rounded-2xl z-[1001] flex min-h-0 flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b flex items-center justify-between bg-slate-50/50">
+            <div className="shrink-0 p-4 border-b flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2 min-w-0">
                 <Library className="w-4 h-4 text-indigo-500 shrink-0" />
                 <h3 className="font-bold text-slate-800 truncate">Vault Library</h3>
@@ -414,7 +445,7 @@ export function AssetDrawer() {
             ) : null}
 
             {/* Search */}
-            <div className="p-3 border-b">
+            <div className="shrink-0 p-3 border-b">
               <div className="mb-3 grid grid-cols-2 gap-2">
                 <button
                   className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "workspace"
@@ -450,7 +481,7 @@ export function AssetDrawer() {
             </div>
 
             {/* Asset List */}
-            <div className="flex-1 overflow-auto p-2 space-y-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -458,9 +489,68 @@ export function AssetDrawer() {
                 </div>
               ) : scopedAssets.length > 0 ? (
                 scopedAssets.map((asset) => (
+                  <Fragment key={asset.id}>
+                  {touchDragPreview?.assetId === asset.id ? (
+                    <div
+                      aria-hidden="true"
+                      className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50"
+                      style={{ height: touchDragPreview.height }}
+                    />
+                  ) : null}
                   <div
-                    key={asset.id}
                     draggable
+                    style={{
+                      touchAction: "none",
+                      ...(touchDragPreview?.assetId === asset.id ? {
+                        position: "fixed" as const,
+                        left: touchDragPreview.x,
+                        top: touchDragPreview.y,
+                        width: touchDragPreview.width,
+                        height: touchDragPreview.height,
+                        zIndex: 10002,
+                        pointerEvents: "none" as const,
+                        boxShadow: "0 16px 40px rgba(15,23,42,.22)",
+                        transform: "scale(1.02)",
+                      } : {}),
+                    }}
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "touch") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      touchDragRef.current = {
+                        asset,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        offsetX: event.clientX - rect.left,
+                        offsetY: event.clientY - rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                        moved: false,
+                      };
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = touchDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+                        drag.moved = true;
+                        setTouchDragPreview({
+                          assetId: asset.id,
+                          x: event.clientX - drag.offsetX,
+                          y: event.clientY - drag.offsetY,
+                          width: drag.width,
+                          height: drag.height,
+                        });
+                      }
+                    }}
+                    onPointerCancel={(event) => {
+                      if (touchDragRef.current?.pointerId === event.pointerId) {
+                        touchDragRef.current = null;
+                        setTouchDragPreview(null);
+                      }
+                    }}
                     onDragStart={(e) => {
                       const dragData = {
                         type: asset.kind,
@@ -500,6 +590,7 @@ export function AssetDrawer() {
                     </button>
                     <GripVertical className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
                   </div>
+                  </Fragment>
                 ))
               ) : (
                 <div className="flex flex-col items-center justify-center h-60 text-center px-6">
@@ -515,7 +606,7 @@ export function AssetDrawer() {
             </div>
 
             {/* Footer / Tip */}
-            <div className="p-4 bg-slate-50 border-t">
+            <div className="shrink-0 p-4 bg-slate-50 border-t">
               <div className="flex items-start gap-3">
                 <div className="p-1.5 bg-indigo-50 rounded text-indigo-600">
                   <Plus className="w-3 h-3" />
