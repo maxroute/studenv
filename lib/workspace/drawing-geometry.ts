@@ -126,6 +126,45 @@ function segmentDistanceSquared(a: Point, b: Point, c: Point, d: Point) {
     pointDistance(c,closest(c,a,b)),pointDistance(d,closest(d,a,b)));
 }
 
+/** Hit-test the rendered pressure-aware stroke polygon against a swept eraser. */
+export function strokeOutlineIntersectsPolyline(outline: Point[], eraser: Point[], eraserRadius: number) {
+  if (outline.length < 3 || eraser.length === 0) return false;
+  const radius = Math.max(0, eraserRadius);
+  const limit = radius * radius;
+  const strokeBounds = getStrokeBounds(outline);
+  const eraserBounds = getStrokeBounds(eraser);
+  if (
+    eraserBounds.maxX + radius < strokeBounds.minX ||
+    eraserBounds.minX - radius > strokeBounds.maxX ||
+    eraserBounds.maxY + radius < strokeBounds.minY ||
+    eraserBounds.minY - radius > strokeBounds.maxY
+  ) return false;
+
+  const containsPoint = (point: Point) => {
+    let inside = false;
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const a = outline[i], b = outline[j];
+      const crosses = (a.y > point.y) !== (b.y > point.y) &&
+        point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  };
+
+  const edgeCount = outline.length;
+  for (let i = 0; i < eraser.length; i++) {
+    const point = eraser[i];
+    if (containsPoint(point)) return true;
+    const previous = eraser[Math.max(0, i - 1)];
+    for (let edge = 0; edge < edgeCount; edge++) {
+      const a = outline[edge];
+      const b = outline[(edge + 1) % edgeCount];
+      if (segmentDistanceSquared(previous, point, a, b) <= limit) return true;
+    }
+  }
+  return false;
+}
+
 /** Hit-test the actual stroke centerline, including its visible half-width. */
 export function strokeIntersectsPolyline(
   stroke: StrokePoint[], eraser: Point[], eraserRadius: number, strokeWidth: number,
