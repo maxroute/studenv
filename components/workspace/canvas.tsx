@@ -49,6 +49,13 @@ import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import {
+  beginPointerSession,
+  clearPointerSession,
+  endPointerSession,
+  ownsPointerSession,
+  type PointerSession,
+} from "@/lib/workspace/pointer-session";
 
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 
@@ -419,6 +426,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
   const outsideFreeTextDismissRef = useRef(false);
+  const drawPointerSessionRef = useRef<PointerSession | null>(null);
+  const textPointerSessionRef = useRef<PointerSession | null>(null);
+  const stickyPointerSessionRef = useRef<PointerSession | null>(null);
 
   // Fit only a fresh/default workspace view. A saved non-default viewport is
   // respected, and this ref prevents resize/content updates from refitting it.
@@ -1039,7 +1049,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const handleDrawPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      e.stopPropagation();
+      const session = beginPointerSession(e, e.currentTarget, drawPointerSessionRef.current);
+      if (!session) return;
+      drawPointerSessionRef.current = session;
+
       const { x, y } = screenToWorld(e.clientX, e.clientY);
       setMousePos({ x, y });
 
@@ -1048,15 +1061,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       } else {
         setCurrentPath([{ x, y }]);
       }
-
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
     [drawTool, screenToWorld],
   );
 
   const handleDrawPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!ownsPointerSession(drawPointerSessionRef.current, e)) return;
       e.stopPropagation();
+      e.preventDefault();
       const { x, y } = screenToWorld(e.clientX, e.clientY);
       setMousePos({ x, y });
 
@@ -1073,13 +1086,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const handleDrawPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      const session = drawPointerSessionRef.current;
+      if (!ownsPointerSession(session, e)) return;
+      drawPointerSessionRef.current = endPointerSession(session, e);
       e.stopPropagation();
+      e.preventDefault();
 
-      if (drawTool === "pen" && currentPath.length > 1) {
-        const { x, y } = screenToWorld(e.clientX, e.clientY);
-        const lastPoint = currentPath[currentPath.length - 1];
-        const points = lastPoint && lastPoint.x === x && lastPoint.y === y ? currentPath : [...currentPath, { x, y }];
-        const drawing = createDrawingFromWorldPoints(points, drawColor, drawStrokeWidth);
+      const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const lastPenPoint = currentPath[currentPath.length - 1];
+      const completedPenPath =
+        currentPath.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
+          ? [...currentPath, { x, y }]
+          : currentPath;
+      const lastEraserPoint = eraserPath[eraserPath.length - 1];
+      const completedEraserPath =
+        eraserPath.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
+          ? [...eraserPath, { x, y }]
+          : eraserPath;
+
+      if (drawTool === "pen" && completedPenPath.length > 1) {
+        const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
           y: drawing.y,
@@ -1093,12 +1119,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         setCurrentPath([]);
       }
 
-      if (drawTool === "eraser" && eraserPath.length > 0) {
-        eraseAtPath(eraserPath);
+      if (drawTool === "eraser" && completedEraserPath.length > 0) {
+        eraseAtPath(completedEraserPath);
         setEraserPath([]);
       }
 
-      if (drawTool === "pen" && currentPath.length <= 1) {
+      if (drawTool === "pen") {
         setCurrentPath([]);
       }
     },
@@ -1316,6 +1342,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onPointerUpCapture={(e) => {
                   setIsPanDragging(false);
+                  const stickySession = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(stickySession, e)) {
+                    stickyPointerSessionRef.current = endPointerSession(stickySession, e);
+                  }
                   if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
                     return;
                   }
@@ -1343,8 +1373,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onPointerCancelCapture={(e) => {
                   setIsPanDragging(false);
+                  const stickySession = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(stickySession, e)) {
+                    stickyPointerSessionRef.current = endPointerSession(stickySession, e);
+                  }
                   if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
                     pendingFreeTextDismissPointerRef.current = null;
+                  }
+                }}
+                onLostPointerCapture={(e) => {
+                  const stickySession = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(stickySession, e)) {
+                    stickyPointerSessionRef.current = clearPointerSession(stickySession, e);
                   }
                 }}
                 onPointerDown={(e) => {
@@ -1381,10 +1421,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                   if (isStickyToolActive) {
                     // Own the full touch sequence for sticky-note placement.
-                    // This prevents a parent gesture handler from taking over
-                    // after the note has been created on pointer-down.
-                    e.preventDefault();
-                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                    // The shared session prevents another pointer from replacing
+                    // this placement gesture before the browser releases capture.
+                    const session = beginPointerSession(e, e.currentTarget, stickyPointerSessionRef.current);
+                    if (!session) return;
+                    stickyPointerSessionRef.current = session;
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
                       ? `item-${crypto.randomUUID()}`
@@ -1474,9 +1515,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     onPointerMove={handleDrawPointerMove}
                     onPointerUp={handleDrawPointerUp}
                     onPointerCancel={(e) => {
-                      if (e.currentTarget) {
-                        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                      }
+                      const session = drawPointerSessionRef.current;
+                      if (!ownsPointerSession(session, e)) return;
+                      drawPointerSessionRef.current = endPointerSession(session, e);
+                      setCurrentPath([]);
+                      setEraserPath([]);
+                    }}
+                    onLostPointerCapture={(e) => {
+                      const session = drawPointerSessionRef.current;
+                      if (!ownsPointerSession(session, e)) return;
+                      drawPointerSessionRef.current = clearPointerSession(session, e);
                       setCurrentPath([]);
                       setEraserPath([]);
                     }}
@@ -1493,21 +1541,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <div
                     className="absolute inset-0 z-[10000]"
                     onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      // Keep the complete touch gesture routed to the text tool,
-                      // even if the finger drifts beyond the overlay before release.
-                      e.currentTarget.setPointerCapture(e.pointerId);
+                      const session = beginPointerSession(e, e.currentTarget, textPointerSessionRef.current);
+                      if (!session) return;
+                      textPointerSessionRef.current = session;
                     }}
                     onPointerUp={(e) => {
+                      const session = textPointerSessionRef.current;
+                      if (!ownsPointerSession(session, e)) return;
+                      textPointerSessionRef.current = endPointerSession(session, e);
                       handleTextPointerUp(e);
-                      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                        e.currentTarget.releasePointerCapture(e.pointerId);
-                      }
                     }}
                     onPointerCancel={(e) => {
-                      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                        e.currentTarget.releasePointerCapture(e.pointerId);
+                      const session = textPointerSessionRef.current;
+                      if (!ownsPointerSession(session, e)) return;
+                      textPointerSessionRef.current = endPointerSession(session, e);
+                    }}
+                    onLostPointerCapture={(e) => {
+                      const session = textPointerSessionRef.current;
+                      if (ownsPointerSession(session, e)) {
+                        textPointerSessionRef.current = clearPointerSession(session, e);
                       }
                     }}
                     style={{ cursor: "text", touchAction: "none" }}
