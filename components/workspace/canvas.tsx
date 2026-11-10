@@ -58,7 +58,7 @@ import {
 } from "@/lib/workspace/pointer-session";
 
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
-import { getImageDisplaySizeFromFile } from "@/lib/workspace/image-sizing";
+import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/workspace/image-sizing";
 
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
@@ -613,14 +613,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           }
 
           if (assetKind === "image") {
+            const src = `/api/assets/${asset.assetId}/content`;
+            const imageSize = await getImageDisplaySizeFromUrl(src);
             addItem(
               "image",
               {
                 assetId: asset.assetId,
-                src: `/api/assets/${asset.assetId}/content`,
+                src,
                 alt: asset.title,
-                w: 360,
-                h: 240,
+                w: imageSize?.w ?? 360,
+                h: imageSize?.h ?? 240,
               },
               { x, y },
             );
@@ -673,12 +675,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       registerWorkspaceAsset(asset.id);
 
       if (asset.kind === "image") {
+        const src = `/api/assets/${asset.id}/content`;
+        const imageSize = await getImageDisplaySizeFromUrl(src);
         addItem("image", {
           assetId: asset.id,
-          src: `/api/assets/${asset.id}/content`,
+          src,
           alt: asset.title,
-          w: 360,
-          h: 240,
+          w: imageSize?.w ?? 360,
+          h: imageSize?.h ?? 240,
         }, { x, y });
         toast.success("Image added to canvas");
         return;
