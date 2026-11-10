@@ -1431,12 +1431,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
         if (gesture.mode === "draw") {
-          const session = drawPointerSessionRef.current;
-          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = endPointerSession(session, e);
-          currentPathRef.current = [];
-          eraserPathRef.current = [];
-          setCurrentPath([]);
-          setEraserPath([]);
+          // Browsers can interrupt a captured pointer (for example when the
+          // OS takes over input). Treat the last delivered sample as the end
+          // of the stroke instead of throwing away a preview the user saw.
+          // The gesture is cleared above, so a subsequent lost-capture event
+          // cannot commit the same stroke twice.
+          handleDrawPointerUp(e);
         } else if (gesture.mode === "text") {
           const session = textPointerSessionRef.current;
           if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
@@ -1457,12 +1457,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
         if (gesture.mode === "draw") {
-          const session = drawPointerSessionRef.current;
-          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = clearPointerSession(session, e);
-          currentPathRef.current = [];
-          eraserPathRef.current = [];
-          setCurrentPath([]);
-          setEraserPath([]);
+          // Unexpected capture loss must use the same idempotent finalizer as
+          // pointerup. A real pointerup clears canvasGestureRef first, so this
+          // branch only handles an interrupted gesture.
+          handleDrawPointerUp(e);
         } else if (gesture.mode === "text") {
           const session = textPointerSessionRef.current;
           if (ownsPointerSession(session, e)) textPointerSessionRef.current = clearPointerSession(session, e);
