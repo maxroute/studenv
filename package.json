@@ -20,7 +20,9 @@
     "prisma:seed": "node prisma/seed.mjs",
     "test:security": "tsx --test lib/security/request.test.ts",
     "test:workspace-pointer": "tsx --test lib/workspace/pointer-session.test.ts",
-    "test:workspace-drawing": "tsx --test lib/workspace/drawing-geometry.test.ts"
+    "test:workspace-drawing": "tsx --test lib/workspace/drawing-geometry.test.ts",
+    "test:workspace-image": "tsx --test lib/workspace/image-sizing.test.ts",
+    "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
