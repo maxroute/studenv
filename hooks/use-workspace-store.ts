@@ -97,7 +97,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     copiedItems: [],
 
     loadWorkspace: async (id: string) => {
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, workspaceId: null, isSaving: false });
       try {
         const response = await fetch(`/api/workspace/${id}`);
         if (!response.ok) {
@@ -121,6 +121,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           viewport: parsedScene.viewport,
           version: data.version,
           isLoading: false,
+          isSaving: false,
           isDirty: false,
           lastSavedAt: Date.now(),
         });
@@ -142,6 +143,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         viewport: parsedScene.viewport,
         version: payload.version ?? 0,
         isLoading: false,
+        isSaving: false,
         error: null,
         isDirty: false,
         lastSavedAt: Date.now(),
@@ -391,24 +393,62 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     syncWithServer: async () => {
-      const { workspaceId, items, viewport, workspaceAssetIds, version, isSaving } = get();
-      if (!workspaceId || isSaving) return;
+      const initial = get();
+      if (!initial.workspaceId || initial.isSaving) return;
 
-      const sceneJson = serializeWorkspaceScene({ items, viewport, workspaceAssetIds });
-      
+      const savingWorkspaceId = initial.workspaceId;
       set({ isSaving: true });
+
       try {
-        const response = await fetch(`/api/workspace/${workspaceId}/snapshot`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sceneJson, version }),
-        });
-        if (!response.ok) throw new Error("Failed to sync workspace");
-        const data = await response.json();
-        set({ version: data.version, isDirty: false, isSaving: false, lastSavedAt: Date.now() });
+        // Serialize saves. If edits happen while a request is in flight, send
+        // the newest complete scene before declaring the workspace clean.
+        while (true) {
+          const current = get();
+          if (current.workspaceId !== savingWorkspaceId) return;
+
+          const sceneJson = serializeWorkspaceScene({
+            items: current.items,
+            viewport: current.viewport,
+            workspaceAssetIds: current.workspaceAssetIds,
+          });
+
+          const response = await fetch(`/api/workspace/${savingWorkspaceId}/snapshot`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sceneJson, version: current.version }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to sync workspace (${response.status})`);
+          }
+
+          const data = await response.json();
+          const latest = get();
+          if (latest.workspaceId !== savingWorkspaceId) return;
+
+          const latestSceneJson = serializeWorkspaceScene({
+            items: latest.items,
+            viewport: latest.viewport,
+            workspaceAssetIds: latest.workspaceAssetIds,
+          });
+
+          set({ version: data.version, lastSavedAt: Date.now() });
+
+          if (latestSceneJson === sceneJson) {
+            set({ isDirty: false });
+            break;
+          }
+
+          // State changed during the request; immediately persist the newer
+          // scene rather than dropping it because isSaving was true.
+          set({ isDirty: true });
+        }
       } catch (error: any) {
         console.warn("Workspace sync warning:", error.message);
-        set({ isSaving: false });
+        set({ isDirty: true });
+      } finally {
+        if (get().workspaceId === savingWorkspaceId) {
+          set({ isSaving: false });
+        }
       }
     },
 
