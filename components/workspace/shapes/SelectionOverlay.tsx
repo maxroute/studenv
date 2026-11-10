@@ -8,7 +8,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
-import { computeResize, computeRotation } from "@/lib/workspace/transform-engine";
+import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 
@@ -238,12 +238,11 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
         transformState.startBounds.forEach((startBounds, itemId) => {
           const item = items.find((i) => i.id === itemId);
           if (!item) return;
-          const isAspectLocked =
-            item.type === "shape" &&
-            (item.props.kind === "circle" ||
-              item.props.kind === "star" ||
-              item.props.kind === "pentagon" ||
-              e.shiftKey);
+          const isAspectLocked = shouldLockAspectRatioOnResize(
+            item.type,
+            item.props as Record<string, unknown>,
+            e.shiftKey,
+          );
           const newBounds = computeResize(
             transformState.handle!,
             startBounds,
@@ -371,6 +370,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
           {interactive && baseHandles.map((handle) => (
             <div
               key={`group-handle-${handle}`}
+              data-no-canvas-gesture="true"
               className="absolute rounded-full border border-[#f5a623] bg-white shadow-sm"
               style={{
                 width: handleSize,
@@ -497,6 +497,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
 
               {interactive && !isLocked && (
                 <div
+                  data-no-canvas-gesture="true"
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
                     width: handleSize * 1.3,
@@ -515,6 +516,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
 
               {interactive && !isLocked && (
                 <div
+                  data-no-canvas-gesture="true"
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
                     width: handleSize * 1.3,
@@ -563,6 +565,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               baseHandles.map((hType) => (
                 <div
                   key={hType}
+                  data-no-canvas-gesture="true"
                   className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
                   style={{
                     width: handleSize,

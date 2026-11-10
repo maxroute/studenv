@@ -294,8 +294,8 @@ export function StudioItemComponent({
         data-image-id={item.type === "image" ? item.id : undefined}
         data-shape-id={item.type === "shape" ? item.id : undefined}
       >
-        <div className={`w-full h-full relative ${isCanvasPrimitive(item.type)
-          ? "overflow-visible bg-transparent border-0 shadow-none"
+        <div className={`w-full h-full relative ${isCanvasPrimitive(item.type) || item.type === "image"
+          ? "overflow-visible bg-transparent border-0 shadow-none rounded-none"
           : "overflow-hidden bg-white border shadow-md rounded"
           }`}>
           {!isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
