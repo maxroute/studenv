@@ -97,7 +97,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     copiedItems: [],
 
     loadWorkspace: async (id: string) => {
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, workspaceId: null, isSaving: false });
       try {
         const response = await fetch(`/api/workspace/${id}`);
         if (!response.ok) {
@@ -121,6 +121,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           viewport: parsedScene.viewport,
           version: data.version,
           isLoading: false,
+          isSaving: false,
           isDirty: false,
           lastSavedAt: Date.now(),
         });
@@ -142,6 +143,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         viewport: parsedScene.viewport,
         version: payload.version ?? 0,
         isLoading: false,
+        isSaving: false,
         error: null,
         isDirty: false,
         lastSavedAt: Date.now(),
