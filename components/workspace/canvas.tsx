@@ -1568,48 +1568,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
-                onPointerUpCapture={(e) => {
-                  const session = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
-                }}
-                onPointerCancelCapture={(e) => {
-                  const session = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
-                }}
-                onLostPointerCapture={(e) => {
-                  const session = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = clearPointerSession(session, e);
-                }}
-                onPointerDown={(e) => {
-                  setContextMenu(null);
-                  if (isDrawing) return;
-                  const target = e.target;
-                  if (target instanceof Element && target.closest('[data-workspace-item="true"], button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-marquee]')) return;
-                  if (editingStickyId) {
-                    const activeElement = document.activeElement;
-                    if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
-                    else setEditingStickyId(null);
-                    setSelectedStickyId(null);
-                    return;
-                  }
-                  if (isStickyToolActive) {
-                    const session = beginPointerSession(e, e.currentTarget, stickyPointerSessionRef.current);
-                    if (!session) return;
-                    stickyPointerSessionRef.current = session;
-                    const point = screenToWorld(e.clientX, e.clientY);
-                    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                      ? "item-" + crypto.randomUUID()
-                      : "item-" + Math.random().toString(36).slice(2, 11);
-                    const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
-                      id, x: point.x, y: point.y,
-                      zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
-                    });
-                    if (note) updateItems([...items, note]);
-                    setSelectedStickyId(id);
-                    setEditingStickyId(id);
-                    setActiveTool("select");
-                  }
-                }}
                 onDoubleClick={(e) => {
                   if (e.target === e.currentTarget && !isDrawing) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -1620,28 +1578,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               >
                 {isDrawing && (
                   <div
-                    className="absolute inset-0 z-[10000]"
-                    onPointerDown={handleDrawPointerDown}
-                    onPointerMove={handleDrawPointerMove}
-                    onPointerUp={handleDrawPointerUp}
-                    onPointerCancel={(e) => {
-                      const session = drawPointerSessionRef.current;
-                      if (!ownsPointerSession(session, e)) return;
-                      drawPointerSessionRef.current = endPointerSession(session, e);
-                      setCurrentPath([]);
-                      setEraserPath([]);
-                    }}
-                    onLostPointerCapture={(e) => {
-                      const session = drawPointerSessionRef.current;
-                      if (!ownsPointerSession(session, e)) return;
-                      drawPointerSessionRef.current = clearPointerSession(session, e);
-                      setCurrentPath([]);
-                      setEraserPath([]);
-                    }}
+                    className="pointer-events-none absolute inset-0 z-[10000]"
                     style={{
                       cursor: drawTool === "eraser" ? "none" : "crosshair",
-                      // Touch input must stay with the drawing surface instead of
-                      // becoming a browser gesture while the pointer is captured.
                       touchAction: "none",
                     }}
                   />
@@ -1649,29 +1588,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 {isTextToolActive && !isDrawing && !editingFreeTextId && (
                   <div
-                    className="absolute inset-0 z-[10000]"
-                    onPointerDown={(e) => {
-                      const session = beginPointerSession(e, e.currentTarget, textPointerSessionRef.current);
-                      if (!session) return;
-                      textPointerSessionRef.current = session;
-                    }}
-                    onPointerUp={(e) => {
-                      const session = textPointerSessionRef.current;
-                      if (!ownsPointerSession(session, e)) return;
-                      textPointerSessionRef.current = endPointerSession(session, e);
-                      handleTextPointerUp(e);
-                    }}
-                    onPointerCancel={(e) => {
-                      const session = textPointerSessionRef.current;
-                      if (!ownsPointerSession(session, e)) return;
-                      textPointerSessionRef.current = endPointerSession(session, e);
-                    }}
-                    onLostPointerCapture={(e) => {
-                      const session = textPointerSessionRef.current;
-                      if (ownsPointerSession(session, e)) {
-                        textPointerSessionRef.current = clearPointerSession(session, e);
-                      }
-                    }}
+                    className="pointer-events-none absolute inset-0 z-[10000]"
                     style={{ cursor: "text", touchAction: "none" }}
                   />
                 )}
