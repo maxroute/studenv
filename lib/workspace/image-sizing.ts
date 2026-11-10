@@ -48,3 +48,28 @@ export async function getImageDisplaySizeFromFile(file: File): Promise<ImageDisp
     return null;
   }
 }
+
+
+/** Resolve the intrinsic dimensions of a same-origin asset URL before adding
+ * it to the canvas. This keeps the persisted item bounds and selection overlay
+ * in sync from the first render (including Vault drag-and-drop). */
+export async function getImageDisplaySizeFromUrl(
+  src: string,
+  maxWidth = 360,
+  maxHeight = 240,
+): Promise<ImageDisplaySize | null> {
+  if (typeof Image === "undefined" || !src.trim()) return null;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve(
+        image.naturalWidth > 0 && image.naturalHeight > 0
+          ? fitImageToBounds(image.naturalWidth, image.naturalHeight, maxWidth, maxHeight)
+          : null,
+      );
+    };
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
