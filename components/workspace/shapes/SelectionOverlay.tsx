@@ -591,6 +591,8 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
                   onPointerDown={(e) => handleResizeStart(e, item.id, hType)}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
+                  onLostPointerCapture={handlePointerCancel}
                 />
               ))}
 
