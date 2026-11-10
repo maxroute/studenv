@@ -77,7 +77,12 @@ function segmentDistanceSquared(a: Point, b: Point, c: Point, d: Point) {
   const intersects = (() => {
     const cross=(p:Point,q:Point,r:Point)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
     const x1=cross(a,b,c),x2=cross(a,b,d),x3=cross(c,d,a),x4=cross(c,d,b);
-    return x1*x2<=0 && x3*x4<=0;
+    const within = (p: Point, q: Point, r: Point) =>
+      q.x >= Math.min(p.x,r.x) - 1e-9 && q.x <= Math.max(p.x,r.x) + 1e-9 &&
+      q.y >= Math.min(p.y,r.y) - 1e-9 && q.y <= Math.max(p.y,r.y) + 1e-9;
+    if (x1*x2 < 0 && x3*x4 < 0) return true;
+    return (Math.abs(x1)<1e-9 && within(a,c,b)) || (Math.abs(x2)<1e-9 && within(a,d,b)) ||
+      (Math.abs(x3)<1e-9 && within(c,a,d)) || (Math.abs(x4)<1e-9 && within(c,b,d));
   })();
   if (intersects) return 0;
   return Math.min(pointDistance(a,closest(a,c,d)),pointDistance(b,closest(b,c,d)),
