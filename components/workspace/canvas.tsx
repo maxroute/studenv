@@ -962,9 +962,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             point.y >= item.y - eraserRadius && point.y <= item.y + item.h + eraserRadius
           );
         }
-        const worldPoints = localPoints.map((point) => ({
-          x: item.x + point.x, y: item.y + point.y, pressure: point.pressure,
-        }));
+        const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(rotation), sin = Math.sin(rotation);
+        const centerX = item.w / 2, centerY = item.h / 2;
+        const worldPoints = localPoints.map((point) => {
+          const dx = point.x - centerX, dy = point.y - centerY;
+          return {
+            x: item.x + centerX + dx * cos - dy * sin,
+            y: item.y + centerY + dx * sin + dy * cos,
+            pressure: point.pressure,
+          };
+        });
         return !strokeIntersectsPolyline(worldPoints, eraserSamples, eraserRadius, item.props.strokeWidth);
       });
       if (nextItems.length !== items.length) commitDrawingItems(nextItems);
