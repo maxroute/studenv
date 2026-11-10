@@ -324,6 +324,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setIsPanDragging(false);
   }, [isPanning]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const [selectionScreenBox, setSelectionScreenBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const panPointerRef = useRef<{ pointerId: number; startClientX: number; startClientY: number; startX: number; startY: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
@@ -1303,6 +1305,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         smooth
         doubleClick={{ disabled: true }}
         panning={{
+          // All pan gestures are routed through the canvas Pointer Events controller.
+          disabled: true,
+          wheelPanning: true,
+          allowLeftClickPan: false,
+          excluded: [],
+        }}
+        /* panning={{
           // Shape creation and drawing own their pointer gestures.
           // On touch-first devices, Select also owns one-finger gestures:
           // item drags move items and empty-canvas drags create selection boxes.
@@ -1316,6 +1325,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         }}
         // Creation tools own their one-finger gesture; do not let a second
         // touch be interpreted as a transform-layer pinch at the same time.
+        */
         pinch={{ disabled: isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
@@ -1345,7 +1355,22 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
                 onPointerDownCapture={(e) => {
-                  if (isPanning && e.button === 0) setIsPanDragging(true);
+                  if (isPanning && e.isPrimary && e.button === 0) {
+                    const state = transformRef.current?.instance?.transformState;
+                    if (state) {
+                      panPointerRef.current = {
+                        pointerId: e.pointerId,
+                        startClientX: e.clientX,
+                        startClientY: e.clientY,
+                        startX: state.positionX,
+                        startY: state.positionY,
+                      };
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsPanDragging(true);
+                    }
+                  }
                   // Keep the editor mounted for the entire outside gesture.
                   // Blurring on pointer-down remounts the Rnd drag handle under
                   // the same gesture, which can interpret the press as a drag.
@@ -1359,7 +1384,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     e.stopPropagation();
                   }
                 }}
+                onPointerMoveCapture={(e) => {
+                  const pan = panPointerRef.current;
+                  if (!pan || pan.pointerId !== e.pointerId) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const instance = transformRef.current;
+                  const scale = instance?.instance?.transformState?.scale ?? 1;
+                  instance?.setTransform(
+                    pan.startX + (e.clientX - pan.startClientX),
+                    pan.startY + (e.clientY - pan.startClientY),
+                    scale,
+                    0,
+                  );
+                }}
                 onPointerUpCapture={(e) => {
+                  if (panPointerRef.current?.pointerId === e.pointerId) {
+                    panPointerRef.current = null;
+                    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                  }
                   setIsPanDragging(false);
                   const stickySession = stickyPointerSessionRef.current;
                   if (ownsPointerSession(stickySession, e)) {
@@ -1391,6 +1434,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   }
                 }}
                 onPointerCancelCapture={(e) => {
+                  if (panPointerRef.current?.pointerId === e.pointerId) {
+                    panPointerRef.current = null;
+                    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                  }
                   setIsPanDragging(false);
                   const stickySession = stickyPointerSessionRef.current;
                   if (ownsPointerSession(stickySession, e)) {
@@ -1479,6 +1526,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     currentX: x,
                     currentY: y,
                   });
+                  const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+                  if (wrapperRect) {
+                    const sx = e.clientX - wrapperRect.left;
+                    const sy = e.clientY - wrapperRect.top;
+                    setSelectionScreenBox({ startX: sx, startY: sy, currentX: sx, currentY: sy });
+                  }
                   (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                 }}
                 onPointerMove={(e) => {
@@ -1486,6 +1539,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     e.stopPropagation();
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
                     setSelectionBox((prev) => (prev ? { ...prev, currentX: x, currentY: y } : null));
+                    const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+                    if (wrapperRect) {
+                      const sx = e.clientX - wrapperRect.left;
+                      const sy = e.clientY - wrapperRect.top;
+                      setSelectionScreenBox((prev) => (prev ? { ...prev, currentX: sx, currentY: sy } : null));
+                    }
 
                     const rectX = Math.min(selectionBox.startX, x);
                     const rectY = Math.min(selectionBox.startY, y);
@@ -1508,6 +1567,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     e.stopPropagation();
                     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
                     setSelectionBox(null);
+                    setSelectionScreenBox(null);
                   }
                 }}
                 onDoubleClick={(e) => {
@@ -1518,15 +1578,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 
               >
-                {selectionBox && (
-                  <SelectionBox
-                    x={Math.min(selectionBox.startX, selectionBox.currentX)}
-                    y={Math.min(selectionBox.startY, selectionBox.currentY)}
-                    w={Math.abs(selectionBox.startX - selectionBox.currentX)}
-                    h={Math.abs(selectionBox.startY - selectionBox.currentY)}
-                  />
-                )}
-
                 {isDrawing && (
                   <div
                     className="absolute inset-0 z-[10000]"
@@ -1850,6 +1901,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 />
               </div>
             </TransformComponent>
+
+            {selectionScreenBox && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute z-[2147483000] rounded border-2 border-indigo-600 bg-indigo-500/15"
+                style={{
+                  left: Math.min(selectionScreenBox.startX, selectionScreenBox.currentX),
+                  top: Math.min(selectionScreenBox.startY, selectionScreenBox.currentY),
+                  width: Math.abs(selectionScreenBox.startX - selectionScreenBox.currentX),
+                  height: Math.abs(selectionScreenBox.startY - selectionScreenBox.currentY),
+                }}
+              />
+            )}
 
             <ZoomControls utils={utils} />
             <AssetDrawer />
