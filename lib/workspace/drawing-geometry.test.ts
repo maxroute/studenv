@@ -6,6 +6,7 @@ import {
   outlineToPath,
   resampleStrokePoints,
   strokeIntersectsPolyline,
+  strokeOutlineIntersectsPolyline,
 } from "./drawing-geometry";
 
 test("creates a closed, finite outline for a single tap", () => {
@@ -80,4 +81,26 @@ test("fully measured pressure remains smoothly interpolated", () => {
 test("pressureless mouse points remain supported", () => {
   const outline = createStrokeOutline([{ x: 0, y: 0 }, { x: 10, y: 10 }], 4);
   assert.ok(outline.length >= 4);
+});
+
+test("eraser hits the visible edge of a pressure-thickened stroke", () => {
+  const outline = createStrokeOutline([
+    { x: 0, y: 0, pressure: 1 },
+    { x: 100, y: 0, pressure: 1 },
+  ], 20);
+  const bounds = getStrokeBounds(outline);
+  const visibleEdgePoint = { x: 50, y: bounds.minY - 0.5 };
+  assert.equal(strokeOutlineIntersectsPolyline(outline, [visibleEdgePoint], 1), true);
+});
+
+test("eraser does not hit a stroke outside its visible outline", () => {
+  const outline = createStrokeOutline([
+    { x: 0, y: 0, pressure: 0.5 },
+    { x: 100, y: 0, pressure: 0.5 },
+  ], 8);
+  const bounds = getStrokeBounds(outline);
+  assert.equal(
+    strokeOutlineIntersectsPolyline(outline, [{ x: 50, y: bounds.minY - 20 }], 2),
+    false,
+  );
 });
