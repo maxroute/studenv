@@ -36,7 +36,7 @@ import {
 } from "@/lib/utils/media-assets";
 import { ImageNode } from "./items/ImageNode";
 import { ShapeNode } from "./items/ShapeNode";
-import { ShapeCreationOverlay } from "./shapes/ShapeCreationOverlay";
+import { ShapeCreationOverlay, type ShapePointerHandlers } from "./shapes/ShapeCreationOverlay";
 import { ShapeToolButton, ShapeToolIcon } from "./shapes/ShapeToolButton";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
@@ -314,6 +314,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   }, [isPanning]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const [selectionScreenBox, setSelectionScreenBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const shapePointerHandlersRef = useRef<ShapePointerHandlers | null>(null);
   const canvasGestureRef = useRef<{
     pointerId: number;
     mode: "pan" | "select" | "dismiss-text";
@@ -1592,6 +1593,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <ShapeCreationOverlay
                     activeShapeKind={activeShapeKind}
                     screenToWorld={screenToWorld}
+                    pointerHandlersRef={shapePointerHandlersRef}
                     onComplete={() => {
                       setIsShapeToolActive(false);
                     }}
