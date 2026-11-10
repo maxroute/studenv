@@ -1,4 +1,4 @@
-name: Workspace drawing tests
+name: Workspace interaction tests
 
 on:
   pull_request:
@@ -7,13 +7,17 @@ on:
       - "components/workspace/items/DrawingNode.tsx"
       - "lib/workspace/drawing-geometry.ts"
       - "lib/workspace/drawing-geometry.test.ts"
+      - "lib/workspace/image-sizing.ts"
+      - "lib/workspace/image-sizing.test.ts"
+      - "lib/workspace/pointer-session.ts"
+      - "lib/workspace/pointer-session.test.ts"
       - "types/workspace.ts"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/workspace-drawing-tests.yml"
 
 jobs:
-  drawing-geometry:
+  workspace-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,4 +26,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:workspace-drawing
+      - run: npm run test:workspace
