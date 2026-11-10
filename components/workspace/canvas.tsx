@@ -1022,16 +1022,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       if (!ownsPointerSession(drawPointerSessionRef.current, e)) return;
       e.stopPropagation();
       e.preventDefault();
-      const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
-      const point = { x, y, pressure };
-      setMousePos({ x, y });
+      const nativeEvent = e.nativeEvent;
+      const coalesced = typeof nativeEvent.getCoalescedEvents === "function"
+        ? nativeEvent.getCoalescedEvents()
+        : [];
+      const samples = coalesced.length ? coalesced : [nativeEvent];
+      const points = samples.map((sample) => {
+        const world = screenToWorld(sample.clientX, sample.clientY);
+        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? 0.5 : sample.pressure;
+        return { ...world, pressure };
+      });
+      const point = points[points.length - 1];
+      if (!point) return;
+      setMousePos({ x: point.x, y: point.y });
 
       if (drawTool === "pen" && currentPath.length > 0) {
-        setCurrentPath((prev) => [...prev, point]);
+        setCurrentPath((prev) => [...prev, ...points]);
       }
       if (drawTool === "eraser" && eraserPath.length > 0) {
-        setEraserPath((prev) => [...prev, point]);
+        setEraserPath((prev) => [...prev, ...points]);
       }
     },
     [currentPath.length, drawTool, eraserPath.length, screenToWorld],
