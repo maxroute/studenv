@@ -21,3 +21,8 @@ test("scales small images up to the available footprint", () => {
 test("returns a safe fallback for invalid intrinsic dimensions", () => {
   assert.deepEqual(fitImageToBounds(0, 100), { w: 360, h: 240 });
 });
+
+test("fits Vault landscape and portrait assets to their intrinsic dimensions", () => {
+  assert.deepEqual(fitImageToBounds(1600, 900), { w: 360, h: 203 });
+  assert.deepEqual(fitImageToBounds(900, 1600), { w: 135, h: 240 });
+});
