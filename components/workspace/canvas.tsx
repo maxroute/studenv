@@ -220,9 +220,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [fitHintDismissed, setFitHintDismissed] = useState(false);
-  const [fitHintReady, setFitHintReady] = useState(false);
   const [fitHintEligible, setFitHintEligible] = useState(false);
-  const fitHintStorageKey = "studenv:fit-to-screen-hint-dismissed:v1";
 
 
   // Derived state booleans to maintain backward compatibility
@@ -434,57 +432,60 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
     transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
   }, [items]);
-  // Show the compact Fit to Screen coachmark only after the viewport has
-  // settled somewhere with none of the workspace objects visible.
-  useEffect(() => {
-    try {
-      setFitHintDismissed(window.localStorage.getItem(fitHintStorageKey) === "true");
-    } catch {
-      // If storage is unavailable, the hint remains dismissible for this mount.
-    }
-    setFitHintReady(true);
-  }, []);
-
-  const dismissFitHint = useCallback(() => {
-    setFitHintDismissed(true);
-    try {
-      window.localStorage.setItem(fitHintStorageKey, "true");
-    } catch {
-      // Dismissal still applies to the current mount when storage is unavailable.
-    }
-  }, []);
-
-  const hasVisibleWorkspaceContent = useMemo(() => {
-    if (items.length === 0 || !wrapperRef.current) return true;
+  // Determine whether the user has lost the workspace overview, not merely
+  // whether every last object has left the viewport. This catches mobile users
+  // who are zoomed into one object while the rest of the board is elsewhere.
+  const workspaceViewIsLost = useMemo(() => {
+    if (items.length === 0 || !wrapperRef.current || viewport.zoom <= 0) return false;
     const rect = wrapperRef.current.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return true;
+    if (rect.width <= 0 || rect.height <= 0) return false;
     const visible = {
       left: -viewport.x / viewport.zoom,
       top: -viewport.y / viewport.zoom,
       right: (rect.width - viewport.x) / viewport.zoom,
       bottom: (rect.height - viewport.y) / viewport.zoom,
     };
-    return items.some((item) => {
+    let visibleCount = 0;
+    const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    for (const item of items) {
       const radians = ((item.rotation ?? 0) * Math.PI) / 180;
-      const rotatedWidth = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
-      const rotatedHeight = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
+      const width = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
+      const height = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
       const centerX = item.x + item.w / 2;
       const centerY = item.y + item.h / 2;
-      const left = centerX - rotatedWidth / 2;
-      const top = centerY - rotatedHeight / 2;
-      return left < visible.right && left + rotatedWidth > visible.left &&
-        top < visible.bottom && top + rotatedHeight > visible.top;
-    });
+      const left = centerX - width / 2;
+      const top = centerY - height / 2;
+      const right = left + width;
+      const bottom = top + height;
+      bounds.left = Math.min(bounds.left, left);
+      bounds.top = Math.min(bounds.top, top);
+      bounds.right = Math.max(bounds.right, right);
+      bounds.bottom = Math.max(bounds.bottom, bottom);
+      if (left < visible.right && right > visible.left && top < visible.bottom && bottom > visible.top) visibleCount += 1;
+    }
+    const visibleRatio = visibleCount / items.length;
+    const viewportCenterX = (visible.left + visible.right) / 2;
+    const viewportCenterY = (visible.top + visible.bottom) / 2;
+    const contentCenterX = (bounds.left + bounds.right) / 2;
+    const contentCenterY = (bounds.top + bounds.bottom) / 2;
+    const centerIsFarFromContent =
+      Math.abs(viewportCenterX - contentCenterX) > (visible.right - visible.left) * 0.65 ||
+      Math.abs(viewportCenterY - contentCenterY) > (visible.bottom - visible.top) * 0.65;
+    return visibleCount === 0 || (items.length > 1 && visibleRatio < 0.25 && centerIsFarFromContent);
   }, [items, viewport.x, viewport.y, viewport.zoom]);
 
-  useEffect(() => {
-    if (!fitHintReady || fitHintDismissed || isLoading || items.length === 0 || hasVisibleWorkspaceContent || isDrawing || isPanDragging || editingFreeTextId || editingStickyId) return;
-    setFitHintEligible(false);
-    const timeout = window.setTimeout(() => setFitHintEligible(true), 850);
-    return () => window.clearTimeout(timeout);
-  }, [fitHintReady, fitHintDismissed, isLoading, items.length, hasVisibleWorkspaceContent, isDrawing, isPanDragging, editingFreeTextId, editingStickyId]);
+  const dismissFitHint = useCallback(() => setFitHintDismissed(true), []);
 
-  const shouldShowFitHint = fitHintReady && fitHintEligible && !fitHintDismissed && !isLoading && items.length > 0 && !hasVisibleWorkspaceContent && !isDrawing && !isPanDragging && !editingFreeTextId && !editingStickyId;
+  useEffect(() => {
+    if (fitHintDismissed || isLoading || items.length === 0 || !workspaceViewIsLost || isDrawing || isPanDragging || editingFreeTextId || editingStickyId) {
+      setFitHintEligible(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setFitHintEligible(true), 700);
+    return () => window.clearTimeout(timeout);
+  }, [fitHintDismissed, isLoading, items.length, workspaceViewIsLost, isDrawing, isPanDragging, editingFreeTextId, editingStickyId]);
+
+  const shouldShowFitHint = fitHintEligible && !fitHintDismissed && !isLoading && items.length > 0 && workspaceViewIsLost && !isDrawing && !isPanDragging && !editingFreeTextId && !editingStickyId;
 
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
