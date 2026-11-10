@@ -4,6 +4,7 @@ import {
   createStrokeOutline,
   getStrokeBounds,
   outlineToPath,
+  resampleStrokePoints,
   strokeIntersectsPolyline,
 } from "./drawing-geometry";
 
@@ -54,6 +55,25 @@ test("eraser accounts for the visible stroke width", () => {
     strokeIntersectsPolyline([{ x: 0, y: 0 }, { x: 100, y: 0 }], [{ x: 50, y: 5 }], 1, 10),
     true,
   );
+});
+
+test("resampling never replaces missing pressure with a synthetic constant", () => {
+  const samples = resampleStrokePoints([
+    { x: 0, y: 0, pressure: 0.15 },
+    { x: 10, y: 0 },
+    { x: 20, y: 0, pressure: 0.9 },
+  ], 2);
+  assert.equal(samples[1].pressure, undefined);
+  assert.equal(samples[samples.length - 1].pressure, 0.9);
+  assert.equal(samples.some((point) => point.pressure === 0.5), false);
+});
+
+test("fully measured pressure remains smoothly interpolated", () => {
+  const samples = resampleStrokePoints([
+    { x: 0, y: 0, pressure: 0.2 },
+    { x: 10, y: 0, pressure: 0.8 },
+  ], 2);
+  assert.ok(samples.some((point) => point.pressure !== undefined && point.pressure > 0.2 && point.pressure < 0.8));
 });
 
 test("pressureless mouse points remain supported", () => {
