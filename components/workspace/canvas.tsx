@@ -1297,7 +1297,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           // Pan accepts gestures that begin over objects; other tools reserve drag handles.
           excluded: isPanning ? [] : ["drag-handle"],
         }}
-        pinch={{ disabled: isDrawing }}
+        // Creation tools own their one-finger gesture; do not let a second
+        // touch be interpreted as a transform-layer pinch at the same time.
+        pinch={{ disabled: isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
         wheel={{
           disabled: isDrawing,
           wheelDisabled: true,
