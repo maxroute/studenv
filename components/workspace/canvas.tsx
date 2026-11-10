@@ -1082,11 +1082,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.preventDefault();
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
-      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
       const penSamples = currentPathRef.current;
       const eraserSamples = eraserPathRef.current;
       const lastPenPoint = penSamples[penSamples.length - 1];
+      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
+      // Pen-up reports zero pressure on many browsers. Preserve the last
+      // actual sample so final geometry matches the pressure-sensitive preview.
+      const pressure = e.pointerType === "mouse"
+        ? undefined
+        : e.pressure > 0
+          ? e.pressure
+          : drawTool === "pen"
+            ? lastPenPoint?.pressure
+            : lastEraserPoint?.pressure;
+      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
       const completedPenPath =
         penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
           ? [...penSamples, finalPoint]
