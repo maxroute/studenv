@@ -52,7 +52,7 @@ export function endPointerSession(
   session: PointerSession | null,
   event: Pick<PointerSessionEvent, "pointerId">,
 ): null | PointerSession {
-  if (!ownsPointerSession(session, event)) return session;
+  if (session === null || session.pointerId !== event.pointerId) return session;
 
   if (session.target.hasPointerCapture(session.pointerId)) {
     session.target.releasePointerCapture(session.pointerId);
