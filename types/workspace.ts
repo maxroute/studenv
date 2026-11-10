@@ -116,6 +116,7 @@ export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
 const DrawingPointSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
+  pressure: z.number().finite().min(0).max(1).optional(),
 });
 
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
@@ -125,6 +126,7 @@ export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
     points: z.array(DrawingPointSchema).optional(),
+    outline: z.boolean().default(false),
   }),
 });
 
@@ -272,7 +274,10 @@ function coercePointArray(value: unknown) {
         return null;
       }
 
-      return { x, y };
+      const pressure = typeof record.pressure === "number" && Number.isFinite(record.pressure)
+        ? Math.max(0, Math.min(1, record.pressure))
+        : undefined;
+      return { x, y, ...(pressure === undefined ? {} : { pressure }) };
     })
     .filter(Boolean) as Array<{ x: number; y: number }>;
 
@@ -459,6 +464,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
           points: coercePointArray(props.points),
+          outline: props.outline === true,
         },
       });
     case "shape": {
