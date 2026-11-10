@@ -314,7 +314,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   }, [isPanning]);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const [selectionScreenBox, setSelectionScreenBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
-  const panPointerRef = useRef<{ pointerId: number; startClientX: number; startClientY: number; startX: number; startY: number } | null>(null);
+  const canvasGestureRef = useRef<{
+    pointerId: number;
+    mode: "pan" | "select" | "dismiss-text";
+    startClientX: number;
+    startClientY: number;
+    startWorldX: number;
+    startWorldY: number;
+    startTransformX: number;
+    startTransformY: number;
+    scale: number;
+  } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
@@ -1254,6 +1264,148 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         cursor: isDrawing && drawTool === "eraser" ? "none" : undefined,
         touchAction: "none",
       }}
+      onPointerDownCapture={(e) => {
+        if (!e.isPrimary || e.button !== 0 || canvasGestureRef.current) return;
+        const target = e.target instanceof Element ? e.target : null;
+        const isControl = !!target?.closest(
+          'button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-canvas-gesture]'
+        );
+        if (isControl) return;
+        if (activeTool !== "select" && activeTool !== "pan") return;
+        if (activeTool === "select" && target?.closest('[data-workspace-item="true"]')) return;
+
+        if (activeTool === "select" && editingStickyId) {
+          const activeElement = document.activeElement;
+          if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
+          else setEditingStickyId(null);
+          setSelectedStickyId(null);
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
+        const rect = wrapperRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const world = screenToWorld(e.clientX, e.clientY);
+        const transformState = transformRef.current?.instance?.transformState;
+        const mode = editingFreeTextId && !target?.closest("[data-free-text-root]")
+          ? "dismiss-text"
+          : activeTool;
+
+        canvasGestureRef.current = {
+          pointerId: e.pointerId,
+          mode,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          startWorldX: world.x,
+          startWorldY: world.y,
+          startTransformX: transformState?.positionX ?? 0,
+          startTransformY: transformState?.positionY ?? 0,
+          scale: transformState?.scale ?? viewport.zoom ?? 1,
+        };
+
+        if (mode === "select") {
+          setContextMenu(null);
+          setSelectedStickyId(null);
+          setEditingStickyId(null);
+          setSelectedFreeTextId(null);
+          setSelectedDrawingId(null);
+          setSelectedImageId(null);
+          useSelectionStore.getState().deselectAll();
+          setSelectionBox({ startX: world.x, startY: world.y, currentX: world.x, currentY: world.y });
+          setSelectionScreenBox({
+            startX: e.clientX - rect.left,
+            startY: e.clientY - rect.top,
+            currentX: e.clientX - rect.left,
+            currentY: e.clientY - rect.top,
+          });
+        } else if (mode === "pan") {
+          setIsPanDragging(true);
+        } else {
+          pendingFreeTextDismissPointerRef.current = e.pointerId;
+        }
+
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onPointerMoveCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (gesture.mode === "dismiss-text") return;
+        if (gesture.mode === "pan") {
+          transformRef.current?.setTransform(
+            gesture.startTransformX + (e.clientX - gesture.startClientX),
+            gesture.startTransformY + (e.clientY - gesture.startClientY),
+            gesture.scale,
+            0,
+          );
+          return;
+        }
+
+        const world = screenToWorld(e.clientX, e.clientY);
+        const rect = wrapperRef.current?.getBoundingClientRect();
+        setSelectionBox((prev) => prev ? { ...prev, currentX: world.x, currentY: world.y } : null);
+        if (rect) {
+          const sx = e.clientX - rect.left;
+          const sy = e.clientY - rect.top;
+          setSelectionScreenBox((prev) => prev ? { ...prev, currentX: sx, currentY: sy } : null);
+        }
+        const x = Math.min(gesture.startWorldX, world.x);
+        const y = Math.min(gesture.startWorldY, world.y);
+        const w = Math.abs(gesture.startWorldX - world.x);
+        const h = Math.abs(gesture.startWorldY - world.y);
+        const collidingIds = items
+          .filter((item) => isIntersecting(
+            { x: item.x, y: item.y, w: item.w, h: item.h },
+            { x, y, w, h },
+          ))
+          .map((item) => item.id);
+        useSelectionStore.getState().clearAndSelectIds(collidingIds);
+      }}
+      onPointerUpCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+        if (gesture.mode === "select") {
+          setSelectionBox(null);
+          setSelectionScreenBox(null);
+        } else if (gesture.mode === "pan") {
+          setIsPanDragging(false);
+        } else {
+          pendingFreeTextDismissPointerRef.current = null;
+          e.preventDefault();
+          e.stopPropagation();
+          outsideFreeTextDismissRef.current = true;
+          const activeElement = document.activeElement;
+          if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
+          outsideFreeTextDismissRef.current = false;
+          setEditingFreeTextId(null);
+          setSelectedFreeTextId(null);
+          if (!isTextToolLocked) setIsTextToolActive(false);
+        }
+      }}
+      onPointerCancelCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+        setSelectionBox(null);
+        setSelectionScreenBox(null);
+        setIsPanDragging(false);
+        if (pendingFreeTextDismissPointerRef.current === e.pointerId) pendingFreeTextDismissPointerRef.current = null;
+      }}
+      onLostPointerCapture={(e) => {
+        const gesture = canvasGestureRef.current;
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        canvasGestureRef.current = null;
+        setSelectionBox(null);
+        setSelectionScreenBox(null);
+        setIsPanDragging(false);
+      }}
     >
       <svg className="absolute w-0 h-0 pointer-events-none" style={{ position: "absolute", width: 0, height: 0, visibility: "hidden" }}>
         <defs>
@@ -1328,224 +1480,46 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
                 onContextMenu={handleContextMenu}
-                onPointerDownCapture={(e) => {
-                  if (isPanning && e.isPrimary && e.button === 0) {
-                    const state = transformRef.current?.instance?.transformState;
-                    if (state) {
-                      panPointerRef.current = {
-                        pointerId: e.pointerId,
-                        startClientX: e.clientX,
-                        startClientY: e.clientY,
-                        startX: state.positionX,
-                        startY: state.positionY,
-                      };
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsPanDragging(true);
-                    }
-                  }
-                  // Keep the editor mounted for the entire outside gesture.
-                  // Blurring on pointer-down remounts the Rnd drag handle under
-                  // the same gesture, which can interpret the press as a drag.
-                  if (
-                    editingFreeTextId &&
-                    !(e.target instanceof Element &&
-                      e.target.closest("[data-free-text-root]"))
-                  ) {
-                    pendingFreeTextDismissPointerRef.current = e.pointerId;
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }
-                }}
-                onPointerMoveCapture={(e) => {
-                  const pan = panPointerRef.current;
-                  if (!pan || pan.pointerId !== e.pointerId) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const instance = transformRef.current;
-                  const scale = instance?.instance?.transformState?.scale ?? 1;
-                  instance?.setTransform(
-                    pan.startX + (e.clientX - pan.startClientX),
-                    pan.startY + (e.clientY - pan.startClientY),
-                    scale,
-                    0,
-                  );
-                }}
                 onPointerUpCapture={(e) => {
-                  if (panPointerRef.current?.pointerId === e.pointerId) {
-                    panPointerRef.current = null;
-                    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-                  }
-                  setIsPanDragging(false);
-                  const stickySession = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(stickySession, e)) {
-                    stickyPointerSessionRef.current = endPointerSession(stickySession, e);
-                  }
-                  if (pendingFreeTextDismissPointerRef.current !== e.pointerId) {
-                    return;
-                  }
-
-                  pendingFreeTextDismissPointerRef.current = null;
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  // Commit only after the outside gesture is fully consumed.
-                  // The textarea's onBlur also completes editing. Mark this
-                  // specific completion as an outside dismissal so its callback
-                  // does not re-select the text item.
-                  outsideFreeTextDismissRef.current = true;
-                  const activeElement = document.activeElement;
-                  if (activeElement instanceof HTMLTextAreaElement) {
-                    activeElement.blur();
-                  }
-                  outsideFreeTextDismissRef.current = false;
-
-                  setEditingFreeTextId(null);
-                  setSelectedFreeTextId(null);
-                  if (!isTextToolLocked) {
-                    setIsTextToolActive(false);
-                  }
+                  const session = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
                 }}
                 onPointerCancelCapture={(e) => {
-                  if (panPointerRef.current?.pointerId === e.pointerId) {
-                    panPointerRef.current = null;
-                    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-                  }
-                  setIsPanDragging(false);
-                  const stickySession = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(stickySession, e)) {
-                    stickyPointerSessionRef.current = endPointerSession(stickySession, e);
-                  }
-                  if (pendingFreeTextDismissPointerRef.current === e.pointerId) {
-                    pendingFreeTextDismissPointerRef.current = null;
-                  }
+                  const session = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
                 }}
                 onLostPointerCapture={(e) => {
-                  if (panPointerRef.current?.pointerId === e.pointerId) {
-                    panPointerRef.current = null;
-                    setIsPanDragging(false);
-                  }
-                  const stickySession = stickyPointerSessionRef.current;
-                  if (ownsPointerSession(stickySession, e)) {
-                    stickyPointerSessionRef.current = clearPointerSession(stickySession, e);
-                  }
+                  const session = stickyPointerSessionRef.current;
+                  if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = clearPointerSession(session, e);
                 }}
                 onPointerDown={(e) => {
                   setContextMenu(null);
                   if (isDrawing) return;
-
-                  // Start marquee selection on any non-interactive empty-canvas
-                  // surface, not only when the exact canvas div is the target.
-                  // Real workspace items and controls keep ownership of their
-                  // own pointer gestures.
                   const target = e.target;
-                  if (
-                    target instanceof Element &&
-                    target.closest(
-                      '[data-workspace-item="true"], button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-marquee]'
-                    )
-                  ) {
-                    return;
-                  }
-
+                  if (target instanceof Element && target.closest('[data-workspace-item="true"], button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-marquee]')) return;
                   if (editingStickyId) {
                     const activeElement = document.activeElement;
-
-                    if (activeElement instanceof HTMLTextAreaElement) {
-                      activeElement.blur();
-                    } else {
-                      setEditingStickyId(null);
-                    }
-
-                    // Exit editing and deselect the sticky note in the same click.
+                    if (activeElement instanceof HTMLTextAreaElement) activeElement.blur();
+                    else setEditingStickyId(null);
                     setSelectedStickyId(null);
                     return;
                   }
-
                   if (isStickyToolActive) {
-                    // Own the full touch sequence for sticky-note placement.
-                    // The shared session prevents another pointer from replacing
-                    // this placement gesture before the browser releases capture.
                     const session = beginPointerSession(e, e.currentTarget, stickyPointerSessionRef.current);
                     if (!session) return;
                     stickyPointerSessionRef.current = session;
-                    const { x, y } = screenToWorld(e.clientX, e.clientY);
+                    const point = screenToWorld(e.clientX, e.clientY);
                     const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                      ? `item-${crypto.randomUUID()}`
-                      : `item-${Math.random().toString(36).slice(2, 11)}`;
+                      ? "item-" + crypto.randomUUID()
+                      : "item-" + Math.random().toString(36).slice(2, 11);
                     const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
-                      id, x, y,
+                      id, x: point.x, y: point.y,
                       zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
                     });
                     if (note) updateItems([...items, note]);
                     setSelectedStickyId(id);
                     setEditingStickyId(id);
                     setActiveTool("select");
-                    return;
-                  }
-
-                  if (isTextToolActive || isShapeToolActive || isPanning) {
-                    return;
-                  }
-
-                  setSelectedStickyId(null);
-                  setEditingStickyId(null);
-                  setSelectedFreeTextId(null);
-                  setSelectedDrawingId(null);
-                  setSelectedImageId(null);
-
-                  // Selection box start
-                  useSelectionStore.getState().deselectAll();
-                  const { x, y } = screenToWorld(e.clientX, e.clientY);
-                  setSelectionBox({
-                    startX: x,
-                    startY: y,
-                    currentX: x,
-                    currentY: y,
-                  });
-                  const wrapperRect = wrapperRef.current?.getBoundingClientRect();
-                  if (wrapperRect) {
-                    const sx = e.clientX - wrapperRect.left;
-                    const sy = e.clientY - wrapperRect.top;
-                    setSelectionScreenBox({ startX: sx, startY: sy, currentX: sx, currentY: sy });
-                  }
-                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                }}
-                onPointerMove={(e) => {
-                  if (selectionBox) {
-                    e.stopPropagation();
-                    const { x, y } = screenToWorld(e.clientX, e.clientY);
-                    setSelectionBox((prev) => (prev ? { ...prev, currentX: x, currentY: y } : null));
-                    const wrapperRect = wrapperRef.current?.getBoundingClientRect();
-                    if (wrapperRect) {
-                      const sx = e.clientX - wrapperRect.left;
-                      const sy = e.clientY - wrapperRect.top;
-                      setSelectionScreenBox((prev) => (prev ? { ...prev, currentX: sx, currentY: sy } : null));
-                    }
-
-                    const rectX = Math.min(selectionBox.startX, x);
-                    const rectY = Math.min(selectionBox.startY, y);
-                    const rectW = Math.abs(selectionBox.startX - x);
-                    const rectH = Math.abs(selectionBox.startY - y);
-
-                    const collidingIds = items
-                      .filter((item) => {
-                        const bounds = { x: item.x, y: item.y, w: item.w, h: item.h };
-                        const rect = { x: rectX, y: rectY, w: rectW, h: rectH };
-                        return isIntersecting(bounds, rect);
-                      })
-                      .map((item) => item.id);
-
-                    useSelectionStore.getState().clearAndSelectIds(collidingIds);
-                  }
-                }}
-                onPointerUp={(e) => {
-                  if (selectionBox) {
-                    e.stopPropagation();
-                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                    setSelectionBox(null);
-                    setSelectionScreenBox(null);
                   }
                 }}
                 onDoubleClick={(e) => {
