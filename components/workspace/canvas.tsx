@@ -1863,7 +1863,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   canvasScale={viewport.zoom}
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
-                  interactive={!isPanning}
+                  interactive={activeTool === "select"}
                 />
               </div>
             </TransformComponent>
