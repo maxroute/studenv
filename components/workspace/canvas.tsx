@@ -1007,7 +1007,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       drawPointerSessionRef.current = session;
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
       const point = { x, y, pressure };
       setMousePos({ x, y });
 
@@ -1029,7 +1029,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       const samples = coalesced.length ? coalesced : [nativeEvent];
       const points = samples.map((sample) => {
         const world = screenToWorld(sample.clientX, sample.clientY);
-        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? 0.5 : sample.pressure;
+        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? undefined : sample.pressure;
         return { ...world, pressure };
       });
       const point = points[points.length - 1];
