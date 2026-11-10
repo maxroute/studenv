@@ -26,6 +26,7 @@ import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
+import { createStrokeOutline, getStrokeBounds, outlineToPath, strokeIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -59,7 +60,7 @@ import {
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 
 
-type CanvasPoint = { x: number; y: number };
+type CanvasPoint = { x: number; y: number; pressure?: number };
 type HistoryEntry = StudioItem[];
 
 function ZoomControls({ utils }: { utils: any }) {
@@ -162,27 +163,26 @@ function resamplePolyline(points: CanvasPoint[], maxStep = 2): CanvasPoint[] {
 
 function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
   const normalizedPoints = resamplePolyline(points, Math.max(1.5, strokeWidth / 2));
-  const padding = Math.ceil(strokeWidth / 2) + 2;
-  const minX = Math.min(...normalizedPoints.map((point) => point.x));
-  const minY = Math.min(...normalizedPoints.map((point) => point.y));
-  const maxX = Math.max(...normalizedPoints.map((point) => point.x));
-  const maxY = Math.max(...normalizedPoints.map((point) => point.y));
-  const x = minX - padding;
-  const y = minY - padding;
+  const outline = createStrokeOutline(normalizedPoints, strokeWidth);
+  const bounds = getStrokeBounds(outline);
+  const padding = 2;
+  const x = bounds.minX - padding;
+  const y = bounds.minY - padding;
   const localPoints = normalizedPoints.map((point) => ({
     x: point.x - x,
     y: point.y - y,
+    ...(point.pressure === undefined ? {} : { pressure: point.pressure }),
   }));
-
+  const localOutline = outline.map((point) => ({ x: point.x - x, y: point.y - y }));
   return {
-    x,
-    y,
-    w: Math.max(maxX - minX + padding * 2, 1),
-    h: Math.max(maxY - minY + padding * 2, 1),
-    d: buildStrokePath(localPoints),
+    x, y,
+    w: Math.max(bounds.maxX - bounds.minX + padding * 2, 1),
+    h: Math.max(bounds.maxY - bounds.minY + padding * 2, 1),
+    d: outlineToPath(localOutline),
     points: localPoints,
     color,
     strokeWidth,
+    outline: true,
   };
 }
 
@@ -935,105 +935,36 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const eraseAtPath = useCallback(
     (path: CanvasPoint[]) => {
       if (path.length === 0) return;
-
-      const eraserSamples = resamplePolyline(path, 2);
-      const radiusSquared = eraserRadius * eraserRadius;
-      const nextItems = items.flatMap((item) => {
+      const eraserSamples = resamplePolyline(path, 3);
+      const nextItems = items.filter((item) => {
         if (item.type === "shape") {
-          // Shapes are atomic vector objects: erase the whole object when the
-          // eraser path intersects its rotated bounds.
           const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
-          const cos = Math.cos(rotation);
-          const sin = Math.sin(rotation);
-          const centerX = item.x + item.w / 2;
-          const centerY = item.y + item.h / 2;
-          const touchedShape = eraserSamples.some((point) => {
-            const dx = point.x - centerX;
-            const dy = point.y - centerY;
+          const cos = Math.cos(rotation), sin = Math.sin(rotation);
+          const centerX = item.x + item.w / 2, centerY = item.y + item.h / 2;
+          return !eraserSamples.some((point) => {
+            const dx = point.x - centerX, dy = point.y - centerY;
             const localX = dx * cos + dy * sin + item.w / 2;
             const localY = -dx * sin + dy * cos + item.h / 2;
             return localX >= -eraserRadius && localX <= item.w + eraserRadius &&
               localY >= -eraserRadius && localY <= item.h + eraserRadius;
           });
-          return touchedShape ? [] : [item];
         }
-
-        if (item.type !== "drawing") {
-          return [item];
-        }
-
+        if (item.type !== "drawing") return true;
         const localPoints = item.props.points;
-        if (!localPoints || localPoints.length < 2) {
-          const touchedLegacyStroke = path.some((pt) => {
-            return (
-              pt.x >= item.x - eraserRadius &&
-              pt.x <= item.x + item.w + eraserRadius &&
-              pt.y >= item.y - eraserRadius &&
-              pt.y <= item.y + item.h + eraserRadius
-            );
-          });
-
-          return touchedLegacyStroke ? [] : [item];
+        if (!localPoints?.length) {
+          // Backward-compatible fallback for old imported drawings that only
+          // contain an SVG path and no source samples.
+          return !eraserSamples.some((point) =>
+            point.x >= item.x - eraserRadius && point.x <= item.x + item.w + eraserRadius &&
+            point.y >= item.y - eraserRadius && point.y <= item.y + item.h + eraserRadius
+          );
         }
-
-        const worldPoints = resamplePolyline(
-          localPoints.map((point) => ({
-            x: item.x + point.x,
-            y: item.y + point.y,
-          })),
-          2,
-        );
-
-        const keptSegments: CanvasPoint[][] = [];
-        let activeSegment: CanvasPoint[] = [];
-        let touched = false;
-
-        for (const point of worldPoints) {
-          const shouldErase = eraserSamples.some((eraserPoint) => {
-            const dx = point.x - eraserPoint.x;
-            const dy = point.y - eraserPoint.y;
-            return dx * dx + dy * dy <= radiusSquared;
-          });
-
-          if (shouldErase) {
-            touched = true;
-            if (activeSegment.length > 1) {
-              keptSegments.push(activeSegment);
-            }
-            activeSegment = [];
-            continue;
-          }
-
-          activeSegment.push(point);
-        }
-
-        if (activeSegment.length > 1) {
-          keptSegments.push(activeSegment);
-        }
-
-        if (!touched) {
-          return [item];
-        }
-
-        return keptSegments
-          .map((segment) => {
-            const drawing = createDrawingFromWorldPoints(segment, item.props.color, item.props.strokeWidth);
-            return createWorkspaceItem("drawing", drawing, {
-              x: drawing.x,
-              y: drawing.y,
-              zIndex: item.zIndex,
-            });
-          })
-          .filter(Boolean) as StudioItem[];
+        const worldPoints = localPoints.map((point) => ({
+          x: item.x + point.x, y: item.y + point.y, pressure: point.pressure,
+        }));
+        return !strokeIntersectsPolyline(worldPoints, eraserSamples, eraserRadius, item.props.strokeWidth);
       });
-
-      const didChange =
-        nextItems.length !== items.length ||
-        nextItems.some((item, index) => items[index]?.id !== item.id);
-
-      if (didChange) {
-        commitDrawingItems(nextItems);
-      }
+      if (nextItems.length !== items.length) commitDrawingItems(nextItems);
     },
     [commitDrawingItems, eraserRadius, items],
   );
@@ -1073,13 +1004,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       drawPointerSessionRef.current = session;
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
+      const point = { x, y, pressure };
       setMousePos({ x, y });
 
-      if (drawTool === "eraser") {
-        setEraserPath([{ x, y }]);
-      } else {
-        setCurrentPath([{ x, y }]);
-      }
+      if (drawTool === "eraser") setEraserPath([point]);
+      else setCurrentPath([point]);
     },
     [drawTool, screenToWorld],
   );
@@ -1090,14 +1020,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.stopPropagation();
       e.preventDefault();
       const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
+      const point = { x, y, pressure };
       setMousePos({ x, y });
 
-      if (drawTool === "pen" && currentPath.length > 0) {
-        setCurrentPath((prev) => [...prev, { x, y }]);
+      if ((drawTool === "pen" || drawTool === "highlighter") && currentPath.length > 0) {
+        setCurrentPath((prev) => [...prev, point]);
       }
-
       if (drawTool === "eraser" && eraserPath.length > 0) {
-        setEraserPath((prev) => [...prev, { x, y }]);
+        setEraserPath((prev) => [...prev, point]);
       }
     },
     [currentPath.length, drawTool, eraserPath.length, screenToWorld],
@@ -1112,18 +1043,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.preventDefault();
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
+      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? 0.5 : e.pressure;
+      const finalPoint = { x, y, pressure };
       const lastPenPoint = currentPath[currentPath.length - 1];
       const completedPenPath =
         currentPath.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
-          ? [...currentPath, { x, y }]
+          ? [...currentPath, finalPoint]
           : currentPath;
       const lastEraserPoint = eraserPath[eraserPath.length - 1];
       const completedEraserPath =
         eraserPath.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
-          ? [...eraserPath, { x, y }]
+          ? [...eraserPath, finalPoint]
           : eraserPath;
 
-      if (drawTool === "pen" && completedPenPath.length > 1) {
+      if ((drawTool === "pen" || drawTool === "highlighter") && completedPenPath.length > 0) {
         const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
@@ -1608,15 +1541,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {currentPath.length > 1 && (
+                {currentPath.length > 0 && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[999]">
                     <path
-                      d={buildStrokePath(currentPath)}
-                      stroke={drawColor}
-                      strokeWidth={drawStrokeWidth}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      d={outlineToPath(createStrokeOutline(currentPath, drawStrokeWidth))}
+                      fill={drawColor}
+                      fillOpacity={drawTool === "highlighter" ? 0.35 : 1}
                     />
                   </svg>
                 )}
