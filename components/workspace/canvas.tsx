@@ -134,7 +134,10 @@ function buildStrokePath(points: CanvasPoint[]) {
 
 
 function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
-  const normalizedPoints = resampleStrokePoints(points, Math.max(1.5, strokeWidth / 2));
+  // Persist the exact same sample sequence used by the live preview. Re-sampling
+  // here changes the pressure curve at pen-up, making the saved stroke look
+  // different from what the user just drew.
+  const normalizedPoints = points;
   const outline = createStrokeOutline(normalizedPoints, strokeWidth);
   const bounds = getStrokeBounds(outline);
   const padding = 2;
