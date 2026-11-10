@@ -131,7 +131,9 @@ export function strokeIntersectsPolyline(
   stroke: StrokePoint[], eraser: Point[], eraserRadius: number, strokeWidth: number,
 ) {
   if (!stroke.length || !eraser.length) return false;
-  const radius = Math.max(0, eraserRadius) + Math.max(0, strokeWidth) / 2;
+  // Give the eraser a forgiving hit area while still respecting the visible stroke width.
+  // This compensates for pressure-shaped outlines and makes near-edge passes reliable.
+  const radius = Math.max(0, eraserRadius) * 1.35 + Math.max(0, strokeWidth) / 2;
   const limit = radius * radius;
   if (stroke.length === 1) {
     return eraser.some((p) => (p.x-stroke[0].x)**2+(p.y-stroke[0].y)**2 <= limit);
