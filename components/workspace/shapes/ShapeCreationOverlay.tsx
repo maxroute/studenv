@@ -393,7 +393,6 @@ export function ShapeCreationOverlay({
       <div
         ref={containerRef}
         className="absolute inset-0 select-none cursor-crosshair z-[10000] bg-transparent"
-        style={{ touchAction: "none" }}
         style={{ touchAction: "none", pointerEvents: "none" }}
       />
       {dragState && previewComponent && (
