@@ -430,6 +430,23 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const textPointerSessionRef = useRef<PointerSession | null>(null);
   const stickyPointerSessionRef = useRef<PointerSession | null>(null);
 
+  // If the user changes tools mid-gesture, release the old creation tool's
+  // capture and discard its unfinished preview instead of leaving a stale
+  // pointer session that blocks the next gesture.
+  useEffect(() => {
+    if (isDrawing || !drawPointerSessionRef.current) return;
+    const session = drawPointerSessionRef.current;
+    drawPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+    setCurrentPath([]);
+    setEraserPath([]);
+  }, [isDrawing]);
+
+  useEffect(() => {
+    if (isTextToolActive || !textPointerSessionRef.current) return;
+    const session = textPointerSessionRef.current;
+    textPointerSessionRef.current = endPointerSession(session, { pointerId: session.pointerId });
+  }, [isTextToolActive]);
+
   // Fit only a fresh/default workspace view. A saved non-default viewport is
   // respected, and this ref prevents resize/content updates from refitting it.
   useEffect(() => {
