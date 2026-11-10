@@ -317,7 +317,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const shapePointerHandlersRef = useRef<ShapePointerHandlers | null>(null);
   const canvasGestureRef = useRef<{
     pointerId: number;
-    mode: "pan" | "select" | "dismiss-text";
+    mode: "pan" | "select" | "dismiss-text" | "draw" | "text" | "shape" | "sticky";
     startClientX: number;
     startClientY: number;
     startWorldX: number;
@@ -1272,8 +1272,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           'button, input, textarea, select, [contenteditable="true"], [role="button"], [data-no-canvas-gesture]'
         );
         if (isControl) return;
-        if (activeTool !== "select" && activeTool !== "pan") return;
-        if (activeTool === "select" && target?.closest('[data-workspace-item="true"]')) return;
+
+        const isCanvasTool = activeTool === "select" || activeTool === "pan" ||
+          isDrawing || isTextToolActive || isShapeToolActive || isStickyToolActive;
+        if (!isCanvasTool) return;
+        if ((activeTool === "select" || isStickyToolActive) && target?.closest('[data-workspace-item="true"]')) return;
 
         if (activeTool === "select" && editingStickyId) {
           const activeElement = document.activeElement;
@@ -1289,9 +1292,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (!rect) return;
         const world = screenToWorld(e.clientX, e.clientY);
         const transformState = transformRef.current?.instance?.transformState;
-        const mode = editingFreeTextId && !target?.closest("[data-free-text-root]")
-          ? "dismiss-text"
-          : activeTool;
+        const mode: "pan" | "select" | "dismiss-text" | "draw" | "text" | "shape" | "sticky" =
+          editingFreeTextId && !target?.closest("[data-free-text-root]")
+            ? "dismiss-text"
+            : isPanning ? "pan"
+            : isDrawing ? "draw"
+            : isTextToolActive ? "text"
+            : isShapeToolActive ? "shape"
+            : isStickyToolActive ? "sticky"
+            : "select";
 
         canvasGestureRef.current = {
           pointerId: e.pointerId,
@@ -1322,6 +1331,37 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           });
         } else if (mode === "pan") {
           setIsPanDragging(true);
+        } else if (mode === "draw") {
+          handleDrawPointerDown(e);
+        } else if (mode === "text") {
+          const session = beginPointerSession(e, e.currentTarget, textPointerSessionRef.current);
+          if (!session) {
+            canvasGestureRef.current = null;
+            return;
+          }
+          textPointerSessionRef.current = session;
+        } else if (mode === "shape") {
+          shapePointerHandlersRef.current?.down(e);
+        } else if (mode === "sticky") {
+          const session = beginPointerSession(e, e.currentTarget, stickyPointerSessionRef.current);
+          if (!session) {
+            canvasGestureRef.current = null;
+            return;
+          }
+          stickyPointerSessionRef.current = session;
+          const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? "item-" + crypto.randomUUID()
+            : "item-" + Math.random().toString(36).slice(2, 11);
+          const note = createWorkspaceItem("sticky", { text: "", color: stickyColor, w: 220, h: 220, rotation: 0 }, {
+            id,
+            x: world.x,
+            y: world.y,
+            zIndex: items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) + 1 : 1,
+          });
+          if (note) updateItems([...items, note]);
+          setSelectedStickyId(id);
+          setEditingStickyId(id);
+          setActiveTool("select");
         } else {
           pendingFreeTextDismissPointerRef.current = e.pointerId;
         }
@@ -1333,9 +1373,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       onPointerMoveCapture={(e) => {
         const gesture = canvasGestureRef.current;
         if (!gesture || gesture.pointerId !== e.pointerId) return;
+        if (gesture.mode === "draw") {
+          handleDrawPointerMove(e);
+          return;
+        }
+        if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.move(e);
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
-        if (gesture.mode === "dismiss-text") return;
+        if (gesture.mode === "dismiss-text" || gesture.mode === "text" || gesture.mode === "sticky") return;
         if (gesture.mode === "pan") {
           transformRef.current?.setTransform(
             gesture.startTransformX + (e.clientX - gesture.startClientX),
@@ -1370,8 +1418,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         const gesture = canvasGestureRef.current;
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
-        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-        if (gesture.mode === "select") {
+        if (gesture.mode === "draw") {
+          handleDrawPointerUp(e);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
+          handleTextPointerUp(e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.up(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
+        } else if (gesture.mode === "select") {
           setSelectionBox(null);
           setSelectionScreenBox(null);
         } else if (gesture.mode === "pan") {
@@ -1388,21 +1446,50 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           setSelectedFreeTextId(null);
           if (!isTextToolLocked) setIsTextToolActive(false);
         }
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
       }}
       onPointerCancelCapture={(e) => {
         const gesture = canvasGestureRef.current;
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
-        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+        if (gesture.mode === "draw") {
+          const session = drawPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = endPointerSession(session, e);
+          setCurrentPath([]);
+          setEraserPath([]);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = endPointerSession(session, e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.cancel(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
+        }
         setSelectionBox(null);
         setSelectionScreenBox(null);
         setIsPanDragging(false);
         if (pendingFreeTextDismissPointerRef.current === e.pointerId) pendingFreeTextDismissPointerRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
       }}
       onLostPointerCapture={(e) => {
         const gesture = canvasGestureRef.current;
         if (!gesture || gesture.pointerId !== e.pointerId) return;
         canvasGestureRef.current = null;
+        if (gesture.mode === "draw") {
+          const session = drawPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) drawPointerSessionRef.current = clearPointerSession(session, e);
+          setCurrentPath([]);
+          setEraserPath([]);
+        } else if (gesture.mode === "text") {
+          const session = textPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) textPointerSessionRef.current = clearPointerSession(session, e);
+        } else if (gesture.mode === "shape") {
+          shapePointerHandlersRef.current?.lostCapture(e);
+        } else if (gesture.mode === "sticky") {
+          const session = stickyPointerSessionRef.current;
+          if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = clearPointerSession(session, e);
+        }
         setSelectionBox(null);
         setSelectionScreenBox(null);
         setIsPanDragging(false);
