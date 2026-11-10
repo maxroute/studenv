@@ -1385,7 +1385,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           // The eraser preview is a hover cursor, not part of an erase gesture.
           // Keep its world-space position current without starting or extending
           // an erase session.
-          if (activeTool === "eraser" && e.pointerType === "mouse") {
+          const target = e.target instanceof Element ? e.target : null;
+          if (
+            activeTool === "eraser" &&
+            e.pointerType === "mouse" &&
+            target?.closest("[data-workspace-interaction]")
+          ) {
             const world = screenToWorld(e.clientX, e.clientY);
             setMousePos(world);
           }
