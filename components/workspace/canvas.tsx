@@ -1886,18 +1886,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
               </div>
             </TransformComponent>
 
-            {selectionScreenBox && (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute z-[2147483000] rounded border-2 border-indigo-600 bg-indigo-500/15"
-                style={{
-                  left: Math.min(selectionScreenBox.startX, selectionScreenBox.currentX),
-                  top: Math.min(selectionScreenBox.startY, selectionScreenBox.currentY),
-                  width: Math.abs(selectionScreenBox.startX - selectionScreenBox.currentX),
-                  height: Math.abs(selectionScreenBox.startY - selectionScreenBox.currentY),
-                }}
-              />
-            )}
 
             <ZoomControls utils={utils} />
             <AssetDrawer />
@@ -2058,6 +2046,18 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           </>
         )}
       </TransformWrapper>
+      {selectionScreenBox && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-[2147483000] rounded border-2 border-indigo-600 bg-indigo-500/15"
+          style={{
+            left: Math.min(selectionScreenBox.startX, selectionScreenBox.currentX),
+            top: Math.min(selectionScreenBox.startY, selectionScreenBox.currentY),
+            width: Math.abs(selectionScreenBox.startX - selectionScreenBox.currentX),
+            height: Math.abs(selectionScreenBox.startY - selectionScreenBox.currentY),
+          }}
+        />
+      )}
     </div>
   );
 }
