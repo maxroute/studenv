@@ -296,6 +296,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedFreeTextId(null);
     setEditingFreeTextId(null);
     setSelectedDrawingId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, []);
@@ -362,6 +364,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     setSelectedDrawingId(null);
     setSelectedImageId(null);
     setSelectedShapeId(null);
+    currentPathRef.current = [];
+    eraserPathRef.current = [];
     setCurrentPath([]);
     setEraserPath([]);
   }, [activeShapeKind]);
@@ -1431,8 +1435,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           if (ownsPointerSession(session, e)) drawPointerSessionRef.current = endPointerSession(session, e);
           currentPathRef.current = [];
           eraserPathRef.current = [];
-          currentPathRef.current = [];
-          eraserPathRef.current = [];
           setCurrentPath([]);
           setEraserPath([]);
         } else if (gesture.mode === "text") {
@@ -1457,6 +1459,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         if (gesture.mode === "draw") {
           const session = drawPointerSessionRef.current;
           if (ownsPointerSession(session, e)) drawPointerSessionRef.current = clearPointerSession(session, e);
+          currentPathRef.current = [];
+          eraserPathRef.current = [];
           setCurrentPath([]);
           setEraserPath([]);
         } else if (gesture.mode === "text") {
@@ -1938,7 +1942,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   setEditingFreeTextId(null);
                   setSelectedDrawingId(null);
                   setSelectedShapeId(null);
-                                setCurrentPath([]);
+                  currentPathRef.current = [];
+                  eraserPathRef.current = [];
+                  setCurrentPath([]);
                   setEraserPath([]);
                 }}
                 className={`p-2 rounded-md transition-colors ${isDrawing ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
@@ -1986,7 +1992,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
                 </div>
