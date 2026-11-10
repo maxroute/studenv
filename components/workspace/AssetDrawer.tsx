@@ -489,6 +489,7 @@ export function AssetDrawer() {
                     draggable
                     onPointerDown={(event) => {
                       if (event.pointerType !== "touch") return;
+                      event.currentTarget.setPointerCapture(event.pointerId);
                       touchDragRef.current = {
                         asset,
                         pointerId: event.pointerId,
