@@ -394,11 +394,7 @@ export function ShapeCreationOverlay({
         ref={containerRef}
         className="absolute inset-0 select-none cursor-crosshair z-[10000] bg-transparent"
         style={{ touchAction: "none" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onLostPointerCapture={handleLostPointerCapture}
+        style={{ touchAction: "none", pointerEvents: "none" }}
       />
       {dragState && previewComponent && (
         <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-[10001]">
