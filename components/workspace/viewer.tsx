@@ -668,7 +668,25 @@ export function FloatingViewer({
 
   /** Get the current playback time in milliseconds */
   const getCurrentTimeMs = useCallback((): number => {
-    return livePlaybackTimeRef.current;
+    // Read directly from the active player at click time. The polling ref can
+    // still be zero briefly while the YouTube iframe is initializing on mobile.
+    const youtubeTime = ytPlayerRef.current?.getCurrentTime?.();
+    if (typeof youtubeTime === "number" && Number.isFinite(youtubeTime) && youtubeTime >= 0) {
+      const exactMs = Math.round(youtubeTime * 1000);
+      livePlaybackTimeRef.current = exactMs;
+      return exactMs;
+    }
+
+    const nativePlayer = audioPlayerRef.current ?? videoPlayerRef.current;
+    if (nativePlayer && Number.isFinite(nativePlayer.currentTime) && nativePlayer.currentTime >= 0) {
+      const exactMs = Math.round(nativePlayer.currentTime * 1000);
+      livePlaybackTimeRef.current = exactMs;
+      return exactMs;
+    }
+
+    return Number.isFinite(livePlaybackTimeRef.current) && livePlaybackTimeRef.current >= 0
+      ? livePlaybackTimeRef.current
+      : 0;
   }, []);
 
   function formatTimestamp(ms: number) {
