@@ -105,12 +105,30 @@ export function FloatingViewer({
   const isTopViewer = currentZIndex >= highestViewerZIndex;
   const [maximized, setMaximized] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobileViewerSize, setMobileViewerSize] = useState<{ width: number; height: number } | null>(null);
+  const [mobileViewerPosition, setMobileViewerPosition] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobileViewport(media.matches);
+    const update = () => {
+      const mobile = media.matches;
+      setIsMobileViewport(mobile);
+      if (mobile) {
+        const width = Math.max(280, Math.min(window.innerWidth - 16, 560));
+        const height = Math.max(220, Math.min(Math.round(window.innerHeight * 0.62), window.innerHeight - 100));
+        setMobileViewerSize((current) => current ?? { width, height });
+        setMobileViewerPosition((current) => current ?? {
+          x: Math.max(8, Math.round((window.innerWidth - width) / 2)),
+          y: Math.max(8, window.innerHeight - height - 24),
+        });
+      }
+    };
     update();
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
   const [hasError, setHasError] = useState(false);
   const [mediaErrorText, setMediaErrorText] = useState("The format may not be supported or the file is corrupted.");
@@ -679,16 +697,24 @@ export function FloatingViewer({
         width: 500,
         height: 400,
       }}
-      size={maximized ? { width: "100%", height: "100%" } : undefined}
-      position={maximized ? { x: 0, y: 0 } : undefined}
+      size={maximized ? { width: "100%", height: "100%" } : isMobileViewport ? (mobileViewerSize ?? undefined) : undefined}
+      position={maximized ? { x: 0, y: 0 } : isMobileViewport ? (mobileViewerPosition ?? undefined) : undefined}
+      onDrag={isMobileViewport ? (_event, data) => setMobileViewerPosition({ x: data.x, y: data.y }) : undefined}
+      onDragStop={isMobileViewport ? (_event, data) => setMobileViewerPosition({ x: data.x, y: data.y }) : undefined}
+      onResize={isMobileViewport ? (_event, _direction, ref, _delta, position) => {
+        setMobileViewerSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+        setMobileViewerPosition(position);
+      } : undefined}
+      onResizeStop={isMobileViewport ? (_event, _direction, ref, _delta, position) => {
+        setMobileViewerSize({ width: ref.offsetWidth, height: ref.offsetHeight });
+        setMobileViewerPosition(position);
+      } : undefined}
       minWidth={280}
       minHeight={180}
       bounds="window"
       cancel="button, input, textarea, select, a, [data-no-viewer-drag]"
       disableDragging={maximized}
-      enableResizing={!maximized && !minimized && (isMobileViewport
-        ? { top: true, right: false, bottom: true, left: false, topRight: false, bottomRight: false, bottomLeft: false, topLeft: false }
-        : true)}
+      enableResizing={!maximized && !minimized}
       style={{
         display: minimized ? "none" : undefined,
         zIndex: currentZIndex,
