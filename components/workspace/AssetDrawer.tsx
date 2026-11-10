@@ -486,8 +486,11 @@ export function AssetDrawer() {
                   <div
                     key={asset.id}
                     draggable
+                    style={{ touchAction: "none" }}
                     onPointerDown={(event) => {
                       if (event.pointerType !== "touch") return;
+                      event.preventDefault();
+                      event.stopPropagation();
                       event.currentTarget.setPointerCapture(event.pointerId);
                       touchDragRef.current = {
                         asset,
@@ -496,6 +499,31 @@ export function AssetDrawer() {
                         startY: event.clientY,
                         moved: false,
                       };
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = touchDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+                        drag.moved = true;
+                      }
+                    }}
+                    onPointerUp={(event) => {
+                      const drag = touchDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      touchDragRef.current = null;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }
+                      if (drag.moved) {
+                        window.dispatchEvent(new CustomEvent("workspace-asset-touch-drop", {
+                          detail: { asset: drag.asset, clientX: event.clientX, clientY: event.clientY },
+                        }));
+                      }
+                    }}
+                    onPointerCancel={(event) => {
+                      if (touchDragRef.current?.pointerId === event.pointerId) {
+                        touchDragRef.current = null;
+                      }
                     }}
                     onDragStart={(e) => {
                       const dragData = {
