@@ -351,6 +351,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       {selectionBounds && (
         <div
           aria-label={`${allSelectedItems.length} objects selected — drag to move selection`}
+          data-no-canvas-gesture="true"
           className="absolute border-2 border-[#f5a623] border-dashed rounded-sm"
           style={{
             left: selectionBounds.left,
