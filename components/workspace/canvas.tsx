@@ -221,6 +221,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [fitHintDismissed, setFitHintDismissed] = useState(false);
   const [fitHintReady, setFitHintReady] = useState(false);
+  const [fitHintEligible, setFitHintEligible] = useState(false);
   const fitHintStorageKey = "studenv:fit-to-screen-hint-dismissed:v1";
 
 
@@ -478,11 +479,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   useEffect(() => {
     if (!fitHintReady || fitHintDismissed || isLoading || items.length === 0 || hasVisibleWorkspaceContent || isDrawing || isPanDragging || editingFreeTextId || editingStickyId) return;
-    const timeout = window.setTimeout(() => setFitHintReady(true), 850);
+    setFitHintEligible(false);
+    const timeout = window.setTimeout(() => setFitHintEligible(true), 850);
     return () => window.clearTimeout(timeout);
   }, [fitHintReady, fitHintDismissed, isLoading, items.length, hasVisibleWorkspaceContent, isDrawing, isPanDragging, editingFreeTextId, editingStickyId]);
 
-  const shouldShowFitHint = fitHintReady && !fitHintDismissed && !isLoading && items.length > 0 && !hasVisibleWorkspaceContent && !isDrawing && !isPanDragging && !editingFreeTextId && !editingStickyId;
+  const shouldShowFitHint = fitHintReady && fitHintEligible && !fitHintDismissed && !isLoading && items.length > 0 && !hasVisibleWorkspaceContent && !isDrawing && !isPanDragging && !editingFreeTextId && !editingStickyId;
 
   const syncTimerRef = useRef<number | null>(null);
   const pendingFreeTextDismissPointerRef = useRef<number | null>(null);
