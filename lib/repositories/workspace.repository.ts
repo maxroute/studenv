@@ -58,25 +58,46 @@ export async function updateWorkspaceCoverAsset(
   });
 }
 
+/**
+ * Allocate the next snapshot version by locking/updating the owning Workspace
+ * row. latestVersion stores the next version to allocate (default 1).
+ *
+ * GREATEST(..., MAX(snapshot.version) + 1) also repairs workspaces whose
+ * counter predates this allocator. Updating the same workspace row serializes
+ * concurrent writers, avoiding duplicate versions without scanning/locking
+ * snapshot rows independently.
+ */
 export async function saveSnapshot(input: SaveSnapshotInput) {
   return prisma.$transaction(async (tx) => {
-    await tx.workspace.findUniqueOrThrow({
-      where: { id: input.workspaceId },
-      select: { id: true },
-    });
+    const allocation = await tx.$queryRaw<Array<{ version: number }>>(Prisma.sql`
+      UPDATE "Workspace"
+      SET "latestVersion" = GREATEST(
+        "latestVersion",
+        COALESCE(
+          (
+            SELECT MAX("version")
+            FROM "WorkspaceSnapshot"
+            WHERE "workspaceId" = "Workspace"."id"
+          ),
+          0
+        ) + 1
+      ) + 1,
+      "updatedAt" = NOW()
+      WHERE "id" = ${input.workspaceId}
+        AND "ownerId" = ${input.createdBy}
+      RETURNING "latestVersion" - 1 AS "version"
+    `);
 
-    const latestSnapshot = await tx.workspaceSnapshot.findFirst({
-      where: { workspaceId: input.workspaceId },
-      orderBy: { version: "desc" },
-      select: { version: true },
-    });
-
-    const version = (latestSnapshot?.version ?? 0) + 1;
+    if (allocation.length === 0) {
+      const error = new Error("Workspace not found.");
+      Object.assign(error, { status: 404 });
+      throw error;
+    }
 
     const snapshot = await tx.workspaceSnapshot.create({
       data: {
         workspaceId: input.workspaceId,
-        version,
+        version: allocation[0].version,
         sceneJson: input.sceneJson,
         cameraJson: input.cameraJson,
         createdBy: input.createdBy,
@@ -84,6 +105,12 @@ export async function saveSnapshot(input: SaveSnapshotInput) {
     });
 
     return snapshot;
+  }, {
+    // Keep enough headroom for transient database/connection latency while
+    // keeping the transaction bounded. The transaction itself now contains
+    // only the atomic counter update and snapshot insert.
+    maxWait: 5_000,
+    timeout: 15_000,
   });
 }
 
