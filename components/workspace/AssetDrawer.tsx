@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { Fragment, useState, useEffect, useRef } from "react";
 import {
   Library,
   Search,
@@ -490,8 +489,15 @@ export function AssetDrawer() {
                 </div>
               ) : scopedAssets.length > 0 ? (
                 scopedAssets.map((asset) => (
+                  <Fragment key={asset.id}>
+                  {touchDragPreview?.assetId === asset.id ? (
+                    <div
+                      aria-hidden="true"
+                      className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50"
+                      style={{ height: touchDragPreview.height }}
+                    />
+                  ) : null}
                   <div
-                    key={asset.id}
                     draggable
                     style={{
                       touchAction: "none",
@@ -584,6 +590,7 @@ export function AssetDrawer() {
                     </button>
                     <GripVertical className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
                   </div>
+                  </Fragment>
                 ))
               ) : (
                 <div className="flex flex-col items-center justify-center h-60 text-center px-6">
