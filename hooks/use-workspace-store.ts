@@ -308,7 +308,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     removeItem: (id: string) => {
       const { items } = get();
       set({ 
-        items: items.filter((item: StudioItem) => item.id !== id),
+        items: items.filter((item: StudioItem) => item.id !== id && !(item.type === "connector" && (item.props.sourceId === id || item.props.targetId === id))),
         isDirty: true 
       });
     },
@@ -317,42 +317,60 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items } = get();
       const idSet = new Set(ids);
       set({
-        items: items.filter((item: StudioItem) => !idSet.has(item.id)),
+        items: items.filter((item: StudioItem) => !idSet.has(item.id) && !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId)))),
         isDirty: true,
       });
     },
 
     duplicateItems: (ids) => {
       const { items } = get();
-      const idSet = new Set(ids);
-      const itemsToDuplicate = items.filter(item => idSet.has(item.id));
-      if (itemsToDuplicate.length === 0) return;
+      const selectedIds = new Set(ids);
+      const sourceNodes = items.filter((item) => selectedIds.has(item.id) && item.type !== "connector");
+      if (sourceNodes.length === 0) return;
 
-      const maxZIndex = items.length > 0 ? Math.max(...items.map(item => item.zIndex)) : 1;
-      const newItems = itemsToDuplicate.map((item, index) => {
-        const nextProps = JSON.parse(JSON.stringify(item.props));
-        const newId = item.type === "shape" ? `shape-${Math.random().toString(36).slice(2, 11)}` : `item-${Math.random().toString(36).slice(2, 11)}`;
+      const nodeIdMap = new Map<string, string>();
+      sourceNodes.forEach((item) => nodeIdMap.set(item.id, `item-${Math.random().toString(36).slice(2, 11)}`));
+      const attachedConnectors = items.filter((item) =>
+        item.type === "connector" &&
+        nodeIdMap.has(item.props.sourceId) &&
+        nodeIdMap.has(item.props.targetId)
+      );
+      const maxZIndex = items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) : 1;
+      const duplicatedNodes = sourceNodes.map((item, index) => ({
+        ...item,
+        id: nodeIdMap.get(item.id)!,
+        x: item.x + 30,
+        y: item.y + 30,
+        zIndex: maxZIndex + 1 + index,
+        props: JSON.parse(JSON.stringify(item.props)),
+      } as StudioItem));
+      const duplicatedConnectors = attachedConnectors.map((item, index) => {
+        if (item.type !== "connector") return item;
         return {
           ...item,
-          id: newId,
-          x: item.x + 30,
-          y: item.y + 30,
-          zIndex: maxZIndex + 1 + index,
-          props: nextProps,
-        } as StudioItem;
+          id: `item-${Math.random().toString(36).slice(2, 11)}`,
+          zIndex: maxZIndex + 1 + duplicatedNodes.length + index,
+          props: {
+            ...item.props,
+            sourceId: nodeIdMap.get(item.props.sourceId)!,
+            targetId: nodeIdMap.get(item.props.targetId)!,
+          },
+        };
       });
-
-      set({
-        items: [...items, ...newItems],
-        isDirty: true,
-      });
+      set({ items: [...items, ...duplicatedNodes, ...duplicatedConnectors], isDirty: true });
     },
 
     copyItems: (ids) => {
       const { items } = get();
-      const idSet = new Set(ids);
-      const selected = items.filter(item => idSet.has(item.id));
-      set({ copiedItems: JSON.parse(JSON.stringify(selected)) });
+      const selectedIds = new Set(ids);
+      const selectedNodes = items.filter((item) => selectedIds.has(item.id) && item.type !== "connector");
+      const selectedNodeIds = new Set(selectedNodes.map((item) => item.id));
+      const attachedConnectors = items.filter((item) =>
+        item.type === "connector" &&
+        selectedNodeIds.has(item.props.sourceId) &&
+        selectedNodeIds.has(item.props.targetId)
+      );
+      set({ copiedItems: JSON.parse(JSON.stringify([...selectedNodes, ...attachedConnectors])) });
     },
 
     cutItems: (ids) => {
@@ -360,7 +378,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       copyItems(ids);
       const idSet = new Set(ids);
       set({
-        items: items.filter(item => !idSet.has(item.id)),
+        items: items.filter((item) =>
+          !idSet.has(item.id) &&
+          !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId)))
+        ),
         isDirty: true,
       });
     },
@@ -368,28 +389,37 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     pasteItems: (offset) => {
       const { items, copiedItems } = get();
       if (!copiedItems || copiedItems.length === 0) return;
-      
-      const maxZIndex = items.length > 0 ? Math.max(...items.map(item => item.zIndex)) : 1;
+
+      const sourceNodes = copiedItems.filter((item) => item.type !== "connector");
+      const nodeIdMap = new Map<string, string>();
+      sourceNodes.forEach((item) => nodeIdMap.set(item.id, `item-${Math.random().toString(36).slice(2, 11)}`));
+      const maxZIndex = items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) : 1;
       const dx = offset?.x ?? 30;
       const dy = offset?.y ?? 30;
 
-      const pasted = copiedItems.map((item, index) => {
-        const newId = item.type === "shape" ? `shape-${Math.random().toString(36).slice(2, 11)}` : `item-${Math.random().toString(36).slice(2, 11)}`;
-        return {
+      const pastedNodes = sourceNodes.map((item, index) => ({
+        ...item,
+        id: nodeIdMap.get(item.id)!,
+        x: item.x + dx,
+        y: item.y + dy,
+        zIndex: maxZIndex + 1 + index,
+        props: JSON.parse(JSON.stringify(item.props)),
+      } as StudioItem));
+      const pastedConnectors = copiedItems.flatMap((item, index) => {
+        if (item.type !== "connector") return [];
+        const sourceId = nodeIdMap.get(item.props.sourceId);
+        const targetId = nodeIdMap.get(item.props.targetId);
+        if (!sourceId || !targetId) return [];
+        return [{
           ...item,
-          id: newId,
-          x: item.x + dx,
-          y: item.y + dy,
-          zIndex: maxZIndex + 1 + index,
-          props: JSON.parse(JSON.stringify(item.props)),
-        } as StudioItem;
+          id: `item-${Math.random().toString(36).slice(2, 11)}`,
+          zIndex: maxZIndex + 1 + pastedNodes.length + index,
+          props: { ...item.props, sourceId, targetId },
+        }];
       });
 
-      set({
-        items: [...items, ...pasted],
-        copiedItems: pasted,
-        isDirty: true,
-      });
+      const pasted = [...pastedNodes, ...pastedConnectors];
+      set({ items: [...items, ...pasted], copiedItems: pasted, isDirty: true });
     },
 
     syncWithServer: async () => {
