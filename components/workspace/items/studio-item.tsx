@@ -148,8 +148,7 @@ export function StudioItemComponent({
     <Rnd
       className="workspace-item-rnd"
       size={{ width: item.w, height: item.h }}
-      position={{ x: item.x, y: item.y }}
-      scale={canvasScale}
+      // The parent TransformComponent already scales the workspace. react-rnd\n      // applies its scale to its controlled translation as well, so feed it\n      // normalized coordinates to avoid scaling x/y twice. Drag deltas remain\n      // world-space because react-rnd still receives the canvas scale.\n      position={{ x: item.x / canvasScale, y: item.y / canvasScale }}\n      scale={canvasScale}
       minWidth={1}
       minHeight={1}
       disableDragging={draggingDisabled}
