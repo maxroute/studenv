@@ -11,10 +11,12 @@ import { groupItems, ungroupItems } from "./group-engine";
 
 interface KeyboardShortcutsOptions {
   onActivateShapeTool?: () => void;
+  /** `C` without modifiers (connector tool / mode cycling). */
+  onActivateConnectorTool?: () => void;
 }
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
-  const { onActivateShapeTool } = options;
+  const { onActivateShapeTool, onActivateConnectorTool } = options;
   const { selectedIds, deselectAll, clearAndSelectIds } = useSelectionStore();
   const {
     items,
@@ -60,6 +62,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       if (!cmdOrCtrl && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         onActivateShapeTool?.();
+        return;
+      }
+
+      if (!cmdOrCtrl && !e.altKey && !e.shiftKey && (e.key === "c" || e.key === "C") && onActivateConnectorTool) {
+        e.preventDefault();
+        onActivateConnectorTool();
         return;
       }
 
@@ -173,5 +181,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     updateItems,
     batchUpdateItems,
     onActivateShapeTool,
+    onActivateConnectorTool,
   ]);
 }

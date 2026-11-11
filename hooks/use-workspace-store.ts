@@ -44,7 +44,8 @@ interface WorkspaceState {
   unregisterWorkspaceAsset: (assetId: string) => void;
   updateItems: (items: StudioItem[]) => void;
   updateViewport: (viewport: WorkspaceViewport) => void;
-  addItem: (type: StudioItemType, props: unknown, position?: { x: number; y: number }) => void;
+  /** Adds an item on top of the stack; returns its id, or undefined when the props are rejected. */
+  addItem: (type: StudioItemType, props: unknown, position?: { x: number; y: number }) => string | undefined;
   updateItem: (id: string, updates: StudioItemUpdate) => void;
   updateItemProps: (id: string, propsUpdate: any) => void;
   batchUpdateItems: (updates: Array<{ id: string; changes: StudioItemUpdate; props?: any }>) => void;
@@ -199,10 +200,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
       if (!newItem) {
         console.warn("Rejected invalid workspace item", { type, props });
-        return;
+        return undefined;
       }
 
       set({ items: [...items, newItem], isDirty: true });
+      return newItem.id;
     },
 
     updateItem: (id: string, updates: StudioItemUpdate) => {

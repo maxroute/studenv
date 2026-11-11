@@ -113,7 +113,7 @@ for (const type of [...AFFECTED_TYPES, ...MIGRATED_TYPES]) {
 
       const expected = expectedEdgeMidpoints(frame);
       for (const anchor of ANCHORS) {
-        // What WorkspaceConnectorHandles renders, and what the outline exposes.
+        // The anchor geometry for each side, and what the outline exposes.
         const handle = getConnectorAnchorPoint(item, anchor, getEffectiveRotation(item, {}));
         assertClose(handle, expected[anchor], `${anchor} handle`);
         assertClose(frame.edgeMidpoints[anchor], expected[anchor], `${anchor} outline midpoint`);

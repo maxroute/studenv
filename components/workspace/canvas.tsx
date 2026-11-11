@@ -13,6 +13,7 @@ import {
   MousePointer2,
   Pencil,
   Plus,
+  Spline,
   Type,
   X,
 } from "lucide-react";
@@ -21,7 +22,9 @@ import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
 import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
-import { WorkspaceConnectorHandles } from "./WorkspaceConnectorHandles";
+import { ConnectorCreationLayer } from "./connectors/ConnectorCreationLayer";
+import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
+import { getNextConnectorMode } from "@/lib/workspace/connector-autocomplete";
 import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
@@ -206,6 +209,7 @@ type WorkspaceTool =
   | "eraser"
   | "text"
   | "sticky"
+  | "connector"
   | ShapeKind;
 
 interface StudioCanvasProps {
@@ -379,8 +383,21 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     activateShapeTool(activeShapeKind);
   }, [activeShapeKind, activateShapeTool]);
 
+  // `C`: activate the connector tool with the last-used mode; pressing it
+  // again while active cycles Curve → Elbow → Straight (AFFiNE).
+  const handleConnectorShortcut = useCallback(() => {
+    if (activeTool === "connector") {
+      const { mode, setMode } = useConnectorUiStore.getState();
+      setMode(getNextConnectorMode(mode));
+      return;
+    }
+    setActiveTool("connector");
+    setIsTextToolLocked(false);
+  }, [activeTool]);
+
   useKeyboardShortcuts({
     onActivateShapeTool: handleActivateShapeShortcut,
+    onActivateConnectorTool: handleConnectorShortcut,
   });
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -2036,16 +2053,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   interactive={activeTool === "select"}
                 />
 
-                <WorkspaceConnectorHandles
+                <ConnectorCreationLayer
                   items={items}
                   selectedIds={selectedIds}
-                  enabled={activeTool === "select"}
-                  canvasScale={viewport.zoom}
+                  activeTool={activeTool}
+                  zoom={viewport.zoom}
                   screenToWorld={screenToWorld}
-                  onCreate={(source, target) => {
-                    // Mode, colour and endpoint styles take the AFFiNE defaults.
-                    addItem("connector", { source, target }, { x: 0, y: 0 });
-                  }}
+                  onToolDone={() => setActiveTool("select")}
                 />
               </div>
             </TransformComponent>
@@ -2119,6 +2133,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onSelectShapeKind={handleSelectShapeKind}
                 onOpen={() => handleSelectShapeKind(activeShapeKind)}
               />
+              <button
+                onClick={() => {
+                  setActiveTool(activeTool === "connector" ? "select" : "connector");
+                  setIsTextToolLocked(false);
+                  setEditingFreeTextId(null);
+                }}
+                className={`p-2 rounded-md transition-colors ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
+                title="Connector (C) — press C again to switch curve, elbow, straight"
+                aria-label="Connector tool"
+                aria-pressed={activeTool === "connector"}
+              ><Spline size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
                 onClick={() => {
@@ -2203,6 +2228,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
                   <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} compact />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "connector" ? "select" : "connector"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connector" aria-label="Connector tool" aria-pressed={activeTool === "connector"}><Spline size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
