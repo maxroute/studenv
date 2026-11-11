@@ -10,7 +10,10 @@ interface WorkspaceConnectorsLayerProps {
 
 export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProps) {
   const connectors = useMemo(() => {
-    const nodes = new Map<string, Exclude<StudioItem, { type: "connector" }>>();\n    items.forEach((item) => {\n      if (item.type !== "connector") nodes.set(item.id, item);\n    });
+    const nodes = new Map<string, Exclude<StudioItem, { type: "connector" }>>();
+    items.forEach((item) => {
+      if (item.type !== "connector") nodes.set(item.id, item);
+    });
     return items.flatMap((item) => {
       if (item.type !== "connector") return [];
       const source = nodes.get(item.props.sourceId);
