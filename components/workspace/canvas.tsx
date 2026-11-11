@@ -19,7 +19,7 @@ import {
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { StudioItem, createWorkspaceItem } from "@/types/workspace";
-import { StudioItemComponent } from "./items/studio-item";
+import { StudioItemComponent } from "./items/studio-item";\nimport { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";\nimport { WorkspaceConnectorHandles } from "./WorkspaceConnectorHandles";
 import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
@@ -1795,7 +1795,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {items.map((item) => (
+                <WorkspaceConnectorsLayer items={items} />\n\n                {items.filter((item) => item.type !== "connector").map((item) => (
                   <StudioItemComponent
                     key={item.id}
                     item={item}
@@ -1849,7 +1849,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? selectedIds
                         : [draggedItemId];
                       const otherBounds = items
-                        .filter((other) => !draggedIds.includes(other.id))
+                        .filter((other) => other.type !== "connector" && !draggedIds.includes(other.id))
                         .map((other) => ({
                           x: other.x,
                           y: other.y,
@@ -2022,6 +2022,24 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
                   interactive={activeTool === "select"}
+                />
+
+                <WorkspaceConnectorHandles
+                  items={items}
+                  selectedIds={selectedIds}
+                  enabled={activeTool === "select"}
+                  canvasScale={viewport.zoom}
+                  screenToWorld={screenToWorld}
+                  onCreate={(sourceId, sourceAnchor, targetId, targetAnchor) => {
+                    addItem("connector", {
+                      sourceId,
+                      sourceAnchor,
+                      targetId,
+                      targetAnchor,
+                      color: "#64748b",
+                      strokeWidth: 2,
+                    }, { x: 0, y: 0 });
+                  }}
                 />
               </div>
             </TransformComponent>
