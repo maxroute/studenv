@@ -62,8 +62,11 @@ test("connector nodes survive workspace scene serialization and parsing", () => 
   const parsed = parseWorkspaceScene(createWorkspaceScene({ items: [first, second, connector] }));
   const restored = parsed.items.find((item) => item.type === "connector");
   assert.ok(restored && restored.type === "connector");
-  assert.equal(restored.props.sourceId, first.id);
-  assert.equal(restored.props.targetId, second.id);
-  assert.equal(restored.props.sourceAnchor, "right");
-  assert.equal(restored.props.targetAnchor, "left");
+  // v1 props are migrated to v2 ends: ids kept, side anchors → relative positions,
+  // and legacy connectors keep their straight appearance.
+  assert.deepEqual(restored.props.source, { id: first.id, position: [1, 0.5] });
+  assert.deepEqual(restored.props.target, { id: second.id, position: [0, 0.5] });
+  assert.equal(restored.props.mode, "straight");
+  assert.equal(restored.props.rearEndpointStyle, "arrow");
+  assert.equal(restored.props.frontEndpointStyle, "none");
 });

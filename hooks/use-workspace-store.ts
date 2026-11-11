@@ -8,6 +8,9 @@ import {
   parseWorkspaceSceneJson,
   serializeWorkspaceScene,
 } from "@/types/workspace";
+import { connectorTravelsWith, isConnectorAttachedToAny, remapConnector } from "@/lib/workspace/connector-lifecycle";
+
+const newItemId = () => `item-${Math.random().toString(36).slice(2, 11)}`;
 
 type StudioItemUpdate = Partial<
   Pick<StudioItem, "x" | "y" | "w" | "h" | "rotation" | "zIndex">
@@ -308,7 +311,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     removeItem: (id: string) => {
       const { items } = get();
       set({ 
-        items: items.filter((item: StudioItem) => item.id !== id && !(item.type === "connector" && (item.props.sourceId === id || item.props.targetId === id))),
+        items: items.filter((item: StudioItem) => item.id !== id && !isConnectorAttachedToAny(item, new Set([id]))),
         isDirty: true 
       });
     },
@@ -317,7 +320,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items } = get();
       const idSet = new Set(ids);
       set({
-        items: items.filter((item: StudioItem) => !idSet.has(item.id) && !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId)))),
+        items: items.filter((item: StudioItem) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
         isDirty: true,
       });
     },
@@ -329,12 +332,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       if (sourceNodes.length === 0) return;
 
       const nodeIdMap = new Map<string, string>();
-      sourceNodes.forEach((item) => nodeIdMap.set(item.id, `item-${Math.random().toString(36).slice(2, 11)}`));
-      const attachedConnectors = items.filter((item) =>
-        item.type === "connector" &&
-        nodeIdMap.has(item.props.sourceId) &&
-        nodeIdMap.has(item.props.targetId)
-      );
+      sourceNodes.forEach((item) => nodeIdMap.set(item.id, newItemId()));
+      const duplicatedIds = new Set(nodeIdMap.keys());
+      const attachedConnectors = items.filter((item) => connectorTravelsWith(item, duplicatedIds));
       const maxZIndex = items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) : 1;
       const duplicatedNodes = sourceNodes.map((item, index) => ({
         ...item,
@@ -344,18 +344,13 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         zIndex: maxZIndex + 1 + index,
         props: JSON.parse(JSON.stringify(item.props)),
       } as StudioItem));
-      const duplicatedConnectors = attachedConnectors.map((item, index) => {
-        if (item.type !== "connector") return item;
-        return {
-          ...item,
-          id: `item-${Math.random().toString(36).slice(2, 11)}`,
+      const duplicatedConnectors = attachedConnectors.flatMap((item, index) => {
+        if (item.type !== "connector") return [];
+        const copy = remapConnector(item, nodeIdMap, { x: 30, y: 30 }, {
+          id: newItemId(),
           zIndex: maxZIndex + 1 + duplicatedNodes.length + index,
-          props: {
-            ...item.props,
-            sourceId: nodeIdMap.get(item.props.sourceId)!,
-            targetId: nodeIdMap.get(item.props.targetId)!,
-          },
-        };
+        });
+        return copy ? [copy] : [];
       });
       set({ items: [...items, ...duplicatedNodes, ...duplicatedConnectors], isDirty: true });
     },
@@ -365,11 +360,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const selectedIds = new Set(ids);
       const selectedNodes = items.filter((item) => selectedIds.has(item.id) && item.type !== "connector");
       const selectedNodeIds = new Set(selectedNodes.map((item) => item.id));
-      const attachedConnectors = items.filter((item) =>
-        item.type === "connector" &&
-        selectedNodeIds.has(item.props.sourceId) &&
-        selectedNodeIds.has(item.props.targetId)
-      );
+      const attachedConnectors = items.filter((item) => connectorTravelsWith(item, selectedNodeIds));
       set({ copiedItems: JSON.parse(JSON.stringify([...selectedNodes, ...attachedConnectors])) });
     },
 
@@ -378,10 +369,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       copyItems(ids);
       const idSet = new Set(ids);
       set({
-        items: items.filter((item) =>
-          !idSet.has(item.id) &&
-          !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId)))
-        ),
+        items: items.filter((item) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
         isDirty: true,
       });
     },
@@ -407,15 +395,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       } as StudioItem));
       const pastedConnectors = copiedItems.flatMap((item, index) => {
         if (item.type !== "connector") return [];
-        const sourceId = nodeIdMap.get(item.props.sourceId);
-        const targetId = nodeIdMap.get(item.props.targetId);
-        if (!sourceId || !targetId) return [];
-        return [{
-          ...item,
-          id: `item-${Math.random().toString(36).slice(2, 11)}`,
+        const pasted = remapConnector(item, nodeIdMap, { x: dx, y: dy }, {
+          id: newItemId(),
           zIndex: maxZIndex + 1 + pastedNodes.length + index,
-          props: { ...item.props, sourceId, targetId },
-        }];
+        });
+        return pasted ? [pasted] : [];
       });
 
       const pasted = [...pastedNodes, ...pastedConnectors];

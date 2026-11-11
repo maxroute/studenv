@@ -168,15 +168,57 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
 
 export const ConnectorAnchorSchema = z.enum(["top", "right", "bottom", "left"]);
 
+/** Relative [0..1] position inside an element's unrotated bounds for each named side anchor. */
+export const CONNECTOR_ANCHOR_POSITIONS: Record<z.infer<typeof ConnectorAnchorSchema>, [number, number]> = {
+  top: [0.5, 0],
+  right: [1, 0.5],
+  bottom: [0.5, 1],
+  left: [0, 0.5],
+};
+
+const ConnectorVecSchema = z.tuple([z.number().finite(), z.number().finite()]);
+
+/**
+ * One connector end. With `id`, `position` is relative [0..1] within that
+ * element's unrotated bounds (rotation is applied when resolving); without
+ * `position` the end auto-picks the element's nearest anchor. Without `id`,
+ * `position` is an absolute world point (a free end).
+ */
+export const ConnectorEndSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    position: ConnectorVecSchema.optional(),
+  })
+  .refine((end) => Boolean(end.id || end.position), {
+    message: "A connector end needs an element id or a position",
+  });
+
+export const ConnectorModeSchema = z.enum(["straight", "elbow", "curve"]);
+export const ConnectorStrokeStyleSchema = z.enum(["solid", "dash"]);
+export const ConnectorEndpointStyleSchema = z.enum(["none", "arrow", "triangle", "circle", "diamond"]);
+
+export const DEFAULT_CONNECTOR_MODE: z.infer<typeof ConnectorModeSchema> = "curve";
+export const DEFAULT_CONNECTOR_COLOR = "#929292";
+export const DEFAULT_CONNECTOR_STROKE_WIDTH = 2;
+
+export const ConnectorLabelSchema = z.object({
+  text: z.string(),
+  /** Fraction 0..1 along the connector path where the label is centred. */
+  offset: z.number().min(0).max(1).default(0.5),
+});
+
 export const ConnectorNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("connector"),
   props: z.object({
-    sourceId: z.string().min(1),
-    sourceAnchor: ConnectorAnchorSchema,
-    targetId: z.string().min(1),
-    targetAnchor: ConnectorAnchorSchema,
-    color: z.string().default("#64748b"),
-    strokeWidth: z.number().finite().positive().default(2),
+    source: ConnectorEndSchema,
+    target: ConnectorEndSchema,
+    mode: ConnectorModeSchema.default(DEFAULT_CONNECTOR_MODE),
+    color: z.string().default(DEFAULT_CONNECTOR_COLOR),
+    strokeWidth: z.number().finite().positive().default(DEFAULT_CONNECTOR_STROKE_WIDTH),
+    strokeStyle: ConnectorStrokeStyleSchema.default("solid"),
+    frontEndpointStyle: ConnectorEndpointStyleSchema.default("none"),
+    rearEndpointStyle: ConnectorEndpointStyleSchema.default("arrow"),
+    label: ConnectorLabelSchema.optional(),
   }),
 });
 
@@ -216,6 +258,11 @@ export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
 export type ConnectorNode = z.infer<typeof ConnectorNodeSchema>;
 export type ConnectorAnchor = z.infer<typeof ConnectorAnchorSchema>;
+export type ConnectorEnd = z.infer<typeof ConnectorEndSchema>;
+export type ConnectorMode = z.infer<typeof ConnectorModeSchema>;
+export type ConnectorStrokeStyle = z.infer<typeof ConnectorStrokeStyleSchema>;
+export type ConnectorEndpointStyle = z.infer<typeof ConnectorEndpointStyleSchema>;
+export type ConnectorLabel = z.infer<typeof ConnectorLabelSchema>;
 export type WorkspaceNode = z.infer<typeof WorkspaceNodeSchema>;
 export type WorkspaceNodeType = WorkspaceNode["type"];
 export type WorkspaceScene = z.infer<typeof WorkspaceSceneSchema>;
@@ -253,6 +300,62 @@ function coerceNumber(value: unknown, fallback: number) {
 function coercePositiveNumber(value: unknown, fallback: number) {
   const parsed = coerceNumber(value, fallback);
   return parsed > 0 ? parsed : fallback;
+}
+
+function coerceConnectorVec(value: unknown): [number, number] | undefined {
+  if (!Array.isArray(value) || value.length !== 2) return undefined;
+  const [x, y] = value;
+  return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y)
+    ? [x, y]
+    : undefined;
+}
+
+function coerceConnectorEnd(value: unknown): { id?: string; position?: [number, number] } {
+  const record = asObject(value) ?? {};
+  const id = typeof record.id === "string" && record.id.length > 0 ? record.id : undefined;
+  const position = coerceConnectorVec(record.position);
+  return { ...(id ? { id } : {}), ...(position ? { position } : {}) };
+}
+
+function legacyAnchorPosition(anchor: unknown): [number, number] | undefined {
+  const parsed = ConnectorAnchorSchema.safeParse(anchor);
+  return parsed.success ? [...CONNECTOR_ANCHOR_POSITIONS[parsed.data]] : undefined;
+}
+
+/**
+ * Normalises connector props to the v2 model. v1 connectors
+ * (`sourceId`/`sourceAnchor`/`targetId`/`targetAnchor`, straight only) are
+ * converted to relative side positions and keep their straight appearance.
+ */
+function normalizeConnectorProps(props: Record<string, unknown>) {
+  const isLegacy = !("source" in props) && !("target" in props) && ("sourceId" in props || "targetId" in props);
+  const source = isLegacy
+    ? { id: coerceString(props.sourceId) || undefined, position: legacyAnchorPosition(props.sourceAnchor) }
+    : coerceConnectorEnd(props.source);
+  const target = isLegacy
+    ? { id: coerceString(props.targetId) || undefined, position: legacyAnchorPosition(props.targetAnchor) }
+    : coerceConnectorEnd(props.target);
+  const label = asObject(props.label);
+
+  return {
+    source,
+    target,
+    mode: ConnectorModeSchema.safeParse(props.mode).success
+      ? props.mode
+      : isLegacy ? "straight" : DEFAULT_CONNECTOR_MODE,
+    color: coerceString(props.color, DEFAULT_CONNECTOR_COLOR),
+    strokeWidth: coercePositiveNumber(props.strokeWidth, DEFAULT_CONNECTOR_STROKE_WIDTH),
+    strokeStyle: ConnectorStrokeStyleSchema.safeParse(props.strokeStyle).success ? props.strokeStyle : "solid",
+    frontEndpointStyle: ConnectorEndpointStyleSchema.safeParse(props.frontEndpointStyle).success
+      ? props.frontEndpointStyle
+      : "none",
+    rearEndpointStyle: ConnectorEndpointStyleSchema.safeParse(props.rearEndpointStyle).success
+      ? props.rearEndpointStyle
+      : "arrow",
+    ...(label && typeof label.text === "string" && label.text.length > 0
+      ? { label: { text: label.text, offset: Math.min(1, Math.max(0, coerceNumber(label.offset, 0.5))) } }
+      : {}),
+  };
 }
 
 function coerceInteger(value: unknown, fallback: number) {
@@ -488,19 +591,16 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           outline: props.outline === true,
         },
       });
-    case "connector":
-      return ConnectorNodeSchema.parse({
+    case "connector": {
+      // A connector with an unusable end is dropped on its own instead of
+      // failing the whole scene parse (which would fall back to an empty scene).
+      const connector = ConnectorNodeSchema.safeParse({
         ...base,
         type: "connector",
-        props: {
-          sourceId: coerceString(props.sourceId),
-          sourceAnchor: props.sourceAnchor,
-          targetId: coerceString(props.targetId),
-          targetAnchor: props.targetAnchor,
-          color: coerceString(props.color, "#64748b"),
-          strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 2,
-        },
+        props: normalizeConnectorProps(props),
       });
+      return connector.success ? connector.data : null;
+    }
     case "shape": {
       const fillObj = asObject(props.fill) ?? {};
       const strokeObj = asObject(props.stroke) ?? {};
