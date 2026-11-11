@@ -166,6 +166,18 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
+export const ConnectorNodeSchema = WorkspaceNodeBaseSchema.extend({
+  type: z.literal("connector"),
+  props: z.object({
+    sourceId: z.string().min(1),
+    sourceAnchor: z.enum(["top", "right", "bottom", "left"]),
+    targetId: z.string().min(1),
+    targetAnchor: z.enum(["top", "right", "bottom", "left"]),
+    color: z.string().default("#64748b"),
+    strokeWidth: z.number().finite().positive().default(2),
+  }),
+});
+
 export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   TextNodeSchema,
   FreeTextNodeSchema,
@@ -177,6 +189,7 @@ export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   GroupNodeSchema,
   DrawingNodeSchema,
   ShapeNodeSchema,
+  ConnectorNodeSchema,
 ]);
 
 export const WorkspaceSceneSchema = z.object({
@@ -199,6 +212,7 @@ export type ImageNode = z.infer<typeof ImageNodeSchema>;
 export type GroupNode = z.infer<typeof GroupNodeSchema>;
 export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
+export type ConnectorNode = z.infer<typeof ConnectorNodeSchema>;
 export type WorkspaceNode = z.infer<typeof WorkspaceNodeSchema>;
 export type WorkspaceNodeType = WorkspaceNode["type"];
 export type WorkspaceScene = z.infer<typeof WorkspaceSceneSchema>;
@@ -218,6 +232,7 @@ const DEFAULT_NODE_SIZE: Record<WorkspaceNodeType, { w: number; h: number }> = {
   group: { w: 400, h: 300 },
   drawing: { w: 100, h: 100 },
   shape: { w: 120, h: 120 },
+  connector: { w: 1, h: 1 },
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -470,6 +485,32 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           outline: props.outline === true,
         },
       });
+    case "connector":
+      return ConnectorNodeSchema.safeParse({
+        ...base,
+        type: "connector",
+        props: {
+          sourceId: coerceString(props.sourceId),
+          sourceAnchor: props.sourceAnchor,
+          targetId: coerceString(props.targetId),
+          targetAnchor: props.targetAnchor,
+          color: coerceString(props.color, "#64748b"),
+          strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 2,
+        },
+      }).success
+        ? ConnectorNodeSchema.parse({
+            ...base,
+            type: "connector",
+            props: {
+              sourceId: coerceString(props.sourceId),
+              sourceAnchor: props.sourceAnchor,
+              targetId: coerceString(props.targetId),
+              targetAnchor: props.targetAnchor,
+              color: coerceString(props.color, "#64748b"),
+              strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 2,
+            },
+          })
+        : null;
     case "shape": {
       const fillObj = asObject(props.fill) ?? {};
       const strokeObj = asObject(props.stroke) ?? {};
