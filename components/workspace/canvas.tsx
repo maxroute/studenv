@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
-import { CONNECTOR_ANCHOR_POSITIONS, StudioItem, createWorkspaceItem } from "@/types/workspace";
+import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
 import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
 import { WorkspaceConnectorHandles } from "./WorkspaceConnectorHandles";
@@ -2042,13 +2042,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   enabled={activeTool === "select"}
                   canvasScale={viewport.zoom}
                   screenToWorld={screenToWorld}
-                  onCreate={(sourceId, sourceAnchor, targetId, targetAnchor) => {
-                    // v2 connector: ends store relative positions; mode,
-                    // colour and endpoint styles take the AFFiNE defaults.
-                    addItem("connector", {
-                      source: { id: sourceId, position: [...CONNECTOR_ANCHOR_POSITIONS[sourceAnchor]] },
-                      target: { id: targetId, position: [...CONNECTOR_ANCHOR_POSITIONS[targetAnchor]] },
-                    }, { x: 0, y: 0 });
+                  onCreate={(source, target) => {
+                    // Mode, colour and endpoint styles take the AFFiNE defaults.
+                    addItem("connector", { source, target }, { x: 0, y: 0 });
                   }}
                 />
               </div>

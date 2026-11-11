@@ -1,26 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { StudioItem, ConnectorAnchor } from "@/types/workspace";
 import {
-  getConnectorAnchorPoint,
-  getConnectorPath,
-  getNearestConnectorAnchor,
-  isConnectableWorkspaceItem,
-  type ConnectorPoint,
-} from "@/lib/workspace/connector-geometry";
+  DEFAULT_CONNECTOR_COLOR,
+  DEFAULT_CONNECTOR_MODE,
+  DEFAULT_CONNECTOR_STROKE_WIDTH,
+  type ConnectorAnchor,
+  type ConnectorEnd,
+  type StudioItem,
+} from "@/types/workspace";
+import { getConnectorAnchorPoint, isConnectableWorkspaceItem, type ConnectorPoint } from "@/lib/workspace/connector-geometry";
+import { getConnectorAnchors } from "@/lib/workspace/connector-anchors";
+import { findConnectionTarget, type ConnectionTarget } from "@/lib/workspace/connector-target";
+import { computeConnectorRoute } from "@/lib/workspace/connector-routing";
 import { getEffectiveRotation } from "@/lib/workspace/selection-frame";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
+import { ConnectorGraphic, type ConnectorGraphicStyle } from "./ConnectorGraphic";
+import { ConnectionOverlay } from "./ConnectionOverlay";
 
-type Candidate = { itemId: string; anchor: ConnectorAnchor; point: ConnectorPoint; distance: number };
 type DragState = {
   pointerId: number;
   sourceId: string;
-  sourceAnchor: ConnectorAnchor;
-  sourcePoint: ConnectorPoint;
+  source: ConnectorEnd;
   pointer: ConnectorPoint;
-  candidate: Candidate | null;
+  target: ConnectionTarget | null;
   startClientX: number;
   startClientY: number;
   moved: boolean;
@@ -32,12 +36,20 @@ interface WorkspaceConnectorHandlesProps {
   enabled: boolean;
   canvasScale: number;
   screenToWorld: (clientX: number, clientY: number) => ConnectorPoint;
-  onCreate: (sourceId: string, sourceAnchor: ConnectorAnchor, targetId: string, targetAnchor: ConnectorAnchor) => void;
+  onCreate: (source: ConnectorEnd, target: ConnectorEnd) => void;
 }
 
 const ANCHORS: ConnectorAnchor[] = ["top", "right", "bottom", "left"];
-const TARGET_HIT_RADIUS_PX = 28;
 const DRAG_START_PX = 4;
+
+/** New connectors use AFFiNE's defaults until the style toolbar exists. */
+const PREVIEW_STYLE: ConnectorGraphicStyle = {
+  color: DEFAULT_CONNECTOR_COLOR,
+  strokeWidth: DEFAULT_CONNECTOR_STROKE_WIDTH,
+  strokeStyle: "solid",
+  frontEndpointStyle: "none",
+  rearEndpointStyle: "arrow",
+};
 
 export function WorkspaceConnectorHandles({
   items,
@@ -66,20 +78,12 @@ export function WorkspaceConnectorHandles({
     return item && isConnectableWorkspaceItem(item) ? item : null;
   }, [enabled, items, selectedIds]);
 
-  const findCandidate = useCallback((sourceId: string, point: ConnectorPoint): Candidate | null => {
-    let nearest: Candidate | null = null;
-    for (const item of itemsRef.current) {
-      if (item.id === sourceId || !isConnectableWorkspaceItem(item)) continue;
-      const candidate = getNearestConnectorAnchor(item, point);
-      if (!nearest || candidate.distance < nearest.distance) {
-        nearest = { itemId: item.id, ...candidate };
-      }
-    }
-    const hitRadius = TARGET_HIT_RADIUS_PX / Math.max(0.1, scaleRef.current);
-    return nearest && nearest.distance <= hitRadius ? nearest : null;
-  }, []);
-
   useEffect(() => {
+    const clear = () => {
+      dragRef.current = null;
+      setDrag(null);
+    };
+
     const handleMove = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || current.pointerId !== event.pointerId) return;
@@ -88,11 +92,13 @@ export function WorkspaceConnectorHandles({
         event.clientY - current.startClientY,
       ) >= DRAG_START_PX;
       const pointer = screenToWorldRef.current(event.clientX, event.clientY);
-      const next = {
+      const next: DragState = {
         ...current,
         moved,
         pointer,
-        candidate: moved ? findCandidate(current.sourceId, pointer) : null,
+        target: moved
+          ? findConnectionTarget(pointer, itemsRef.current, { zoom: scaleRef.current, excludeIds: [current.sourceId] })
+          : null,
       };
       dragRef.current = next;
       setDrag(next);
@@ -102,46 +108,47 @@ export function WorkspaceConnectorHandles({
     const finish = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || current.pointerId !== event.pointerId) return;
-      dragRef.current = null;
-      setDrag(null);
-      if (current.moved && current.candidate) {
-        onCreateRef.current(
-          current.sourceId,
-          current.sourceAnchor,
-          current.candidate.itemId,
-          current.candidate.anchor,
-        );
+      clear();
+      // Releasing over empty canvas cancels for now; stage 3 adds AFFiNE's
+      // create-on-drop panel.
+      if (current.moved && current.target?.targetId) {
+        onCreateRef.current(current.source, current.target.end);
       }
     };
 
     const cancel = (event: PointerEvent) => {
       if (dragRef.current?.pointerId !== event.pointerId) return;
-      dragRef.current = null;
-      setDrag(null);
+      clear();
+    };
+
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && dragRef.current) clear();
     };
 
     window.addEventListener("pointermove", handleMove, { passive: false });
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", escape);
     return () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", escape);
     };
-  }, [findCandidate]);
+  }, []);
 
   const startConnection = (event: ReactPointerEvent<HTMLButtonElement>, anchor: ConnectorAnchor) => {
     if (!selected || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const pointer = screenToWorldRef.current(event.clientX, event.clientY);
+    // The connector starts at the shape-aware anchor for this side.
+    const sideAnchor = getConnectorAnchors(selected).find((candidate) => candidate.side === anchor)!;
     const next: DragState = {
       pointerId: event.pointerId,
       sourceId: selected.id,
-      sourceAnchor: anchor,
-      sourcePoint: getConnectorAnchorPoint(selected, anchor),
-      pointer,
-      candidate: null,
+      source: { id: selected.id, position: [...sideAnchor.position] },
+      pointer: screenToWorldRef.current(event.clientX, event.clientY),
+      target: null,
       startClientX: event.clientX,
       startClientY: event.clientY,
       moved: false,
@@ -157,20 +164,24 @@ export function WorkspaceConnectorHandles({
 
   if (!selected && !drag) return null;
 
-  const previewEnd = drag?.candidate?.point ?? drag?.pointer;
+  const previewRoute = drag?.moved && drag.target
+    ? computeConnectorRoute({ mode: DEFAULT_CONNECTOR_MODE, source: drag.source, target: drag.target.end }, items)
+    : null;
   // Follow the live rotate preview so handles stay on the outline mid-gesture.
   const selectedRotation = selected ? getEffectiveRotation(selected, rotationPreviews) : 0;
   return (
     <div className="pointer-events-none absolute inset-0" style={{ zIndex: 1200 }} aria-label="Connector controls">
       <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
-        {drag?.moved && previewEnd && (
-          <path
-            d={getConnectorPath(drag.sourcePoint, previewEnd)}
-            fill="none"
-            stroke={drag.candidate ? "#2563eb" : "#94a3b8"}
-            strokeWidth={2}
-            strokeDasharray="6 5"
-            strokeLinecap="round"
+        {previewRoute && (
+          <g data-connector-preview="true">
+            <ConnectorGraphic route={previewRoute} style={PREVIEW_STYLE} />
+          </g>
+        )}
+        {drag?.moved && drag.target && (
+          <ConnectionOverlay
+            anchors={drag.target.anchors}
+            highlight={drag.target.kind === "free" ? null : drag.target.point}
+            zoom={canvasScale}
           />
         )}
       </svg>
@@ -184,16 +195,12 @@ export function WorkspaceConnectorHandles({
             title={`Drag to connect from ${anchor}`}
             onPointerDown={(event) => startConnection(event, anchor)}
             className="pointer-events-auto absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-500 shadow-md touch-none"
-            style={{ left: point.x, top: point.y }}
+            // Hidden (not unmounted) while dragging: the pressed handle keeps
+            // pointer capture, which touch browsers need for the gesture.
+            style={{ left: point.x, top: point.y, opacity: drag?.moved ? 0 : 1 }}
           />
         );
       })}
-      {drag?.candidate && (
-        <div
-          className="absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-600 shadow"
-          style={{ left: drag.candidate.point.x, top: drag.candidate.point.y }}
-        />
-      )}
     </div>
   );
 }
