@@ -212,7 +212,7 @@ export type VideoAnchorNode = z.infer<typeof VideoAnchorNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
 export type GroupNode = z.infer<typeof GroupNodeSchema>;
 export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
-export type ShapeNode = z.infer<typeof ShapeNodeSchema>;\nexport type ConnectorNode = z.infer<typeof ConnectorNodeSchema>;
+export type ShapeNode = z.infer<typeof ShapeNodeSchema>;\nexport type ConnectorNode = z.infer<typeof ConnectorNodeSchema>;\nexport type ConnectorAnchor = z.infer<typeof ConnectorAnchorSchema>;
 export type WorkspaceNode = z.infer<typeof WorkspaceNodeSchema>;
 export type WorkspaceNodeType = WorkspaceNode["type"];
 export type WorkspaceScene = z.infer<typeof WorkspaceSceneSchema>;
