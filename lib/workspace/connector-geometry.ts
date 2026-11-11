@@ -5,7 +5,7 @@ export type ConnectorAnchorName = ConnectorAnchor;
 
 const ANCHORS: ConnectorAnchorName[] = ["top", "right", "bottom", "left"];
 
-export function isConnectableWorkspaceItem(item: StudioItem): boolean {
+export function isConnectableWorkspaceItem(\n  item: StudioItem,\n): item is Exclude<StudioItem, { type: "connector" }> {
   if (item.type === "connector" || item.type === "group" || item.type === "drawing") return false;
   if (item.type === "shape" && (item.props.kind === "line" || item.props.kind === "arrow")) return false;
   return !("locked" in item.props && item.props.locked === true);
