@@ -58,12 +58,10 @@ export function WorkspaceConnectorHandles({
       } : null);
     };
     const handleUp = () => {
-      setDrag((current) => {
-        if (current?.candidate) {
-          onCreate(current.sourceId, current.sourceAnchor, current.candidate.itemId, current.candidate.anchor);
-        }
-        return null;
-      });
+      if (drag.candidate) {
+        onCreate(drag.sourceId, drag.sourceAnchor, drag.candidate.itemId, drag.candidate.anchor);
+      }
+      setDrag(null);
     };
     const handleCancel = () => setDrag(null);
     window.addEventListener("pointermove", handleMove);
