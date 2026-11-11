@@ -3,7 +3,7 @@
 import { StudioItem } from "@/types/workspace";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
-import { ReactNode, useState, useEffect, useRef } from "react";
+import { ReactNode, useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Rnd } from "react-rnd";
 import { RotateCw, X } from "lucide-react";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
@@ -48,6 +48,7 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
+  const rndRef = useRef<Rnd | null>(null);
   const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -72,7 +73,14 @@ export function StudioItemComponent({
 
   useEffect(() => {
     setSize({ w: item.w, h: item.h });
-  }, [item.x, item.y, item.w, item.h]);
+  }, [item.w, item.h]);
+
+  // react-rnd/react-draggable can retain an internal translated position after
+  // a controlled drag. Reconcile that internal position with the workspace
+  // store before paint so overlays and the rendered item share one origin.
+  useLayoutEffect(() => {
+    rndRef.current?.updatePosition({ x: item.x, y: item.y });
+  }, [item.x, item.y]);
 
   const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
@@ -151,6 +159,7 @@ export function StudioItemComponent({
 
   return (
     <Rnd
+      ref={rndRef}
       className="workspace-item-rnd"
       size={{ width: size.w, height: size.h }}
       position={{ x: item.x, y: item.y }}
