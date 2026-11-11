@@ -148,11 +148,10 @@ export function StudioItemComponent({
     <Rnd
       className="workspace-item-rnd"
       size={{ width: item.w, height: item.h }}
-      // The parent TransformComponent already scales the workspace. react-rnd
-      // applies its scale to its controlled translation as well, so feed it
-      // normalized coordinates to avoid scaling x/y twice. Drag deltas remain
-      // world-space because react-rnd still receives the canvas scale.
-      position={{ x: item.x / canvasScale, y: item.y / canvasScale }}
+      // react-rnd uses `scale` to normalize pointer deltas; it does not
+      // scale the controlled position prop. Keep position in workspace units,
+      // matching SelectionOverlay and the parent TransformComponent.
+      position={{ x: item.x, y: item.y }}
       scale={canvasScale}
       minWidth={1}
       minHeight={1}
