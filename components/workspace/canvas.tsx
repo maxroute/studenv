@@ -20,6 +20,7 @@ import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
+import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
 import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
@@ -1795,7 +1796,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {items.map((item) => (
+                <WorkspaceConnectorsLayer items={items} />
+
+                {items.filter((item) => item.type !== "connector").map((item) => (
                   <StudioItemComponent
                     key={item.id}
                     item={item}
