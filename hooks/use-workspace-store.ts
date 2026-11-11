@@ -360,7 +360,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       copyItems(ids);
       const idSet = new Set(ids);
       set({
-        items: items.filter(item => !idSet.has(item.id)),
+        items: items.filter(item => !idSet.has(item.id) && !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId))),
         isDirty: true,
       });
     },
