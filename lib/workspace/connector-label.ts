@@ -4,7 +4,8 @@
 
 import type { Vec } from "./connector-anchors";
 import type { ConnectorRoute } from "./connector-routing";
-import { getPointAtOffset } from "./connector-path";
+import type { ConnectorLabel } from "@/types/workspace";
+import { getNearestPointOnRoute, getPointAtOffset } from "./connector-path";
 
 /** AFFiNE wraps connector labels at 280 world units. */
 export const CONNECTOR_LABEL_MAX_WIDTH = 280;
@@ -28,4 +29,14 @@ export function getConnectorLabelLayout(
   const rect = { x: center.x - size.w / 2, y: center.y - size.h / 2, w: size.w, h: size.h };
   const pad = CONNECTOR_LABEL_CLIP_PADDING;
   return { center, rect, clip: { x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2 } };
+}
+
+/** Where a label sits when it is dragged to, or edited at, `point`: the nearest point on the path. */
+export function getLabelOffsetAtPoint(route: ConnectorRoute, point: Vec): number {
+  return Math.min(1, Math.max(0, getNearestPointOnRoute(route, point).offset));
+}
+
+/** Label after editing: blank text removes it (AFFiNE), otherwise it keeps its place. */
+export function applyLabelText(text: string, offset: number): ConnectorLabel | undefined {
+  return text.trim() === "" ? undefined : { text, offset: Math.min(1, Math.max(0, offset)) };
 }

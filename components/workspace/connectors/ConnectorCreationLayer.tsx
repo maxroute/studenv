@@ -73,8 +73,11 @@ export function ConnectorCreationLayer({
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [panelHover, setPanelHover] = useState<DropPanelChoice | null>(null);
 
-  const createConnector = useCallback((source: ConnectorEnd, target: ConnectorEnd) =>
-    addItem("connector", { source, target, mode: useConnectorUiStore.getState().mode }, { x: 0, y: 0 }),
+  const createConnector = useCallback((source: ConnectorEnd, target: ConnectorEnd) => {
+    // New connectors take the last-used mode and style (AFFiNE last props).
+    const { mode: lastMode, style } = useConnectorUiStore.getState();
+    return addItem("connector", { ...style, source, target, mode: lastMode }, { x: 0, y: 0 });
+  },
   [addItem]);
 
   // ── auto-complete arrows ────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import {
 } from "@/lib/workspace/connector-label";
 import { ConnectorGraphic } from "./ConnectorGraphic";
 import { routeToSvgPath } from "@/lib/workspace/connector-path";
-import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
+import { useConnectorUiStore, type ConnectorPart } from "@/lib/workspace/connector-ui-store";
 
 interface WorkspaceConnectorsLayerProps {
   items: StudioItem[];
@@ -27,9 +27,14 @@ const LABEL_COLOR = "#000000";
 const HIT_PADDING = 8;
 
 export function WorkspaceConnectorsLayer({ items, interactive = false }: WorkspaceConnectorsLayerProps) {
-  const pressConnector = (connectorId: string, event: React.PointerEvent) => {
-    useConnectorUiStore.getState().connectorPointerDown?.(connectorId, event.nativeEvent);
+  const pressConnector = (connectorId: string, event: React.PointerEvent, part: ConnectorPart) => {
+    useConnectorUiStore.getState().connectorPointerDown?.(connectorId, event.nativeEvent, part);
   };
+  const doubleClickConnector = (connectorId: string, event: React.MouseEvent) => {
+    useConnectorUiStore.getState().connectorDoubleClick?.(connectorId, event.nativeEvent);
+  };
+  // The label being edited is replaced by its editor.
+  const editingLabelId = useConnectorUiStore((state) => state.editingLabel?.connectorId ?? null);
   const connectors = useMemo<RoutedConnector[]>(() => {
     const byId = new Map(items.map((item) => [item.id, item] as const));
     return items.flatMap((item) => {
@@ -64,7 +69,7 @@ export function WorkspaceConnectorsLayer({ items, interactive = false }: Workspa
     connectors.flatMap(({ item, route }) => {
       const label = item.props.label;
       const size = labelSizes[item.id];
-      if (!label?.text || !size) return [];
+      if (!label?.text || !size || item.id === editingLabelId) return [];
       return [[item.id, getConnectorLabelLayout(route, label.offset, size)] as const];
     }),
   );
@@ -111,7 +116,8 @@ export function WorkspaceConnectorsLayer({ items, interactive = false }: Workspa
                 pointerEvents="stroke"
                 data-connector-hit={item.id}
                 data-no-canvas-gesture="true"
-                onPointerDown={(event) => pressConnector(item.id, event)}
+                onPointerDown={(event) => pressConnector(item.id, event, "path")}
+                onDoubleClick={(event) => doubleClickConnector(item.id, event)}
               />
             )}
           </svg>
@@ -119,7 +125,7 @@ export function WorkspaceConnectorsLayer({ items, interactive = false }: Workspa
       })}
       {connectors.map(({ item, route }) => {
         const label = item.props.label;
-        if (!label?.text) return null;
+        if (!label?.text || item.id === editingLabelId) return null;
         const layout = layouts.get(item.id) ?? getConnectorLabelLayout(route, label.offset, { w: 0, h: 0 });
         return (
           <div
@@ -130,7 +136,8 @@ export function WorkspaceConnectorsLayer({ items, interactive = false }: Workspa
             }}
             data-connector-label-id={item.id}
             data-no-canvas-gesture={interactive ? "true" : undefined}
-            onPointerDown={interactive ? (event) => pressConnector(item.id, event) : undefined}
+            onPointerDown={interactive ? (event) => pressConnector(item.id, event, "label") : undefined}
+            onDoubleClick={interactive ? (event) => doubleClickConnector(item.id, event) : undefined}
             className={`${interactive ? "pointer-events-auto" : "pointer-events-none"} absolute whitespace-pre-wrap break-words text-center`}
             style={{
               left: layout.center.x,

@@ -1,24 +1,11 @@
 "use client";
 
-import {
-  DEFAULT_CONNECTOR_COLOR,
-  DEFAULT_CONNECTOR_STROKE_WIDTH,
-  type ConnectorMode,
-  type StudioItem,
-} from "@/types/workspace";
+import type { ConnectorMode, StudioItem } from "@/types/workspace";
 import { computeConnectorRoute } from "@/lib/workspace/connector-routing";
-import { ConnectorGraphic, type ConnectorGraphicStyle } from "../ConnectorGraphic";
+import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
+import { ConnectorGraphic } from "../ConnectorGraphic";
 import { ConnectionOverlay } from "../ConnectionOverlay";
 import type { ConnectionDraft } from "./useConnectionGesture";
-
-/** Default appearance of a new connector (AFFiNE defaults). */
-export const NEW_CONNECTOR_STYLE: ConnectorGraphicStyle = {
-  color: DEFAULT_CONNECTOR_COLOR,
-  strokeWidth: DEFAULT_CONNECTOR_STROKE_WIDTH,
-  strokeStyle: "solid",
-  frontEndpointStyle: "none",
-  rearEndpointStyle: "arrow",
-};
 
 /**
  * The connector being created, drawn exactly as it will be saved, plus the
@@ -35,6 +22,8 @@ export function ConnectorDraftPreview({
   mode: ConnectorMode;
   zoom: number;
 }) {
+  // Drawn with the last-used style the connector will be saved with.
+  const style = useConnectorUiStore((state) => state.style);
   const route = computeConnectorRoute({ mode, source: draft.source, target: draft.target.end }, items);
   return (
     <svg
@@ -45,7 +34,7 @@ export function ConnectorDraftPreview({
     >
       {route && (
         <g data-connector-preview="true">
-          <ConnectorGraphic route={route} style={NEW_CONNECTOR_STYLE} />
+          <ConnectorGraphic route={route} style={style} />
         </g>
       )}
       <ConnectionOverlay

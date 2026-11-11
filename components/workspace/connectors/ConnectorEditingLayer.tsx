@@ -8,6 +8,8 @@ import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import { findConnectionTarget, type ConnectionTarget } from "@/lib/workspace/connector-target";
 import { getConnectorRoute, groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
+import { getPointAtOffset } from "@/lib/workspace/connector-path";
+import { getLabelOffsetAtPoint } from "@/lib/workspace/connector-label";
 import type { Vec } from "@/lib/workspace/connector-anchors";
 import { ConnectionOverlay, CONNECTION_EMPHASIS_COLOR } from "../ConnectionOverlay";
 
@@ -28,6 +30,16 @@ type EndDrag = {
   end: EndName;
   original: ConnectorNode["props"];
   target: ConnectionTarget | null;
+};
+
+type LabelDrag = {
+  pointerId: number;
+  connectorId: string;
+  startClient: Vec;
+  /** Pointer position relative to the label centre, kept while sliding. */
+  grab: Vec;
+  original: NonNullable<ConnectorNode["props"]["label"]>;
+  moving: boolean;
 };
 
 /** Screen pixels a press must travel before it becomes a drag. */
@@ -57,8 +69,11 @@ export function ConnectorEditingLayer({
 }) {
   const batchUpdateItems = useWorkspaceStore((state) => state.batchUpdateItems);
   const setConnectorPointerDown = useConnectorUiStore((state) => state.setConnectorPointerDown);
+  const setConnectorDoubleClick = useConnectorUiStore((state) => state.setConnectorDoubleClick);
+  const setEditingLabel = useConnectorUiStore((state) => state.setEditingLabel);
   const [endDrag, setEndDrag] = useState<EndDrag | null>(null);
   const bodyDragRef = useRef<BodyDrag | null>(null);
+  const labelDragRef = useRef<LabelDrag | null>(null);
   const endDragRef = useRef<EndDrag | null>(null);
   const live = useRef({ items, zoom, screenToWorld });
   live.current = { items, zoom, screenToWorld };
@@ -69,9 +84,10 @@ export function ConnectorEditingLayer({
   useEffect(() => {
     if (!enabled) {
       setConnectorPointerDown(null);
+      setConnectorDoubleClick(null);
       return;
     }
-    setConnectorPointerDown((connectorId, event) => {
+    setConnectorPointerDown((connectorId, event, part) => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
@@ -80,6 +96,26 @@ export function ConnectorEditingLayer({
         selection.toggle(connectorId);
         return;
       }
+
+      // Pressing the label of the selected connector slides it along the path (AFFiNE).
+      const connector = live.current.items.find((item): item is ConnectorNode => item.id === connectorId && item.type === "connector");
+      const label = connector?.props.label;
+      if (part === "label" && connector && label && selection.selectedIds.length === 1 && selection.selectedIds[0] === connectorId) {
+        const route = getConnectorRoute(connector, live.current.items);
+        if (!route) return;
+        const world = live.current.screenToWorld(event.clientX, event.clientY);
+        const center = getPointAtOffset(route, label.offset);
+        labelDragRef.current = {
+          pointerId: event.pointerId,
+          connectorId,
+          startClient: { x: event.clientX, y: event.clientY },
+          grab: { x: world.x - center.x, y: world.y - center.y },
+          original: label,
+          moving: false,
+        };
+        return;
+      }
+
       if (!selection.selectedIds.includes(connectorId)) selection.select(connectorId);
 
       const snapshot = snapshotGroupMove(live.current.items, useSelectionStore.getState().selectedIds);
@@ -91,8 +127,26 @@ export function ConnectorEditingLayer({
         snapshot,
       };
     });
-    return () => setConnectorPointerDown(null);
-  }, [enabled, setConnectorPointerDown]);
+    setConnectorDoubleClick((connectorId, event) => {
+      const connector = live.current.items.find((item): item is ConnectorNode => item.id === connectorId && item.type === "connector");
+      if (!connector) return;
+      const route = getConnectorRoute(connector, live.current.items);
+      if (!route) return;
+      event.preventDefault();
+      event.stopPropagation();
+      bodyDragRef.current = null;
+      labelDragRef.current = null;
+      useSelectionStore.getState().select(connectorId);
+      // An existing label is edited where it is; otherwise the new label
+      // starts at the clicked point projected onto the path.
+      const offset = connector.props.label?.offset ?? getLabelOffsetAtPoint(route, live.current.screenToWorld(event.clientX, event.clientY));
+      setEditingLabel({ connectorId, offset });
+    });
+    return () => {
+      setConnectorPointerDown(null);
+      setConnectorDoubleClick(null);
+    };
+  }, [enabled, setConnectorPointerDown, setConnectorDoubleClick, setEditingLabel]);
 
   // ── window listeners for body and endpoint drags ───────────────────────
   useEffect(() => {
@@ -102,7 +156,28 @@ export function ConnectorEditingLayer({
       batchUpdateItems([{ id: drag.connectorId, changes: {}, props: { [drag.end]: drag.original[drag.end] } }]);
     };
 
+    const restoreLabel = (drag: LabelDrag) => {
+      batchUpdateItems([{ id: drag.connectorId, changes: {}, props: { label: drag.original } }]);
+    };
+
     const handleMove = (event: PointerEvent) => {
+      const labelDrag = labelDragRef.current;
+      if (labelDrag && labelDrag.pointerId === event.pointerId) {
+        if (!labelDrag.moving) {
+          const travelled = Math.hypot(event.clientX - labelDrag.startClient.x, event.clientY - labelDrag.startClient.y);
+          if (travelled < BODY_DRAG_THRESHOLD_PX) return;
+          labelDrag.moving = true;
+        }
+        const connector = live.current.items.find((item): item is ConnectorNode => item.id === labelDrag.connectorId && item.type === "connector");
+        const route = connector ? getConnectorRoute(connector, live.current.items) : null;
+        if (!route) return;
+        const world = live.current.screenToWorld(event.clientX, event.clientY);
+        const offset = getLabelOffsetAtPoint(route, { x: world.x - labelDrag.grab.x, y: world.y - labelDrag.grab.y });
+        batchUpdateItems([{ id: labelDrag.connectorId, changes: {}, props: { label: { ...labelDrag.original, offset } } }]);
+        event.preventDefault();
+        return;
+      }
+
       const body = bodyDragRef.current;
       if (body && body.pointerId === event.pointerId) {
         if (!body.moving) {
@@ -133,6 +208,10 @@ export function ConnectorEditingLayer({
     };
 
     const finish = (event: PointerEvent) => {
+      if (labelDragRef.current?.pointerId === event.pointerId) {
+        labelDragRef.current = null;
+        return;
+      }
       const body = bodyDragRef.current;
       if (body && body.pointerId === event.pointerId) {
         bodyDragRef.current = null;
@@ -146,6 +225,12 @@ export function ConnectorEditingLayer({
     };
 
     const cancel = (event: PointerEvent) => {
+      const labelDrag = labelDragRef.current;
+      if (labelDrag && labelDrag.pointerId === event.pointerId) {
+        restoreLabel(labelDrag);
+        labelDragRef.current = null;
+        return;
+      }
       const body = bodyDragRef.current;
       if (body && body.pointerId === event.pointerId) {
         // Put everything back where the drag started.
@@ -162,7 +247,16 @@ export function ConnectorEditingLayer({
     };
 
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !endDragRef.current) return;
+      if (event.key !== "Escape") return;
+      const labelDrag = labelDragRef.current;
+      if (labelDrag) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (labelDrag.moving) restoreLabel(labelDrag);
+        labelDragRef.current = null;
+        return;
+      }
+      if (!endDragRef.current) return;
       event.preventDefault();
       event.stopPropagation();
       restoreEnd();

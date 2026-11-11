@@ -29,6 +29,8 @@ on:
       - "lib/workspace/connector-selection.ts"
       - "lib/workspace/connector-selection.test.ts"
       - "lib/workspace/connector-label.test.ts"
+      - "lib/workspace/connector-style.ts"
+      - "lib/workspace/connector-style.test.ts"
       - "components/workspace/ConnectorGraphic.tsx"
       - "components/workspace/ConnectionOverlay.tsx"
       - "lib/workspace/shape-paths.ts"

@@ -7,8 +7,16 @@
 import { create } from "zustand";
 import { DEFAULT_CONNECTOR_MODE, type ConnectorMode } from "@/types/workspace";
 import { readLastConnectorMode, writeLastConnectorMode } from "./connector-autocomplete";
+import { readLastConnectorStyle, writeLastConnectorStyle, type ConnectorStyle } from "./connector-style";
 
 type QuickConnectRequest = { sourceId: string; clientX: number; clientY: number };
+
+/** Which part of a connector was pressed. */
+export type ConnectorPart = "path" | "label";
+type ConnectorPointerHandler = (connectorId: string, event: PointerEvent, part: ConnectorPart) => void;
+type ConnectorDoubleClickHandler = (connectorId: string, event: MouseEvent) => void;
+/** Label being edited: the connector and where along its path (0..1). */
+export type LabelEditing = { connectorId: string; offset: number };
 
 interface ConnectorUiState {
   /** Mode for newly created connectors; remembered as the last-used mode. */
@@ -25,11 +33,19 @@ interface ConnectorUiState {
    * Set by the connector editing layer; the connectors layer calls it when a
    * connector path or label is pressed in Select mode.
    */
-  connectorPointerDown: ((connectorId: string, event: PointerEvent) => void) | null;
-  setConnectorPointerDown: (handler: ((connectorId: string, event: PointerEvent) => void) | null) => void;
+  connectorPointerDown: ConnectorPointerHandler | null;
+  setConnectorPointerDown: (handler: ConnectorPointerHandler | null) => void;
+  /** Double-click on a connector path or label opens its label editor. */
+  connectorDoubleClick: ConnectorDoubleClickHandler | null;
+  setConnectorDoubleClick: (handler: ConnectorDoubleClickHandler | null) => void;
+  /** Style for newly created connectors; remembered as the last-used style. */
+  style: ConnectorStyle;
+  rememberStyle: (style: Partial<ConnectorStyle>) => void;
+  editingLabel: LabelEditing | null;
+  setEditingLabel: (editing: LabelEditing | null) => void;
 }
 
-export const useConnectorUiStore = create<ConnectorUiState>()((set) => ({
+export const useConnectorUiStore = create<ConnectorUiState>()((set, get) => ({
   mode: readLastConnectorMode(DEFAULT_CONNECTOR_MODE),
   setMode: (mode) => {
     writeLastConnectorMode(mode);
@@ -42,4 +58,14 @@ export const useConnectorUiStore = create<ConnectorUiState>()((set) => ({
   setGestureActive: (gestureActive) => set({ gestureActive }),
   connectorPointerDown: null,
   setConnectorPointerDown: (connectorPointerDown) => set({ connectorPointerDown }),
+  connectorDoubleClick: null,
+  setConnectorDoubleClick: (connectorDoubleClick) => set({ connectorDoubleClick }),
+  style: readLastConnectorStyle(),
+  rememberStyle: (changes) => {
+    const style = { ...get().style, ...changes };
+    writeLastConnectorStyle(style);
+    set({ style });
+  },
+  editingLabel: null,
+  setEditingLabel: (editingLabel) => set({ editingLabel }),
 }));

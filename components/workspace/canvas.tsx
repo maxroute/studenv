@@ -24,6 +24,8 @@ import { StudioItemComponent } from "./items/studio-item";
 import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
 import { ConnectorCreationLayer } from "./connectors/ConnectorCreationLayer";
 import { ConnectorEditingLayer } from "./connectors/ConnectorEditingLayer";
+import { ConnectorLabelEditor } from "./connectors/ConnectorLabelEditor";
+import { ConnectorStyleToolbar } from "./connectors/ConnectorStyleToolbar";
 import { connectorIntersectsRect } from "@/lib/workspace/connector-selection";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import { getNextConnectorMode } from "@/lib/workspace/connector-autocomplete";
@@ -2064,6 +2066,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   screenToWorld={screenToWorld}
                 />
 
+                <ConnectorLabelEditor items={items} />
+
                 <ConnectorCreationLayer
                   items={items}
                   selectedIds={selectedIds}
@@ -2099,6 +2103,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             )}
 
             <ShapeStyleToolbar />
+            <ConnectorStyleToolbar enabled={activeTool === "select"} />
 
             {contextMenu && (
               <ShapeContextMenu
