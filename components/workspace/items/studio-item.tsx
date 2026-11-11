@@ -48,7 +48,6 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
-  const [pos, setPos] = useState({ x: item.x, y: item.y });
   const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -72,9 +71,8 @@ export function StudioItemComponent({
   const isLocked = (item.props as { locked?: boolean }).locked === true;
 
   useEffect(() => {
-    setPos({ x: item.x, y: item.y });
     setSize({ w: item.w, h: item.h });
-  }, [item.x, item.y, item.w, item.h]);
+  }, [item.w, item.h]);
 
   const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
@@ -155,7 +153,7 @@ export function StudioItemComponent({
     <Rnd
       className="workspace-item-rnd"
       size={{ width: size.w, height: size.h }}
-      position={{ x: pos.x, y: pos.y }}
+      position={{ x: item.x, y: item.y }}
       scale={canvasScale}
       minWidth={1}
       minHeight={1}
@@ -211,7 +209,6 @@ export function StudioItemComponent({
           });
           useWorkspaceStore.getState().batchUpdateItems(updates);
         } else {
-          setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
       }}
@@ -253,7 +250,6 @@ export function StudioItemComponent({
           });
           useWorkspaceStore.getState().batchUpdateItems(updates);
         } else {
-          setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
         dragStartPositionsRef.current = new Map();
@@ -263,12 +259,11 @@ export function StudioItemComponent({
       }}
       onResize={(e, direction, ref, delta, position) => {
         setSize({ w: parseInt(ref.style.width), h: parseInt(ref.style.height) });
-        setPos(position);
+        updateItem(item.id, { x: position.x, y: position.y });
       }}
       onResizeStop={(e, direction, ref, delta, position) => {
         const newSize = { w: parseInt(ref.style.width), h: parseInt(ref.style.height) };
         setSize(newSize);
-        setPos(position);
         updateItem(item.id, {
           ...newSize,
           ...position,
