@@ -48,7 +48,6 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
-  const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const rotationStartRef = useRef<{
@@ -69,10 +68,6 @@ export function StudioItemComponent({
   const dragMovedRef = useRef(false);
 
   const isLocked = (item.props as { locked?: boolean }).locked === true;
-
-  useEffect(() => {
-    setSize({ w: item.w, h: item.h });
-  }, [item.w, item.h]);
 
   const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
@@ -152,7 +147,7 @@ export function StudioItemComponent({
   return (
     <Rnd
       className="workspace-item-rnd"
-      size={{ width: size.w, height: size.h }}
+      size={{ width: item.w, height: item.h }}
       position={{ x: item.x, y: item.y }}
       scale={canvasScale}
       minWidth={1}
@@ -258,12 +253,15 @@ export function StudioItemComponent({
         }
       }}
       onResize={(e, direction, ref, delta, position) => {
-        setSize({ w: parseInt(ref.style.width), h: parseInt(ref.style.height) });
-        updateItem(item.id, { x: position.x, y: position.y });
+        updateItem(item.id, {
+          x: position.x,
+          y: position.y,
+          w: parseInt(ref.style.width),
+          h: parseInt(ref.style.height),
+        });
       }}
       onResizeStop={(e, direction, ref, delta, position) => {
         const newSize = { w: parseInt(ref.style.width), h: parseInt(ref.style.height) };
-        setSize(newSize);
         updateItem(item.id, {
           ...newSize,
           ...position,
