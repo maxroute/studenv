@@ -151,7 +151,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     });
 
     setRenderedItemBounds(nextBounds);
-  }, [items, selectedIds, draggingIds, canvasScale, selectedItems]);
+  }, [items, selectedIds, draggingIds, canvasScale]);
 
 
   // Handle pointer down on a resize handle
