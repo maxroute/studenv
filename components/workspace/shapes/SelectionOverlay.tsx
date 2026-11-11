@@ -518,7 +518,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
 
       {/* Selected Items Bounding Outlines & Handles */}
       {selectedItems.map((item) => {
-        if (draggingIds.includes(item.id)) return null;
+        if (draggingIds.length > 0) return null;
         const isLocked = (item.props as { locked?: boolean }).locked === true;
         const isLineOrArrow = item.type === "shape" && (item.props.kind === "line" || item.props.kind === "arrow") && item.props.startPoint && item.props.endPoint;
 
