@@ -48,8 +48,6 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
-  const [pos, setPos] = useState({ x: item.x, y: item.y });
-  const [size, setSize] = useState({ w: item.w, h: item.h });
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const rotationStartRef = useRef<{
@@ -68,13 +66,49 @@ export function StudioItemComponent({
   onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const dragMovedRef = useRef(false);
-
-  const isLocked = (item.props as { locked?: boolean }).locked === true;
+  const pressPointerIdRef = useRef<number | null>(null);
+  const finishPressRef = useRef<((event: PointerEvent) => void) | null>(null);
 
   useEffect(() => {
-    setPos({ x: item.x, y: item.y });
-    setSize({ w: item.w, h: item.h });
-  }, [item.x, item.y, item.w, item.h]);
+    return () => {
+      if (finishPressRef.current) {
+        document.removeEventListener("pointerup", finishPressRef.current, true);
+        document.removeEventListener("pointercancel", finishPressRef.current, true);
+        finishPressRef.current = null;
+      }
+      pressPointerIdRef.current = null;
+    };
+  }, []);
+
+  const handleItemPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    onPointerDown?.(event);
+    if (event.button !== 0 || event.defaultPrevented) return;
+
+    // Hide hover/selection feedback on press, not after react-draggable's
+    // movement threshold. Restore it on release even when this was only a click.
+    pressPointerIdRef.current = event.pointerId;
+    const selectedIds = useSelectionStore.getState().selectedIds;
+    useSelectionStore.getState().setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
+
+    const finish = (nativeEvent: PointerEvent) => {
+      if (nativeEvent.pointerId !== pressPointerIdRef.current) return;
+      document.removeEventListener("pointerup", finish, true);
+      document.removeEventListener("pointercancel", finish, true);
+      finishPressRef.current = null;
+      pressPointerIdRef.current = null;
+      useSelectionStore.getState().setDraggingIds([]);
+    };
+
+    if (finishPressRef.current) {
+      document.removeEventListener("pointerup", finishPressRef.current, true);
+      document.removeEventListener("pointercancel", finishPressRef.current, true);
+    }
+    finishPressRef.current = finish;
+    document.addEventListener("pointerup", finish, true);
+    document.addEventListener("pointercancel", finish, true);
+  };
+
+  const isLocked = (item.props as { locked?: boolean }).locked === true;
 
   const disableInteraction = isDrawingMode;
   const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
@@ -154,8 +188,11 @@ export function StudioItemComponent({
   return (
     <Rnd
       className="workspace-item-rnd"
-      size={{ width: size.w, height: size.h }}
-      position={{ x: pos.x, y: pos.y }}
+      size={{ width: item.w, height: item.h }}
+      // react-rnd uses `scale` to normalize pointer deltas; it does not
+      // scale the controlled position prop. Keep position in workspace units,
+      // matching SelectionOverlay and the parent TransformComponent.
+      position={{ x: item.x, y: item.y }}
       scale={canvasScale}
       minWidth={1}
       minHeight={1}
@@ -165,8 +202,9 @@ export function StudioItemComponent({
         // react-draggable fires onStart as soon as a mouse/touch gesture begins,
         // not only after the pointer has actually moved.
         dragMovedRef.current = false;
-        const { selectedIds } = useSelectionStore.getState();
+        const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
+        setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
 
         if (selectedIds.includes(item.id)) {
           const positions = new Map<string, { x: number; y: number }>();
@@ -211,14 +249,16 @@ export function StudioItemComponent({
           });
           useWorkspaceStore.getState().batchUpdateItems(updates);
         } else {
-          setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
       }}
       onDragStop={(e, d) => {
-        const { selectedIds } = useSelectionStore.getState();
+        const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
-        if (!startPos) return;
+        if (!startPos) {
+          setDraggingIds([]);
+          return;
+        }
 
         // A press can start an Rnd gesture without ever becoming a drag.
         // In particular, a touch used to dismiss a text editor can end outside
@@ -227,6 +267,7 @@ export function StudioItemComponent({
         dragMovedRef.current = false;
         if (!didMove) {
           dragStartPositionsRef.current = new Map();
+          setDraggingIds([]);
           onDragStop?.();
           return;
         }
@@ -253,22 +294,24 @@ export function StudioItemComponent({
           });
           useWorkspaceStore.getState().batchUpdateItems(updates);
         } else {
-          setPos({ x: startPos.x + dx, y: startPos.y + dy });
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
         dragStartPositionsRef.current = new Map();
+        setDraggingIds([]);
         if (onDragStop) {
           onDragStop();
         }
       }}
       onResize={(e, direction, ref, delta, position) => {
-        setSize({ w: parseInt(ref.style.width), h: parseInt(ref.style.height) });
-        setPos(position);
+        updateItem(item.id, {
+          x: position.x,
+          y: position.y,
+          w: parseInt(ref.style.width),
+          h: parseInt(ref.style.height),
+        });
       }}
       onResizeStop={(e, direction, ref, delta, position) => {
         const newSize = { w: parseInt(ref.style.width), h: parseInt(ref.style.height) };
-        setSize(newSize);
-        setPos(position);
         updateItem(item.id, {
           ...newSize,
           ...position,
@@ -284,7 +327,7 @@ export function StudioItemComponent({
         ref={rootRef}
         className={`w-full h-full relative group ${className ?? ""}`}
         onClick={onClick}
-        onPointerDown={onPointerDown}
+        onPointerDown={handleItemPointerDown}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         data-workspace-item="true"

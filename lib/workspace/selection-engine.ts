@@ -8,6 +8,8 @@ import { create } from "zustand";
 
 interface SelectionState {
   selectedIds: string[];
+  draggingIds: string[];
+  setDraggingIds: (ids: string[]) => void;
   rotationPreviews: Record<string, number>;
   setRotationPreview: (id: string, rotation: number) => void;
   clearRotationPreview: (id: string) => void;
@@ -20,6 +22,8 @@ interface SelectionState {
 
 export const useSelectionStore = create<SelectionState>()((set, get) => ({
   selectedIds: [],
+  draggingIds: [],
+  setDraggingIds: (ids) => set({ draggingIds: ids }),
   rotationPreviews: {},
   setRotationPreview: (id, rotation) =>
     set((state) => ({ rotationPreviews: { ...state.rotationPreviews, [id]: rotation } })),
