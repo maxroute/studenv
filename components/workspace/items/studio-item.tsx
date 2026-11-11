@@ -66,6 +66,46 @@ export function StudioItemComponent({
   onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const dragMovedRef = useRef(false);
+  const pressPointerIdRef = useRef<number | null>(null);
+  const finishPressRef = useRef<((event: PointerEvent) => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (finishPressRef.current) {
+        document.removeEventListener("pointerup", finishPressRef.current, true);
+        document.removeEventListener("pointercancel", finishPressRef.current, true);
+        finishPressRef.current = null;
+      }
+      pressPointerIdRef.current = null;
+    };
+  }, []);
+
+  const handleItemPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    onPointerDown?.(event);
+    if (event.button !== 0 || event.defaultPrevented) return;
+
+    // Hide hover/selection feedback on press, not after react-draggable's
+    // movement threshold. Restore it on release even when this was only a click.
+    pressPointerIdRef.current = event.pointerId;
+    useSelectionStore.getState().setDraggingIds([item.id]);
+
+    const finish = (nativeEvent: PointerEvent) => {
+      if (nativeEvent.pointerId !== pressPointerIdRef.current) return;
+      document.removeEventListener("pointerup", finish, true);
+      document.removeEventListener("pointercancel", finish, true);
+      finishPressRef.current = null;
+      pressPointerIdRef.current = null;
+      useSelectionStore.getState().setDraggingIds([]);
+    };
+
+    if (finishPressRef.current) {
+      document.removeEventListener("pointerup", finishPressRef.current, true);
+      document.removeEventListener("pointercancel", finishPressRef.current, true);
+    }
+    finishPressRef.current = finish;
+    document.addEventListener("pointerup", finish, true);
+    document.addEventListener("pointercancel", finish, true);
+  };
 
   const isLocked = (item.props as { locked?: boolean }).locked === true;
 
@@ -286,7 +326,7 @@ export function StudioItemComponent({
         ref={rootRef}
         className={`w-full h-full relative group ${className ?? ""}`}
         onClick={onClick}
-        onPointerDown={onPointerDown}
+        onPointerDown={handleItemPointerDown}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         data-workspace-item="true"
