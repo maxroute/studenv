@@ -88,8 +88,34 @@ test("eraser hits the visible edge of a pressure-thickened stroke", () => {
     { x: 0, y: 0, pressure: 1 },
     { x: 100, y: 0, pressure: 1 },
   ], 20);
-  const bounds = getStrokeBounds(outline);
-  const visibleEdgePoint = { x: 50, y: bounds.minY - 0.5 };
+
+  // Locate the actual upper outline edge around the middle of the stroke.
+  // The global minY can occur near a tapered endpoint, so it is not a
+  // reliable way to construct a point beside the edge at x=50.
+  const edgeSegments = outline.map((point, index) => {
+    const next = outline[(index + 1) % outline.length];
+    return {
+      midpoint: { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 },
+    };
+  }).filter(({ midpoint }) => midpoint.x >= 30 && midpoint.x <= 70);
+  assert.ok(edgeSegments.length > 0, "expected an upper outline edge near the stroke midpoint");
+  const edge = edgeSegments.reduce((best, candidate) =>
+    candidate.midpoint.y < best.midpoint.y ? candidate : best
+  );
+  const center = outline.reduce(
+    (sum, point) => ({ x: sum.x + point.x / outline.length, y: sum.y + point.y / outline.length }),
+    { x: 0, y: 0 },
+  );
+  const outward = {
+    x: edge.midpoint.x - center.x,
+    y: edge.midpoint.y - center.y,
+  };
+  const length = Math.hypot(outward.x, outward.y) || 1;
+  const visibleEdgePoint = {
+    x: edge.midpoint.x + (outward.x / length) * 0.5,
+    y: edge.midpoint.y + (outward.y / length) * 0.5,
+  };
+
   assert.equal(strokeOutlineIntersectsPolyline(outline, [visibleEdgePoint], 1), true);
 });
 
