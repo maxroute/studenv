@@ -87,7 +87,8 @@ export function StudioItemComponent({
     // Hide hover/selection feedback on press, not after react-draggable's
     // movement threshold. Restore it on release even when this was only a click.
     pressPointerIdRef.current = event.pointerId;
-    useSelectionStore.getState().setDraggingIds([item.id]);
+    const selectedIds = useSelectionStore.getState().selectedIds;
+    useSelectionStore.getState().setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
 
     const finish = (nativeEvent: PointerEvent) => {
       if (nativeEvent.pointerId !== pressPointerIdRef.current) return;
