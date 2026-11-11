@@ -180,10 +180,7 @@ export function StudioItemComponent({
       onDrag={(e, d) => {
         const { selectedIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
-        if (!startPos) {
-          setDraggingIds([]);
-          return;
-        }
+        if (!startPos) return;
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
@@ -217,7 +214,10 @@ export function StudioItemComponent({
       onDragStop={(e, d) => {
         const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
-        if (!startPos) return;
+        if (!startPos) {
+          setDraggingIds([]);
+          return;
+        }
 
         // A press can start an Rnd gesture without ever becoming a drag.
         // In particular, a touch used to dismiss a text editor can end outside
