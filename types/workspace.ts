@@ -191,6 +191,7 @@ export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   GroupNodeSchema,
   DrawingNodeSchema,
   ShapeNodeSchema,
+  ConnectorNodeSchema,
 ]);
 
 export const WorkspaceSceneSchema = z.object({
