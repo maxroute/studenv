@@ -7,7 +7,8 @@ import {
   getNearestConnectorAnchor,
   isConnectableWorkspaceItem,
 } from "./connector-geometry";
-import { createWorkspaceItem, parseWorkspaceScene, createWorkspaceScene } from "@/types/workspace";\nimport type { StudioItem } from "@/types/workspace";
+import { createWorkspaceItem, parseWorkspaceScene, createWorkspaceScene } from "@/types/workspace";
+import type { StudioItem } from "@/types/workspace";
 
 const image: Extract<StudioItem, { type: "image" }> = {
   id: "image-1", type: "image", x: 10, y: 20, w: 100, h: 60, rotation: 0, zIndex: 1,
