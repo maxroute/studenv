@@ -16,6 +16,7 @@ export function isConnectableWorkspaceItem(
 export function getConnectorAnchorPoint(
   item: Exclude<StudioItem, { type: "connector" }>,
   anchor: ConnectorAnchorName,
+  rotation: number = item.rotation ?? 0,
 ): ConnectorPoint {
   const local: Record<ConnectorAnchorName, ConnectorPoint> = {
     top: { x: item.x + item.w / 2, y: item.y },
@@ -24,7 +25,7 @@ export function getConnectorAnchorPoint(
     left: { x: item.x, y: item.y + item.h / 2 },
   };
   const point = local[anchor];
-  const radians = ((item.rotation ?? 0) * Math.PI) / 180;
+  const radians = (rotation * Math.PI) / 180;
   if (!radians) return point;
 
   const center = { x: item.x + item.w / 2, y: item.y + item.h / 2 };

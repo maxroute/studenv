@@ -46,6 +46,7 @@ import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
@@ -399,6 +400,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
+  // react-rnd caches each item's parent offset in componentDidMount, measured
+  // against the rendered canvas transform. react-zoom-pan-pinch only writes that
+  // transform in its own effect (after children mount), so items must mount
+  // after onInit or a saved non-1 zoom bakes a position * (1 - zoom) offset in.
+  const [isTransformReady, setIsTransformReady] = useState(false);
   const hasAppliedInitialFitRef = useRef(false);
   const fitWorkspaceToViewport = useCallback(() => {
     const wrapper = wrapperRef.current;
@@ -1679,6 +1685,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       />
       <TransformWrapper
         ref={transformRef}
+        onInit={() => setIsTransformReady(true)}
         initialScale={viewport.zoom}
         initialPositionX={viewport.x}
         initialPositionY={viewport.y}
@@ -1799,7 +1806,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
                 <WorkspaceConnectorsLayer items={items} />
 
-                {items.filter((item) => item.type !== "connector").map((item) => (
+                {isTransformReady && items.filter((item) => item.type !== "connector").map((item) => (
                   <StudioItemComponent
                     key={item.id}
                     item={item}
@@ -1949,7 +1956,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                             : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
                               ? "rounded-md ring-2 ring-indigo-400/70"
                               : "",
-                      !isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id)
+                      // Outline-only types get their orange outline from SelectionOverlay.
+                      !isMigratedToSelectionOverlay(item.type) && !usesOverlayOutlineOnly(item.type) && selectedIds.includes(item.id)
                         ? "ring-2 ring-[#f5a623] ring-offset-1 rounded-md"
                         : "",
                     ].filter(Boolean).join(" ")}

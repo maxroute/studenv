@@ -11,6 +11,7 @@ import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
 import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { getEffectiveRotation, getSelectionFrame, usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { beginPointerSession, clearPointerSession, endPointerSession, ownsPointerSession, type PointerSession } from "@/lib/workspace/pointer-session";
 
 interface SelectionOverlayProps {
@@ -648,6 +649,33 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               ))}
 
 
+          </div>
+        );
+      })}
+      {/* Outline-only frames for items that keep their own react-rnd drag/resize.
+          Same stored geometry and live rotation as the connector handles. */}
+      {draggingIds.length === 0 && allSelectedItems.map((item) => {
+        if (item.type === "connector" || !usesOverlayOutlineOnly(item.type)) return null;
+        const frame = getSelectionFrame(item, getEffectiveRotation(item, rotationPreviews));
+        return (
+          <div
+            key={`outline-${item.id}`}
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: frame.left,
+              top: frame.top,
+              width: frame.width,
+              height: frame.height,
+              pointerEvents: "none",
+              transform: `rotate(${frame.rotation}deg)`,
+              transformOrigin: "center",
+            }}
+          >
+            <div
+              className="absolute inset-0 border border-[#f5a623] pointer-events-none"
+              style={{ borderWidth: Math.max(1.5, 2 / canvasScale) }}
+            />
           </div>
         );
       })}

@@ -10,6 +10,8 @@ import {
   isConnectableWorkspaceItem,
   type ConnectorPoint,
 } from "@/lib/workspace/connector-geometry";
+import { getEffectiveRotation } from "@/lib/workspace/selection-frame";
+import { useSelectionStore } from "@/lib/workspace/selection-engine";
 
 type Candidate = { itemId: string; anchor: ConnectorAnchor; point: ConnectorPoint; distance: number };
 type DragState = {
@@ -45,6 +47,7 @@ export function WorkspaceConnectorHandles({
   screenToWorld,
   onCreate,
 }: WorkspaceConnectorHandlesProps) {
+  const rotationPreviews = useSelectionStore((state) => state.rotationPreviews);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const itemsRef = useRef(items);
@@ -155,6 +158,8 @@ export function WorkspaceConnectorHandles({
   if (!selected && !drag) return null;
 
   const previewEnd = drag?.candidate?.point ?? drag?.pointer;
+  // Follow the live rotate preview so handles stay on the outline mid-gesture.
+  const selectedRotation = selected ? getEffectiveRotation(selected, rotationPreviews) : 0;
   return (
     <div className="pointer-events-none absolute inset-0" style={{ zIndex: 1200 }} aria-label="Connector controls">
       <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
@@ -170,7 +175,7 @@ export function WorkspaceConnectorHandles({
         )}
       </svg>
       {selected && ANCHORS.map((anchor) => {
-        const point = getConnectorAnchorPoint(selected, anchor);
+        const point = getConnectorAnchorPoint(selected, anchor, selectedRotation);
         return (
           <button
             key={anchor}
