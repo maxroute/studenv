@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeftRight, ChevronDown, Type } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, Trash2, Type } from "lucide-react";
 import type { ConnectorEndpointStyle, ConnectorMode, ConnectorNode, ConnectorStrokeStyle } from "@/types/workspace";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
@@ -60,7 +60,7 @@ function ModeGlyph({ mode }: { mode: ConnectorMode }) {
 
 /**
  * Toolbar for selected connectors (AFFiNE parity): colour, line width and
- * style, start style, flip, end style, connector shape and add text. Edits
+ * style, start style, flip, end style, connector shape, add text and delete. Edits
  * apply to every selected connector; mixed selections show the most common
  * value. Style changes become the defaults for new connectors.
  */
@@ -72,6 +72,7 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
   const rememberStyle = useConnectorUiStore((state) => state.rememberStyle);
   const setMode = useConnectorUiStore((state) => state.setMode);
   const setEditingLabel = useConnectorUiStore((state) => state.setEditingLabel);
+  const removeItems = useWorkspaceStore((state) => state.removeItems);
   const [panel, setPanel] = useState<Panel>(null);
 
   const connectors = useMemo(() => {
@@ -105,6 +106,13 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
     const connector = connectors[0];
     setPanel(null);
     setEditingLabel({ connectorId: connector.id, offset: connector.props.label?.offset ?? 0.5 });
+  };
+  // A visible delete (AFFiNE keeps it under "more"): the only way to delete a
+  // connector on touch and pen devices without a keyboard.
+  const deleteSelected = () => {
+    setPanel(null);
+    removeItems(connectors.map((c) => c.id));
+    useSelectionStore.getState().deselectAll();
   };
   const toggle = (next: Exclude<Panel, null>) => setPanel((open) => (open === next ? null : next));
 
@@ -237,6 +245,11 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
           </button>
         </>
       )}
+
+      {divider}
+      <button type="button" onClick={deleteSelected} title="Delete" aria-label="Delete connector" className={`${buttonClass} w-8 hover:bg-red-500/20 hover:text-red-300`}>
+        <Trash2 size={16} />
+      </button>
     </div>
   );
 }
