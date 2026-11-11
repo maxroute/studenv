@@ -25,8 +25,9 @@ test("returns the four edge-center anchors in world coordinates", () => {
 test("rotates anchors around the object's center", () => {
   const rotated = { ...image, rotation: 90 };
   const point = getConnectorAnchorPoint(rotated, "top");
+  // A positive 90-degree CSS-style rotation moves the top anchor to the right edge.
   assert.ok(Math.abs(point.x - 90) < 0.000001);
-  assert.ok(Math.abs(point.y - 70) < 0.000001);
+  assert.ok(Math.abs(point.y - 50) < 0.000001);
 });
 
 test("chooses the nearest rotated anchor", () => {
