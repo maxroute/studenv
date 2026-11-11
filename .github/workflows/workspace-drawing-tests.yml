@@ -42,6 +42,8 @@ on:
       - "components/workspace/WorkspaceConnectorsLayer.tsx"
       - "components/workspace/shapes/SelectionOverlay.tsx"
       - "components/workspace/items/studio-item.tsx"
+      - "lib/workspace/rotate-handles.ts"
+      - "lib/workspace/rotate-handles.test.ts"
       - "types/workspace.ts"
       - "package.json"
       - "package-lock.json"

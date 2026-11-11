@@ -5,7 +5,8 @@ import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { Rnd } from "react-rnd";
-import { RotateCw, X } from "lucide-react";
+import { X } from "lucide-react";
+import { ROTATE_CORNERS, ROTATE_ZONE_COARSE_PX, ROTATE_ZONE_PX, getRotateCursor, getRotateZoneBox } from "@/lib/workspace/rotate-handles";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 
 interface StudioItemComponentProps {
@@ -184,6 +185,45 @@ export function StudioItemComponent({
       }
     };
   }, [isRotating]);
+
+  // Coarse pointers (touch) get larger rotate zones; AFFiNE's 12 px suits a mouse.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  /** Delete button size in world units (p-1 + 12px icon at the 14px root font). */
+  const DELETE_BUTTON_SIZE = 18;
+  const rotateZoneWorld = (coarsePointer ? ROTATE_ZONE_COARSE_PX : ROTATE_ZONE_PX) / Math.max(canvasScale, 0.01);
+  const deleteButtonOffset = showRotateButton
+    ? { top: -(rotateZoneWorld + DELETE_BUTTON_SIZE), right: -(rotateZoneWorld + DELETE_BUTTON_SIZE) }
+    : { top: -20, right: -20 };
+
+  const startRotation = (e: React.PointerEvent<HTMLElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+    const startRotation = item.rotation ?? 0;
+    rotationPreviewRef.current = startRotation;
+    pendingRotationRef.current = startRotation;
+    rotationStartRef.current = {
+      centerX,
+      centerY,
+      lastAngle: startAngle,
+      accumulatedDelta: 0,
+      startRotation,
+    };
+    setIsRotating(true);
+  };
 
   return (
     <Rnd
@@ -371,34 +411,24 @@ export function StudioItemComponent({
               transformOrigin: "center",
             }}
           >
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                const rect = rootRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-                const startRotation = item.rotation ?? 0;
-                rotationPreviewRef.current = startRotation;
-                pendingRotationRef.current = startRotation;
-                rotationStartRef.current = {
-                  centerX,
-                  centerY,
-                  lastAngle: startAngle,
-                  accumulatedDelta: 0,
-                  startRotation,
-                };
-                setIsRotating(true);
-              }}
-              className={`pointer-events-auto absolute -top-[25px] left-1/2 -translate-x-1/2 p-1 bg-slate-900 text-white rounded-full hover:bg-slate-700 shadow-md ${isRotating ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
-                }`}
-              style={{ transform: `translateX(-50%) rotate(-${item.rotation ?? 0}deg)` }}
-              title="Drag to rotate"
-            >
-              <RotateCw className="w-3 h-3 text-white" />
-            </button>
+            {ROTATE_CORNERS.map((corner) => {
+              const box = getRotateZoneBox(corner, item.w, item.h, coarsePointer ? ROTATE_ZONE_COARSE_PX : ROTATE_ZONE_PX, canvasScale);
+              return (
+                // AFFiNE-style rotation: an invisible zone just outside each
+                // corner (resize handles stay on top where they overlap).
+                <div
+                  key={corner}
+                  role="button"
+                  aria-label={`Rotate from ${corner}`}
+                  data-rotate-corner={corner}
+                  data-no-canvas-gesture="true"
+                  title="Drag to rotate"
+                  onPointerDown={startRotation}
+                  className="pointer-events-auto absolute touch-none"
+                  style={{ ...box, ["--rotate-cursor" as string]: getRotateCursor(corner, item.rotation ?? 0) } as React.CSSProperties}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -415,7 +445,10 @@ export function StudioItemComponent({
               useWorkspaceStore.getState().removeItems(idsToRemove);
               useSelectionStore.getState().deselectAll();
             }}
-            className="pointer-events-auto absolute -top-[20px] -right-[20px] z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
+            className="pointer-events-auto absolute z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
+            // With corner rotate zones shown, sit diagonally just past the
+            // top-right zone so both stay reachable; otherwise keep -20px.
+            style={deleteButtonOffset}
           >
             <X className="w-3 h-3 text-white" />
           </button>

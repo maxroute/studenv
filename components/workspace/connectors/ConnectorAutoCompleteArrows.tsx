@@ -23,20 +23,12 @@ export type AutoCompleteSource = Extract<StudioItem, { type: "shape" } | { type:
 const ICON_ROTATION: Record<AutoCompleteDirection, number> = { top: 0, right: 90, bottom: 180, left: -90 };
 const GHOST_ID = "__auto-complete-ghost__";
 
-/**
- * Studenv's rotate button sits centred above a selected shape, 25 world units
- * from its top edge (studio-item.tsx). AFFiNE rotates from the corners, so it
- * has no conflict there; here the top arrow is pushed just past the rotate
- * button so both stay reachable.
- */
-const ROTATE_BUTTON_TOP_OFFSET = 25;
-
-function arrowCenter(direction: AutoCompleteDirection, w: number, h: number, margin: number, topMargin: number) {
+function arrowCenter(direction: AutoCompleteDirection, w: number, h: number, margin: number) {
   switch (direction) {
     case "right": return { x: w + margin, y: h / 2 };
     case "bottom": return { x: w / 2, y: h + margin };
     case "left": return { x: -margin, y: h / 2 };
-    case "top": return { x: w / 2, y: -topMargin };
+    case "top": return { x: w / 2, y: -margin };
   }
 }
 
@@ -65,8 +57,6 @@ export function ConnectorAutoCompleteArrows({
   const directions = isShape ? SHAPE_DIRECTIONS : STICKY_DIRECTIONS;
   const scale = 1 / Math.max(zoom, 0.01);
   const margin = AUTO_COMPLETE_ARROW_MARGIN_PX * scale;
-  // Clear the rotate button (world units) plus the arrow's half hit size (screen px).
-  const topMargin = isShape ? Math.max(margin, ROTATE_BUTTON_TOP_OFFSET + AUTO_COMPLETE_ARROW_MARGIN_PX * scale) : margin;
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -118,7 +108,7 @@ export function ConnectorAutoCompleteArrows({
         }}
       >
         {directions.map((direction) => {
-          const center = arrowCenter(direction, source.w, source.h, margin, topMargin);
+          const center = arrowCenter(direction, source.w, source.h, margin);
           const Icon = isShape ? ArrowUp : Plus;
           return (
             <button
