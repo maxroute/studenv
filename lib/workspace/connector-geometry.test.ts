@@ -7,7 +7,7 @@ import {
   getNearestConnectorAnchor,
   isConnectableWorkspaceItem,
 } from "./connector-geometry";
-import type { StudioItem } from "@/types/workspace";
+import { createWorkspaceItem, parseWorkspaceScene, createWorkspaceScene } from "@/types/workspace";\nimport type { StudioItem } from "@/types/workspace";
 
 const image: Extract<StudioItem, { type: "image" }> = {
   id: "image-1", type: "image", x: 10, y: 20, w: 100, h: 60, rotation: 0, zIndex: 1,
@@ -44,4 +44,24 @@ test("only supported unlocked content nodes are connectable", () => {
   assert.equal(isConnectableWorkspaceItem({ ...image, type: "group", props: {} } as unknown as StudioItem), false);
   assert.equal(isConnectableWorkspaceItem({ ...image, type: "drawing", props: { d: "" } } as unknown as StudioItem), false);
   assert.equal(isConnectableWorkspaceItem({ ...image, type: "shape", props: { kind: "line" } } as unknown as StudioItem), false);
+});
+
+test("connector nodes survive workspace scene serialization and parsing", () => {
+  const first = createWorkspaceItem("image", { src: "https://example.com/a.png" }, { x: 10, y: 20, zIndex: 1 });
+  const second = createWorkspaceItem("sticky", { text: "Target" }, { x: 300, y: 20, zIndex: 2 });
+  assert.ok(first && second);
+  const connector = createWorkspaceItem("connector", {
+    sourceId: first.id,
+    sourceAnchor: "right",
+    targetId: second.id,
+    targetAnchor: "left",
+  }, { x: 0, y: 0, zIndex: 3 });
+  assert.ok(connector);
+  const parsed = parseWorkspaceScene(createWorkspaceScene({ items: [first, second, connector] }));
+  const restored = parsed.items.find((item) => item.type === "connector");
+  assert.ok(restored && restored.type === "connector");
+  assert.equal(restored.props.sourceId, first.id);
+  assert.equal(restored.props.targetId, second.id);
+  assert.equal(restored.props.sourceAnchor, "right");
+  assert.equal(restored.props.targetAnchor, "left");
 });
