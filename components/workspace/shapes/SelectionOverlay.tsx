@@ -125,14 +125,12 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
   const hoveredItem = hoveredItemId ? items.find((i) => i.id === hoveredItemId) : null;
 
   useLayoutEffect(() => {
+    if (draggingIds.length > 0) return;
+
     const overlay = containerRef.current;
     const worldLayer = overlay?.parentElement;
-    if (!overlay || !worldLayer || draggingIds.length > 0) return;
+    if (!worldLayer) return;
 
-    // Read the actual rendered object box (including react-rnd's live
-    // translation), then express it in this overlay's local world coordinates.
-    // This avoids relying on a second, independently reconstructed position.
-    const overlayRect = overlay.getBoundingClientRect();
     const renderedNodes = Array.from(
       worldLayer.querySelectorAll<HTMLElement>("[data-workspace-item-id]"),
     );
@@ -140,19 +138,24 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
 
     selectedItems.forEach((item) => {
       const node = renderedNodes.find((candidate) => candidate.dataset.workspaceItemId === item.id);
-      if (!node) return;
-      const rect = node.getBoundingClientRect();
+      const renderedItem = node?.closest<HTMLElement>(".workspace-item-rnd");
+      if (!renderedItem) return;
+
+      // Measure the unrotated react-rnd frame and convert its screen corners
+      // with the same inverse transform used by canvas pointer input.
+      const rect = renderedItem.getBoundingClientRect();
+      const topLeft = screenToWorld(rect.left, rect.top);
+      const bottomRight = screenToWorld(rect.right, rect.bottom);
       nextBounds[item.id] = {
-        left: (rect.left - overlayRect.left) / canvasScale,
-        top: (rect.top - overlayRect.top) / canvasScale,
-        width: rect.width / canvasScale,
-        height: rect.height / canvasScale,
+        left: topLeft.x,
+        top: topLeft.y,
+        width: bottomRight.x - topLeft.x,
+        height: bottomRight.y - topLeft.y,
       };
     });
 
     setRenderedItemBounds(nextBounds);
-  }, [items, selectedIds, draggingIds, canvasScale]);
-
+  }, [items, selectedIds, draggingIds, canvasScale, screenToWorld]);
 
   // Handle pointer down on a resize handle
   const handleResizeStart = (
@@ -524,6 +527,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
                 top: item.y,
                 width: item.w,
                 height: item.h,
+                pointerEvents: "none",
               }}
             >
               <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
@@ -594,7 +598,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               width: renderedItemBounds[item.id]?.width ?? item.w,
               height: renderedItemBounds[item.id]?.height ?? item.h,
               opacity: draggingIds.includes(item.id) ? 0 : 1,
-              pointerEvents: draggingIds.includes(item.id) ? "none" : "auto",
+              pointerEvents: "none",
               transform: `rotate(${rotationPreviews[item.id] ?? item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
