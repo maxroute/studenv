@@ -4,7 +4,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
@@ -50,9 +50,10 @@ function getRotatedCursor(handle: ResizeHandle, rotation: number): string {
 }
 
 export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, interactive = true }: SelectionOverlayProps) {
-  const { selectedIds, rotationPreviews } = useSelectionStore();
+  const { selectedIds, rotationPreviews, draggingIds } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
+  const [renderedItemBounds, setRenderedItemBounds] = useState<Record<string, { left: number; top: number; width: number; height: number }>>({});
   const transformSessionRef = useRef<PointerSession | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const groupDragRef = useRef<{
@@ -72,6 +73,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       }
     });
     if (startPositions.size === 0) return;
+    useSelectionStore.getState().setDraggingIds(allSelectedItems.map((item) => item.id));
     groupDragRef.current = {
       pointerId: event.pointerId,
       startPointer: screenToWorld(event.clientX, event.clientY),
@@ -99,6 +101,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     event.preventDefault();
     event.stopPropagation();
     groupDragRef.current = null;
+    useSelectionStore.getState().setDraggingIds([]);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -120,6 +123,36 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       )
     : null;
   const hoveredItem = hoveredItemId ? items.find((i) => i.id === hoveredItemId) : null;
+
+  useLayoutEffect(() => {
+    const overlay = containerRef.current;
+    const worldLayer = overlay?.parentElement;
+    if (!overlay || !worldLayer || draggingIds.length > 0) return;
+
+    // Read the actual rendered object box (including react-rnd's live
+    // translation), then express it in this overlay's local world coordinates.
+    // This avoids relying on a second, independently reconstructed position.
+    const overlayRect = overlay.getBoundingClientRect();
+    const renderedNodes = Array.from(
+      worldLayer.querySelectorAll<HTMLElement>("[data-workspace-item-id]"),
+    );
+    const nextBounds: Record<string, { left: number; top: number; width: number; height: number }> = {};
+
+    selectedItems.forEach((item) => {
+      const node = renderedNodes.find((candidate) => candidate.dataset.workspaceItemId === item.id);
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      nextBounds[item.id] = {
+        left: (rect.left - overlayRect.left) / canvasScale,
+        top: (rect.top - overlayRect.top) / canvasScale,
+        width: rect.width / canvasScale,
+        height: rect.height / canvasScale,
+      };
+    });
+
+    setRenderedItemBounds(nextBounds);
+  }, [items, selectedIds, draggingIds, canvasScale, selectedItems]);
+
 
   // Handle pointer down on a resize handle
   const handleResizeStart = (
@@ -365,7 +398,8 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
             top: selectionBounds.top,
             width: Math.max(1, selectionBounds.right - selectionBounds.left),
             height: Math.max(1, selectionBounds.bottom - selectionBounds.top),
-            pointerEvents: interactive ? "auto" : "none",
+            pointerEvents: interactive && draggingIds.length === 0 ? "auto" : "none",
+            opacity: draggingIds.length > 0 ? 0 : 1,
             cursor: groupDragRef.current ? "grabbing" : "move",
             touchAction: "none",
             background: "transparent",
@@ -555,10 +589,12 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
             className="animate-in fade-in zoom-in-95 duration-100 ease-out"
             style={{
               position: "absolute",
-              left: item.x,
-              top: item.y,
-              width: item.w,
-              height: item.h,
+              left: renderedItemBounds[item.id]?.left ?? item.x,
+              top: renderedItemBounds[item.id]?.top ?? item.y,
+              width: renderedItemBounds[item.id]?.width ?? item.w,
+              height: renderedItemBounds[item.id]?.height ?? item.h,
+              opacity: draggingIds.includes(item.id) ? 0 : 1,
+              pointerEvents: draggingIds.includes(item.id) ? "none" : "auto",
               transform: `rotate(${rotationPreviews[item.id] ?? item.rotation ?? 0}deg)`,
               transformOrigin: "center",
             }}
