@@ -8,6 +8,7 @@ import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { ROTATE_CORNERS, ROTATE_ZONE_COARSE_PX, ROTATE_ZONE_PX, getRotateCursor, getRotateZoneBox } from "@/lib/workspace/rotate-handles";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
 
 interface StudioItemComponentProps {
   item: StudioItem;
@@ -66,6 +67,8 @@ export function StudioItemComponent({
   const onRotateChangeRef = useRef(onRotateChange);
   onRotateChangeRef.current = onRotateChange;
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  // Selected connectors that travel with this drag, moved by their free ends.
+  const dragConnectorPropsRef = useRef<GroupMoveSnapshot["connectors"]>(new Map());
   const dragMovedRef = useRef(false);
   const pressPointerIdRef = useRef<number | null>(null);
   const finishPressRef = useRef<((event: PointerEvent) => void) | null>(null);
@@ -247,15 +250,12 @@ export function StudioItemComponent({
         setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
 
         if (selectedIds.includes(item.id)) {
-          const positions = new Map<string, { x: number; y: number }>();
-          items.forEach((itm) => {
-            if (selectedIds.includes(itm.id) && !(itm.props as { locked?: boolean }).locked) {
-              positions.set(itm.id, { x: itm.x, y: itm.y });
-            }
-          });
-          dragStartPositionsRef.current = positions;
+          const snapshot = snapshotGroupMove(items, selectedIds);
+          dragStartPositionsRef.current = snapshot.positions;
+          dragConnectorPropsRef.current = snapshot.connectors;
         } else {
           dragStartPositionsRef.current = new Map([[item.id, { x: item.x, y: item.y }]]);
+          dragConnectorPropsRef.current = new Map();
         }
       }}
       onDrag={(e, d) => {
@@ -277,17 +277,10 @@ export function StudioItemComponent({
         }
 
         if (selectedIds.includes(item.id)) {
-          const updates: Array<{ id: string; changes: any }> = [];
-          dragStartPositionsRef.current.forEach((pos, itmId) => {
-            updates.push({
-              id: itmId,
-              changes: {
-                x: pos.x + dx,
-                y: pos.y + dy,
-              },
-            });
-          });
-          useWorkspaceStore.getState().batchUpdateItems(updates);
+          useWorkspaceStore.getState().batchUpdateItems(groupMoveUpdates({
+            positions: dragStartPositionsRef.current,
+            connectors: dragConnectorPropsRef.current,
+          }, dx, dy));
         } else {
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
@@ -322,17 +315,10 @@ export function StudioItemComponent({
         }
 
         if (selectedIds.includes(item.id)) {
-          const updates: Array<{ id: string; changes: any }> = [];
-          dragStartPositionsRef.current.forEach((pos, itmId) => {
-            updates.push({
-              id: itmId,
-              changes: {
-                x: pos.x + dx,
-                y: pos.y + dy,
-              },
-            });
-          });
-          useWorkspaceStore.getState().batchUpdateItems(updates);
+          useWorkspaceStore.getState().batchUpdateItems(groupMoveUpdates({
+            positions: dragStartPositionsRef.current,
+            connectors: dragConnectorPropsRef.current,
+          }, dx, dy));
         } else {
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }

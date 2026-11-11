@@ -8,7 +8,7 @@ import {
   parseWorkspaceSceneJson,
   serializeWorkspaceScene,
 } from "@/types/workspace";
-import { connectorTravelsWith, isConnectorAttachedToAny, remapConnector } from "@/lib/workspace/connector-lifecycle";
+import { connectorsForSelection, isConnectorAttachedToAny, remapConnector } from "@/lib/workspace/connector-lifecycle";
 
 const newItemId = () => `item-${Math.random().toString(36).slice(2, 11)}`;
 
@@ -331,12 +331,12 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items } = get();
       const selectedIds = new Set(ids);
       const sourceNodes = items.filter((item) => selectedIds.has(item.id) && item.type !== "connector");
-      if (sourceNodes.length === 0) return;
+      // Connectors attached to duplicated nodes, plus selected (e.g. free) connectors.
+      const attachedConnectors = connectorsForSelection(items, selectedIds);
+      if (sourceNodes.length === 0 && attachedConnectors.length === 0) return;
 
       const nodeIdMap = new Map<string, string>();
       sourceNodes.forEach((item) => nodeIdMap.set(item.id, newItemId()));
-      const duplicatedIds = new Set(nodeIdMap.keys());
-      const attachedConnectors = items.filter((item) => connectorTravelsWith(item, duplicatedIds));
       const maxZIndex = items.length > 0 ? Math.max(...items.map((item) => item.zIndex)) : 1;
       const duplicatedNodes = sourceNodes.map((item, index) => ({
         ...item,
@@ -361,8 +361,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items } = get();
       const selectedIds = new Set(ids);
       const selectedNodes = items.filter((item) => selectedIds.has(item.id) && item.type !== "connector");
-      const selectedNodeIds = new Set(selectedNodes.map((item) => item.id));
-      const attachedConnectors = items.filter((item) => connectorTravelsWith(item, selectedNodeIds));
+      const attachedConnectors = connectorsForSelection(items, selectedIds);
       set({ copiedItems: JSON.parse(JSON.stringify([...selectedNodes, ...attachedConnectors])) });
     },
 

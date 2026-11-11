@@ -23,6 +23,8 @@ import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
 import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
 import { ConnectorCreationLayer } from "./connectors/ConnectorCreationLayer";
+import { ConnectorEditingLayer } from "./connectors/ConnectorEditingLayer";
+import { connectorIntersectsRect } from "@/lib/workspace/connector-selection";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import { getNextConnectorMode } from "@/lib/workspace/connector-autocomplete";
 import { PdfFragment } from "./items/PdfFragment";
@@ -1590,11 +1592,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         const y = Math.min(gesture.startWorldY, world.y);
         const w = Math.abs(gesture.startWorldX - world.x);
         const h = Math.abs(gesture.startWorldY - world.y);
+        // Connectors are selected by their path (AFFiNE `containsBound`); their
+        // stored x/y/w/h is only a placeholder.
         const collidingIds = items
-          .filter((item) => isIntersecting(
-            { x: item.x, y: item.y, w: item.w, h: item.h },
-            { x, y, w, h },
-          ))
+          .filter((item) => item.type === "connector"
+            ? connectorIntersectsRect(item, items, { x, y, w, h })
+            : isIntersecting({ x: item.x, y: item.y, w: item.w, h: item.h }, { x, y, w, h }))
           .map((item) => item.id);
         useSelectionStore.getState().clearAndSelectIds(collidingIds);
       }}
@@ -1821,7 +1824,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                <WorkspaceConnectorsLayer items={items} />
+                <WorkspaceConnectorsLayer items={items} interactive={activeTool === "select"} />
 
                 {isTransformReady && items.filter((item) => item.type !== "connector").map((item) => (
                   <StudioItemComponent
@@ -2051,6 +2054,14 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
                   interactive={activeTool === "select"}
+                />
+
+                <ConnectorEditingLayer
+                  items={items}
+                  selectedIds={selectedIds}
+                  enabled={activeTool === "select"}
+                  zoom={viewport.zoom}
+                  screenToWorld={screenToWorld}
                 />
 
                 <ConnectorCreationLayer

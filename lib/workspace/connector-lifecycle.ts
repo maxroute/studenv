@@ -51,3 +51,17 @@ export function remapConnector(
     props: { ...JSON.parse(JSON.stringify(connector.props)), source, target },
   };
 }
+
+/**
+ * Connectors that go along with a copy/duplicate/cut of `selectedIds`: those
+ * attached to selected nodes only, plus directly selected connectors whose
+ * attached ends (if any) are all selected (AFFiNE `isConnectorAndBindingsAllSelected`).
+ */
+export function connectorsForSelection(items: readonly StudioItem[], selectedIds: ReadonlySet<string>): ConnectorNode[] {
+  return items.filter((item): item is ConnectorNode => {
+    if (item.type !== "connector") return false;
+    const bound = getConnectorBoundIds(item);
+    if (selectedIds.has(item.id)) return bound.every((id) => selectedIds.has(id));
+    return bound.length > 0 && bound.every((id) => selectedIds.has(id));
+  });
+}

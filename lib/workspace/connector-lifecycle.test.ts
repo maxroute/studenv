@@ -133,3 +133,26 @@ test("an unusable connector is dropped without discarding the rest of the scene"
   const restored = parseWorkspaceSceneJson(JSON.stringify(raw));
   assert.deepEqual(restored.items.map((item) => item.id), [node.id]);
 });
+
+test("a directly selected free connector can be duplicated and copied on its own", () => {
+  const free = createWorkspaceItem("connector", { source: { position: [0, 0] }, target: { position: [100, 50] } }, { id: "free-only", x: 0, y: 0, zIndex: 1 })!;
+  useWorkspaceStore.setState({ items: [free], copiedItems: [] });
+  useWorkspaceStore.getState().duplicateItems([free.id]);
+  const dup = useWorkspaceStore.getState().items.find((item) => item.id !== free.id);
+  assert.ok(dup && dup.type === "connector");
+  assert.deepEqual(dup.props.source, { position: [30, 30] });
+  assert.deepEqual(dup.props.target, { position: [130, 80] });
+
+  useWorkspaceStore.setState({ items: [free], copiedItems: [] });
+  useWorkspaceStore.getState().copyItems([free.id]);
+  assert.equal(useWorkspaceStore.getState().copiedItems.length, 1);
+});
+
+test("a selected connector whose attached element is not selected is not copied alone", () => {
+  const { node, other, toOther } = v2Fixture();
+  useWorkspaceStore.setState({ items: [node, other, toOther], copiedItems: [] });
+  useWorkspaceStore.getState().copyItems([toOther.id, node.id]);
+  assert.equal(useWorkspaceStore.getState().copiedItems.filter((item) => item.type === "connector").length, 0);
+  useWorkspaceStore.getState().copyItems([toOther.id, node.id, other.id]);
+  assert.equal(useWorkspaceStore.getState().copiedItems.filter((item) => item.type === "connector").length, 1);
+});

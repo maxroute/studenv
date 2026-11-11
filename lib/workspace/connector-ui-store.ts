@@ -21,6 +21,12 @@ interface ConnectorUiState {
   /** True while any connector gesture is in progress (toolbars hide, like AFFiNE). */
   gestureActive: boolean;
   setGestureActive: (active: boolean) => void;
+  /**
+   * Set by the connector editing layer; the connectors layer calls it when a
+   * connector path or label is pressed in Select mode.
+   */
+  connectorPointerDown: ((connectorId: string, event: PointerEvent) => void) | null;
+  setConnectorPointerDown: (handler: ((connectorId: string, event: PointerEvent) => void) | null) => void;
 }
 
 export const useConnectorUiStore = create<ConnectorUiState>()((set) => ({
@@ -34,4 +40,6 @@ export const useConnectorUiStore = create<ConnectorUiState>()((set) => ({
   clearQuickConnect: () => set({ quickConnect: null }),
   gestureActive: false,
   setGestureActive: (gestureActive) => set({ gestureActive }),
+  connectorPointerDown: null,
+  setConnectorPointerDown: (connectorPointerDown) => set({ connectorPointerDown }),
 }));

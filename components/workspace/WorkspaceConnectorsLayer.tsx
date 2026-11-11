@@ -10,16 +10,26 @@ import {
   getConnectorLabelLayout,
 } from "@/lib/workspace/connector-label";
 import { ConnectorGraphic } from "./ConnectorGraphic";
+import { routeToSvgPath } from "@/lib/workspace/connector-path";
+import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 
 interface WorkspaceConnectorsLayerProps {
   items: StudioItem[];
+  /** Select mode: connector paths and labels become hit targets. */
+  interactive?: boolean;
 }
 
 type RoutedConnector = { item: ConnectorNode; route: ConnectorRoute };
 
 const LABEL_COLOR = "#000000";
 
-export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProps) {
+/** Extra hit width around the path (AFFiNE: 8 world units each side, plus half the stroke). */
+const HIT_PADDING = 8;
+
+export function WorkspaceConnectorsLayer({ items, interactive = false }: WorkspaceConnectorsLayerProps) {
+  const pressConnector = (connectorId: string, event: React.PointerEvent) => {
+    useConnectorUiStore.getState().connectorPointerDown?.(connectorId, event.nativeEvent);
+  };
   const connectors = useMemo<RoutedConnector[]>(() => {
     const byId = new Map(items.map((item) => [item.id, item] as const));
     return items.flatMap((item) => {
@@ -88,6 +98,22 @@ export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProp
               </defs>
             )}
             <ConnectorGraphic route={route} style={item.props} maskId={maskId} />
+            {interactive && (
+              // Invisible, wider stroke: the hit area AFFiNE uses. Only this
+              // path takes pointer events, so stacking order picks the target.
+              <path
+                d={routeToSvgPath(route)}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={item.props.strokeWidth + HIT_PADDING * 2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                pointerEvents="stroke"
+                data-connector-hit={item.id}
+                data-no-canvas-gesture="true"
+                onPointerDown={(event) => pressConnector(item.id, event)}
+              />
+            )}
           </svg>
         );
       })}
@@ -103,7 +129,9 @@ export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProp
               else labelRefs.current.delete(item.id);
             }}
             data-connector-label-id={item.id}
-            className="pointer-events-none absolute whitespace-pre-wrap break-words text-center"
+            data-no-canvas-gesture={interactive ? "true" : undefined}
+            onPointerDown={interactive ? (event) => pressConnector(item.id, event) : undefined}
+            className={`${interactive ? "pointer-events-auto" : "pointer-events-none"} absolute whitespace-pre-wrap break-words text-center`}
             style={{
               left: layout.center.x,
               top: layout.center.y,
