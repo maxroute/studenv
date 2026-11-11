@@ -165,7 +165,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
         ? measureItem(hoveredItem.id)
         : null,
     );
-  }, [items, selectedIds, selectedItems, hoveredItemId, draggingIds, canvasScale, screenToWorld]);
+  }, [items, selectedIds, hoveredItemId, draggingIds, canvasScale, screenToWorld]);
 
   // Handle pointer down on a resize handle
   const handleResizeStart = (
