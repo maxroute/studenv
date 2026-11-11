@@ -308,7 +308,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     removeItem: (id: string) => {
       const { items } = get();
       set({ 
-        items: items.filter((item: StudioItem) => item.id !== id),
+        items: items.filter((item: StudioItem) => item.id !== id && !(item.type === "connector" && (item.props.sourceId === id || item.props.targetId === id))),
         isDirty: true 
       });
     },
@@ -317,7 +317,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items } = get();
       const idSet = new Set(ids);
       set({
-        items: items.filter((item: StudioItem) => !idSet.has(item.id)),
+        items: items.filter((item: StudioItem) => !idSet.has(item.id) && !(item.type === "connector" && (idSet.has(item.props.sourceId) || idSet.has(item.props.targetId)))),
         isDirty: true,
       });
     },
