@@ -21,6 +21,7 @@ import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
 import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
+import { WorkspaceConnectorHandles } from "./WorkspaceConnectorHandles";
 import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
@@ -2016,6 +2017,23 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     )}
                   </StudioItemComponent>
                 ))}
+
+                <WorkspaceConnectorHandles
+                  items={items}
+                  selectedIds={selectedIds}
+                  enabled={activeTool === "select"}
+                  screenToWorld={screenToWorld}
+                  onCreate={(sourceId, sourceAnchor, targetId, targetAnchor) => {
+                    addItem("connector", {
+                      sourceId,
+                      sourceAnchor,
+                      targetId,
+                      targetAnchor,
+                      color: "#64748b",
+                      strokeWidth: 2,
+                    }, { x: 0, y: 0 });
+                  }}
+                />
 
                 <SnapGuidesOverlay guides={snapGuides} />
 
