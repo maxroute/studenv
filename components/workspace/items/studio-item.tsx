@@ -161,8 +161,9 @@ export function StudioItemComponent({
         // react-draggable fires onStart as soon as a mouse/touch gesture begins,
         // not only after the pointer has actually moved.
         dragMovedRef.current = false;
-        const { selectedIds } = useSelectionStore.getState();
+        const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
+        setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
 
         if (selectedIds.includes(item.id)) {
           const positions = new Map<string, { x: number; y: number }>();
@@ -179,7 +180,10 @@ export function StudioItemComponent({
       onDrag={(e, d) => {
         const { selectedIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
-        if (!startPos) return;
+        if (!startPos) {
+          setDraggingIds([]);
+          return;
+        }
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
@@ -211,7 +215,7 @@ export function StudioItemComponent({
         }
       }}
       onDragStop={(e, d) => {
-        const { selectedIds } = useSelectionStore.getState();
+        const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const startPos = dragStartPositionsRef.current.get(item.id);
         if (!startPos) return;
 
@@ -222,6 +226,7 @@ export function StudioItemComponent({
         dragMovedRef.current = false;
         if (!didMove) {
           dragStartPositionsRef.current = new Map();
+          setDraggingIds([]);
           onDragStop?.();
           return;
         }
@@ -251,6 +256,7 @@ export function StudioItemComponent({
           updateItem(item.id, { x: startPos.x + dx, y: startPos.y + dy });
         }
         dragStartPositionsRef.current = new Map();
+        setDraggingIds([]);
         if (onDragStop) {
           onDragStop();
         }
