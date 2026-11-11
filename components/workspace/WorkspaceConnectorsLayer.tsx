@@ -59,32 +59,38 @@ export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProp
     }),
   );
 
+  // Each connector gets its own SVG (and label) stacked at the connector's
+  // zIndex, so connectors interleave with items in the same stacking order
+  // (AFFiNE elements share one layer order). Items are absolutely positioned
+  // siblings with `z-index: item.zIndex`; on equal values items, rendered
+  // later, stay on top.
   return (
     <>
-      <svg
-        aria-label="Workspace connections"
-        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-        style={{ zIndex: 0 }}
-      >
-        <defs>
-          {[...layouts.entries()].map(([id, layout]) => (
-            // Even-odd cut-out: everything visible except the padded label box.
-            <mask key={id} id={`connector-label-mask-${id}`} maskUnits="userSpaceOnUse" x={-1e5} y={-1e5} width={2e5} height={2e5}>
-              <rect x={-1e5} y={-1e5} width={2e5} height={2e5} fill="white" />
-              <rect x={layout.clip.x} y={layout.clip.y} width={layout.clip.w} height={layout.clip.h} fill="black" />
-            </mask>
-          ))}
-        </defs>
-        {connectors.map(({ item, route }) => (
-          <g key={item.id} data-connector-id={item.id} data-connector-mode={item.props.mode}>
-            <ConnectorGraphic
-              route={route}
-              style={item.props}
-              maskId={layouts.has(item.id) ? `connector-label-mask-${item.id}` : undefined}
-            />
-          </g>
-        ))}
-      </svg>
+      {connectors.map(({ item, route }) => {
+        const layout = layouts.get(item.id);
+        const maskId = layout ? `connector-label-mask-${item.id}` : undefined;
+        return (
+          <svg
+            key={item.id}
+            aria-hidden="true"
+            data-connector-id={item.id}
+            data-connector-mode={item.props.mode}
+            className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            style={{ zIndex: item.zIndex }}
+          >
+            {layout && maskId && (
+              <defs>
+                {/* Everything visible except the padded label box. */}
+                <mask id={maskId} maskUnits="userSpaceOnUse" x={-1e5} y={-1e5} width={2e5} height={2e5}>
+                  <rect x={-1e5} y={-1e5} width={2e5} height={2e5} fill="white" />
+                  <rect x={layout.clip.x} y={layout.clip.y} width={layout.clip.w} height={layout.clip.h} fill="black" />
+                </mask>
+              </defs>
+            )}
+            <ConnectorGraphic route={route} style={item.props} maskId={maskId} />
+          </svg>
+        );
+      })}
       {connectors.map(({ item, route }) => {
         const label = item.props.label;
         if (!label?.text) return null;
@@ -107,7 +113,9 @@ export function WorkspaceConnectorsLayer({ items }: WorkspaceConnectorsLayerProp
               fontSize: CONNECTOR_LABEL_FONT_SIZE,
               lineHeight: CONNECTOR_LABEL_LINE_HEIGHT,
               color: LABEL_COLOR,
-              zIndex: 0,
+              // Same level as its connector; rendered after the SVGs so the
+              // label sits above its own line.
+              zIndex: item.zIndex,
               // Hidden until measured so the first frame never shows an uncut line under text.
               visibility: layouts.has(item.id) ? "visible" : "hidden",
             }}
