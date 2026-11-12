@@ -1,7 +1,6 @@
 "use client";
 
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
-import { useViewerStore } from "@/hooks/use-viewer-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Hand,
@@ -13,13 +12,24 @@ import {
   MousePointer2,
   Pencil,
   Plus,
+  Spline,
   Type,
   X,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { StudioItem, createWorkspaceItem } from "@/types/workspace";
 import { StudioItemComponent } from "./items/studio-item";
+import { WorkspaceConnectorsLayer } from "./WorkspaceConnectorsLayer";
+import { ConnectorCreationLayer } from "./connectors/ConnectorCreationLayer";
+import { ConnectorEditingLayer } from "./connectors/ConnectorEditingLayer";
+import { ConnectorLabelEditor } from "./connectors/ConnectorLabelEditor";
+import { ConnectorStyleToolbar } from "./connectors/ConnectorStyleToolbar";
+import { connectorIntersectsRect } from "@/lib/workspace/connector-selection";
+import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
+import { getNextConnectorMode } from "@/lib/workspace/connector-autocomplete";
 import { PdfFragment } from "./items/PdfFragment";
 import { VideoAnchor } from "./items/VideoAnchor";
 import { TextNode } from "./items/TextNode";
@@ -33,7 +43,6 @@ import { TextToolbar } from "./TextToolbar";
 import {
   WORKSPACE_UPLOAD_ACCEPT,
   getAssetKindLabel,
-  getViewerTypeForAssetKind,
   inferUploadAssetKind,
 } from "@/lib/utils/media-assets";
 import { ImageNode } from "./items/ImageNode";
@@ -44,12 +53,25 @@ import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
-import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
+import { WorkspaceContextMenu, type WorkspaceContextMenuState } from "./WorkspaceContextMenu";
+import { isElementLocked } from "@/lib/workspace/element-lock";
+import { resolveGroupSelection } from "@/lib/workspace/group-engine";
+import { resourceCardProps, type ResourceAsset } from "@/lib/workspace/resource-card";
+import { ResourceCard } from "./items/ResourceCard";
+import {
+  LONG_PRESS_DURATION_MS,
+  LongPressTracker,
+  isContextMenuKey,
+  selectionCenter,
+  selectionForContextMenu,
+} from "@/lib/workspace/context-menu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
-import { useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import { TouchHistoryGesture, shouldCancelForMultiTouch } from "@/lib/workspace/touch-history-gesture";
 import {
   beginPointerSession,
   clearPointerSession,
@@ -63,9 +85,15 @@ import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/w
 
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
-type HistoryEntry = StudioItem[];
 
-function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void }) {
+// Text fields and the open menu keep the browser's own context menu.
+const CONTEXT_MENU_NATIVE_TARGETS = 'input, textarea, [contenteditable="true"], [data-workspace-context-menu]';
+
+// Undo/redo buttons: finger-sized (44 px) on coarse pointers, compact otherwise.
+const HISTORY_BUTTON_CLASS =
+  "flex h-[30px] w-[32px] items-center justify-center text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent [@media(pointer:coarse)]:h-[44px] [@media(pointer:coarse)]:w-[44px]";
+
+function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint, canUndo, canRedo, onUndo, onRedo }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void; canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }) {
   const [scale, setScale] = useState(1);
   const zoomAnimationTime = 140;
   const handleFitToScreen = () => {
@@ -114,6 +142,12 @@ function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: {
         </div>
       )}
       <div className="flex items-center">
+      <button type="button" onClick={onUndo} disabled={!canUndo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Undo" aria-label="Undo">
+        <Undo2 size={15} />
+      </button>
+      <button type="button" onClick={onRedo} disabled={!canRedo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Redo" aria-label="Redo">
+        <Redo2 size={15} />
+      </button>
       <button
         onClick={() => handleStepZoom(-1)}
         className="p-1.5 hover:bg-slate-50 transition-colors border-r"
@@ -184,13 +218,6 @@ function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, stro
   };
 }
 
-function cloneItemsSnapshot(items: StudioItem[]): HistoryEntry {
-  return items.map((item) => ({
-    ...item,
-    props: { ...item.props },
-  })) as HistoryEntry;
-}
-
 function clampScale(scale: number) {
   return Math.max(0.1, Math.min(5, scale));
 }
@@ -203,6 +230,7 @@ type WorkspaceTool =
   | "eraser"
   | "text"
   | "sticky"
+  | "connector"
   | ShapeKind;
 
 interface StudioCanvasProps {
@@ -210,7 +238,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset } =
+  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset, canUndo, canRedo, breakHistoryCapture } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -328,26 +356,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     startTransformX: number;
     startTransformY: number;
     scale: number;
+    /** Input type, start time and travel decide whether a second finger cancels it. */
+    pointerType: string;
+    startTime: number;
+    travel: number;
   } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
   const { selectedIds } = useSelectionStore();
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const itemEl = target.closest("[data-shape-id]");
-
-    if (itemEl) {
-      e.preventDefault();
-      const itemId = itemEl.getAttribute("data-shape-id")!;
-      const { selectedIds: selIds, select } = useSelectionStore.getState();
-      if (!selIds.includes(itemId)) {
-        select(itemId);
-      }
-      setContextMenu({ x: e.clientX, y: e.clientY });
-    }
-  }, []);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const activateShapeTool = useCallback((kind?: ShapeKind) => {
     const targetKind = kind ?? activeShapeKind;
@@ -376,8 +395,21 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     activateShapeTool(activeShapeKind);
   }, [activeShapeKind, activateShapeTool]);
 
+  // `C`: activate the connector tool with the last-used mode; pressing it
+  // again while active cycles Curve → Elbow → Straight (AFFiNE).
+  const handleConnectorShortcut = useCallback(() => {
+    if (activeTool === "connector") {
+      const { mode, setMode } = useConnectorUiStore.getState();
+      setMode(getNextConnectorMode(mode));
+      return;
+    }
+    setActiveTool("connector");
+    setIsTextToolLocked(false);
+  }, [activeTool]);
+
   useKeyboardShortcuts({
     onActivateShapeTool: handleActivateShapeShortcut,
+    onActivateConnectorTool: handleConnectorShortcut,
   });
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -391,12 +423,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
   const [textFontSize, setTextFontSize] = useState(28);
-  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
-  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
   const imageUploadInputRef = useRef<HTMLInputElement>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<any>(null);
+  // react-rnd caches each item's parent offset in componentDidMount, measured
+  // against the rendered canvas transform. react-zoom-pan-pinch only writes that
+  // transform in its own effect (after children mount), so items must mount
+  // after onInit or a saved non-1 zoom bakes a position * (1 - zoom) offset in.
+  const [isTransformReady, setIsTransformReady] = useState(false);
   const hasAppliedInitialFitRef = useRef(false);
   const fitWorkspaceToViewport = useCallback(() => {
     const wrapper = wrapperRef.current;
@@ -601,6 +636,47 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, []);
 
+  /**
+   * Opens the workspace context menu for whatever is under `target`: a
+   * connector, any other element (selecting it, plus its group, unless it is
+   * already selected) or the empty canvas. Returns false for text fields and
+   * controls, which keep the browser's own menu.
+   */
+  const openContextMenu = useCallback((clientX: number, clientY: number, target: Element | null, fromKeyboard: boolean) => {
+    if (!target || target.closest(CONTEXT_MENU_NATIVE_TARGETS)) return false;
+    const connectorId =
+      target.closest("[data-connector-hit]")?.getAttribute("data-connector-hit") ??
+      target.closest("[data-connector-label-id]")?.getAttribute("data-connector-label-id");
+    const elementId = connectorId ?? target.closest("[data-workspace-item-id]")?.getAttribute("data-workspace-item-id");
+    const { selectedIds: current, clearAndSelectIds } = useSelectionStore.getState();
+    // The multi-selection frame lies over the selected elements: it stands for them.
+    const onSelectionFrame = !elementId && current.length > 0 && !!target.closest("[data-selection-frame]");
+    if (!elementId && !onSelectionFrame && target.closest('button, a, select, [role="button"], [data-no-canvas-gesture]')) return false;
+
+    if (elementId) {
+      const next = selectionForContextMenu(elementId, current, useWorkspaceStore.getState().items);
+      if (next.length === 0) return false;
+      if (next.length !== current.length || next.some((id, index) => id !== current[index])) clearAndSelectIds(next);
+    } else if (!onSelectionFrame) {
+      // The empty-canvas menu acts on the canvas, so clear the selection the
+      // same way a press on empty canvas does.
+      clearAndSelectIds([]);
+      setSelectedStickyId(null);
+      setSelectedFreeTextId(null);
+      setSelectedDrawingId(null);
+      setSelectedImageId(null);
+    }
+    setEditingStickyId(null);
+    setContextMenu({
+      x: clientX,
+      y: clientY,
+      world: screenToWorld(clientX, clientY),
+      target: elementId || onSelectionFrame ? "selection" : "canvas",
+      fromKeyboard,
+    });
+    return true;
+  }, [screenToWorld]);
+
   const zoomAtClientPoint = useCallback((clientX: number, clientY: number, nextScale: number, animationTime = 140) => {
     if (!wrapperRef.current) return;
 
@@ -624,6 +700,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     );
   }, []);
 
+  /** Adds a resource card centred on `center`; undefined for assets that get no card (images, snapshots). */
+  const addResourceCard = useCallback(
+    (asset: ResourceAsset, center: { x: number; y: number }) => {
+      const props = resourceCardProps(asset);
+      if (!props) return undefined;
+      return addItem("resource-card", props, { x: center.x - props.w / 2, y: center.y - props.h / 2 });
+    },
+    [addItem],
+  );
+
   const importFileToWorkspace = useCallback(
     async (file: File, position?: { x: number; y: number }) => {
       const mimeType = file.type || "application/octet-stream";
@@ -645,28 +731,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       toast.loading(`Uploading ${assetLabel}...`, { id: "upload" });
       const uploaded = await uploadWorkspaceAsset(file);
       const assetId = uploaded.assetId;
-      const revisionId = uploaded.revisionId;
 
       registerWorkspaceAsset(assetId);
-
-
-      if (assetKind === "pdf") {
-        addItem(
-          "pdf-fragment",
-          {
-            assetId,
-            revisionId,
-            pageNumber: 1,
-            w: 400,
-            h: 500,
-          },
-          nextPosition,
-        );
-
-        useViewerStore.getState().open(assetId, "pdf", 1);
-        toast.success("PDF imported", { id: "upload" });
-        return;
-      }
 
       if (assetKind === "image") {
         addItem(
@@ -684,12 +750,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         return;
       }
 
-      useViewerStore
-        .getState()
-        .open(assetId, getViewerTypeForAssetKind(assetKind) ?? "video", 1);
+      // PDFs, videos and audio become a resource card; clicking it opens the viewer.
+      addResourceCard({ id: assetId, kind: assetKind, title: file.name }, nextPosition);
       toast.success(`${assetLabel} imported`, { id: "upload" });
     },
-    [addItem, viewport.x, viewport.y, viewport.zoom],
+    [addItem, addResourceCard, viewport.x, viewport.y, viewport.zoom],
   );
 
   const handleToolbarImageUpload = useCallback(() => {
@@ -753,15 +818,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             return;
           }
 
-          const viewerType = getViewerTypeForAssetKind(assetKind);
-          if (!viewerType) {
-            toast.error("That asset can't be opened from the canvas yet");
+          if (!addResourceCard({ id: asset.assetId, kind: assetKind, title: asset.title }, { x, y })) {
+            toast.error("That asset can't be added to the canvas yet");
             return;
           }
-
-          const viewerStore = useViewerStore.getState();
-          await viewerStore.open(asset.assetId, viewerType, 1);
-          toast.success(`${getAssetKindLabel(assetKind)} opened`);
+          toast.success(`${getAssetKindLabel(assetKind)} added to canvas`);
           return;
         } catch (error) {
           console.error("Internal drop failed", error);
@@ -781,7 +842,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         toast.error(error.message || "Failed to import", { id: "upload" });
       }
     },
-    [importFileToWorkspace, screenToWorld],
+    [addResourceCard, importFileToWorkspace, screenToWorld],
   );
 
   useEffect(() => {
@@ -811,24 +872,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         return;
       }
 
-      const viewerType = getViewerTypeForAssetKind(asset.kind);
-      if (!viewerType) {
-        toast.error("That asset can't be opened from the canvas yet");
+      if (!addResourceCard({ id: asset.id, kind: asset.kind, title: asset.title }, { x, y })) {
+        toast.error("That asset can't be added to the canvas yet");
         return;
       }
-
-      try {
-        await useViewerStore.getState().open(asset.id, viewerType, 1);
-        toast.success(`${getAssetKindLabel(asset.kind)} opened`);
-      } catch (error) {
-        console.error("Touch asset drop failed", error);
-        toast.error("Couldn't add that asset to the workspace");
-      }
+      toast.success(`${getAssetKindLabel(asset.kind)} added to canvas`);
     };
 
     window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
     return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
-  }, [addItem, registerWorkspaceAsset, screenToWorld]);
+  }, [addItem, addResourceCard, registerWorkspaceAsset, screenToWorld]);
 
   useEffect(() => {
     if (syncTimerRef.current) {
@@ -846,10 +899,59 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, [items, viewport, workspaceAssetIds, syncWithServer]);
 
+  // Undo steps are capture groups: everything changed between one pointer
+  // press or key action and the next one undoes together. Window capture phase
+  // runs before any canvas, item or toolbar handler sees the event. Typing in a
+  // text field does not split the step; the field keeps its native undo.
   useEffect(() => {
-    setUndoStack([]);
-    setRedoStack([]);
-  }, [_workspaceId]);
+    const breakOnPointer = () => breakHistoryCapture();
+    const breakOnKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      breakHistoryCapture();
+    };
+    window.addEventListener("pointerdown", breakOnPointer, true);
+    window.addEventListener("keydown", breakOnKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", breakOnPointer, true);
+      window.removeEventListener("keydown", breakOnKey, true);
+    };
+  }, [breakHistoryCapture]);
+
+  // Two-finger tap = undo, three-finger tap = redo on the canvas. Listeners
+  // are passive and never prevent default, so pan, pinch and tools behave as
+  // before; the gesture only fires when all fingers lift without moving.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const gesture = new TouchHistoryGesture();
+    // Listen on window in the capture phase: React's canvas handlers run at
+    // the React root (above the wrapper) and stop propagation of the first
+    // finger, so a wrapper listener would never see it. Only touches that
+    // start on the canvas count.
+    const down = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !wrapper.contains(event.target)) return;
+      gesture.down(event.pointerId, event.pointerType, event.clientX, event.clientY, event.timeStamp);
+    };
+    const move = (event: PointerEvent) => gesture.move(event.pointerId, event.clientX, event.clientY);
+    const up = (event: PointerEvent) => {
+      const action = gesture.up(event.pointerId, event.timeStamp);
+      if (action) applyWorkspaceHistory(action);
+    };
+    const cancel = (event: PointerEvent) => gesture.cancel(event.pointerId);
+    window.addEventListener("pointerdown", down, { capture: true, passive: true });
+    window.addEventListener("pointermove", move, { capture: true, passive: true });
+    window.addEventListener("pointerup", up, { capture: true, passive: true });
+    window.addEventListener("pointercancel", cancel, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
+    };
+  }, []);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -1081,11 +1183,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const commitDrawingItems = useCallback(
     (nextItems: StudioItem[]) => {
-      setUndoStack((prev) => [...prev, cloneItemsSnapshot(items)]);
-      setRedoStack([]);
       updateItems(nextItems);
     },
-    [items, updateItems],
+    [updateItems],
   );
 
   const eraserRadius = Math.max(drawStrokeWidth * 2, 14);
@@ -1095,6 +1195,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       if (path.length === 0) return;
       const eraserSamples = resampleStrokePoints(path, 3);
       const nextItems = items.filter((item) => {
+        // The eraser passes over locked elements.
+        if (isElementLocked(item)) return true;
         if (item.type === "shape") {
           const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
           const cos = Math.cos(rotation), sin = Math.sin(rotation);
@@ -1137,25 +1239,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     [commitDrawingItems, eraserRadius, items],
   );
 
-  const handleUndo = useCallback(() => {
-    setUndoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const previous = prev[prev.length - 1];
-      setRedoStack((future) => [...future, cloneItemsSnapshot(items)]);
-      updateItems(cloneItemsSnapshot(previous));
-      return prev.slice(0, -1);
-    });
-  }, [items, updateItems]);
-
-  const handleRedo = useCallback(() => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const next = prev[prev.length - 1];
-      setUndoStack((past) => [...past, cloneItemsSnapshot(items)]);
-      updateItems(cloneItemsSnapshot(next));
-      return prev.slice(0, -1);
-    });
-  }, [items, updateItems]);
+  const handleUndo = useCallback(() => applyWorkspaceHistory("undo"), []);
+  const handleRedo = useCallback(() => applyWorkspaceHistory("redo"), []);
 
   const handleClearAll = useCallback(() => {
     const drawingItems = items.filter((item) => item.type === "drawing");
@@ -1279,6 +1364,187 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     [commitDrawingItems, drawColor, drawStrokeWidth, drawTool, eraseAtPath, items, screenToWorld],
   );
 
+  /**
+   * Ends the one-finger canvas gesture without committing it: the pen dot or
+   * eraser touch is dropped and a pending text box is not created. Sticky
+   * notes (created on press), shape creation and text dismissal keep running.
+   */
+  const cancelCanvasGestureForMultiTouch = useCallback(() => {
+    const gesture = canvasGestureRef.current;
+    if (!gesture) return;
+    const owner = { pointerId: gesture.pointerId };
+    if (gesture.mode === "draw") {
+      drawPointerSessionRef.current = endPointerSession(drawPointerSessionRef.current, owner);
+      currentPathRef.current = [];
+      eraserPathRef.current = [];
+      setCurrentPath([]);
+      setEraserPath([]);
+    } else if (gesture.mode === "text") {
+      textPointerSessionRef.current = endPointerSession(textPointerSessionRef.current, owner);
+    } else if (gesture.mode === "select") {
+      setSelectionBox(null);
+      setSelectionScreenBox(null);
+    } else if (gesture.mode === "pan") {
+      setIsPanDragging(false);
+    } else {
+      return;
+    }
+    canvasGestureRef.current = null;
+    const wrapper = wrapperRef.current;
+    if (wrapper?.hasPointerCapture(gesture.pointerId)) wrapper.releasePointerCapture(gesture.pointerId);
+  }, []);
+
+  // Context menu triggers other than the mouse (see lib/workspace/context-menu):
+  // a 1 s finger or pen long-press in the select and hand tools, the pen
+  // barrel button, and Shift+F10 / the Menu key. Window capture listeners see
+  // presses before canvas and item handlers can stop them; they never prevent
+  // default, so drags, pans and two-finger undo work as before.
+  const contextMenuLive = useRef({ activeTool, openContextMenu, cancelCanvasGesture: cancelCanvasGestureForMultiTouch });
+  contextMenuLive.current = { activeTool, openContextMenu, cancelCanvasGesture: cancelCanvasGestureForMultiTouch };
+  const lastPointerTypeRef = useRef("mouse");
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const press = new LongPressTracker();
+    let timer: number | null = null;
+    let pressTarget: Element | null = null;
+    let suppressClickUntil = 0;
+    let firedPointerId: number | null = null;
+    const clearTimer = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+    };
+    const onCanvas = (target: EventTarget | null): target is Element =>
+      target instanceof Element && wrapper.contains(target) && !target.closest("[data-workspace-context-menu]");
+
+    const down = (event: PointerEvent) => {
+      lastPointerTypeRef.current = event.pointerType;
+      const wasPending = press.pending;
+      if (!onCanvas(event.target)) {
+        press.cancel();
+        clearTimer();
+        return;
+      }
+      if (event.pointerType === "pen" && event.button === 2) {
+        press.cancel();
+        clearTimer();
+        contextMenuLive.current.openContextMenu(event.clientX, event.clientY, event.target, false);
+        return;
+      }
+      const tool = contextMenuLive.current.activeTool;
+      const started = (tool === "select" || tool === "pan") && event.button === 0 && !wasPending &&
+        !event.target.closest(CONTEXT_MENU_NATIVE_TARGETS) &&
+        press.down(event.pointerId, event.pointerType, event.clientX, event.clientY);
+      if (!started) {
+        press.cancel();
+        clearTimer();
+        return;
+      }
+      pressTarget = event.target;
+      clearTimer();
+      timer = window.setTimeout(() => {
+        timer = null;
+        const fired = press.fire();
+        if (!fired) return;
+        contextMenuLive.current.cancelCanvasGesture();
+        if (contextMenuLive.current.openContextMenu(fired.x, fired.y, pressTarget, false)) {
+          firedPointerId = fired.pointerId;
+          suppressClickUntil = Number.POSITIVE_INFINITY;
+        }
+      }, LONG_PRESS_DURATION_MS);
+    };
+    const move = (event: PointerEvent) => {
+      press.move(event.pointerId, event.clientX, event.clientY);
+      if (!press.pending) clearTimer();
+    };
+    const end = (event: PointerEvent) => {
+      press.end(event.pointerId);
+      if (!press.pending) clearTimer();
+      // The click that follows lifting a long-press must not act on the element.
+      if (event.pointerId === firedPointerId) {
+        firedPointerId = null;
+        suppressClickUntil = event.timeStamp + 400;
+      }
+    };
+    const click = (event: MouseEvent) => {
+      if (event.timeStamp > suppressClickUntil) return;
+      suppressClickUntil = 0;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: true });
+    window.addEventListener("pointermove", move, { capture: true, passive: true });
+    window.addEventListener("pointerup", end, { capture: true, passive: true });
+    window.addEventListener("pointercancel", end, { capture: true, passive: true });
+    window.addEventListener("click", click, true);
+    return () => {
+      clearTimer();
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
+      window.removeEventListener("click", click, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    let keyboardOpenedAt = -Infinity;
+    const keydown = (event: KeyboardEvent) => {
+      if (!isContextMenuKey(event)) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && (active.isContentEditable || active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.closest("[data-workspace-context-menu]"))) return;
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
+      event.preventDefault();
+      keyboardOpenedAt = event.timeStamp;
+      const rect = wrapper.getBoundingClientRect();
+      const { selectedIds: ids } = useSelectionStore.getState();
+      const center = selectionCenter(ids, useWorkspaceStore.getState().items);
+      const ts = transformRef.current?.instance?.transformState;
+      const scale = ts?.scale ?? 1;
+      const x = center ? rect.left + (ts?.positionX ?? 0) + center.x * scale : rect.left + rect.width / 2;
+      const y = center ? rect.top + (ts?.positionY ?? 0) + center.y * scale : rect.top + rect.height / 2;
+      setContextMenu({
+        x,
+        y,
+        world: center ?? screenToWorld(x, y),
+        target: center ? "selection" : "canvas",
+        fromKeyboard: true,
+      });
+    };
+    // Some platforms still send `contextmenu` for the Menu key; the menu is already open.
+    const nativeMenu = (event: MouseEvent) => {
+      if (event.timeStamp - keyboardOpenedAt < 1000) event.preventDefault();
+    };
+    window.addEventListener("keydown", keydown);
+    window.addEventListener("contextmenu", nativeMenu, true);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      window.removeEventListener("contextmenu", nativeMenu, true);
+    };
+  }, [screenToWorld]);
+
+  // A tool switch closes the menu (it belongs to the selection it opened on).
+  useEffect(() => {
+    setContextMenu(null);
+  }, [activeTool]);
+
+  /**
+   * Mouse / touchpad right-click. Touch and pen long-presses are timed above,
+   * so the browser's own long-press menu is suppressed on the canvas.
+   */
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target || target.closest(CONTEXT_MENU_NATIVE_TARGETS)) return;
+    const pointerType = lastPointerTypeRef.current;
+    if (pointerType === "touch" || pointerType === "pen") {
+      e.preventDefault();
+      return;
+    }
+    if (openContextMenu(e.clientX, e.clientY, target, false)) e.preventDefault();
+  }, [openContextMenu]);
+
   const handleTextPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
@@ -1389,6 +1655,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     <div
       ref={wrapperRef}
       className="w-full h-full relative bg-[#f8fafc] overflow-visible"
+      onContextMenu={handleContextMenu}
       data-workspace-canvas="true"
       data-workspace-tool={activeTool}
       style={{
@@ -1405,8 +1672,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 ? "text"
                 : undefined,
         touchAction: "none",
+        // No iOS long-press callout: a 1 s press opens the workspace menu.
+        WebkitTouchCallout: "none",
       }}
       onPointerDownCapture={(e) => {
+        // A second finger landing early makes this a multi-finger gesture
+        // (two-finger tap = undo, pan, pinch): discard the first finger's
+        // tool action instead of committing it on release (Procreate).
+        const activeGesture = canvasGestureRef.current;
+        if (!e.isPrimary && activeGesture && shouldCancelForMultiTouch(activeGesture, e.pointerType, e.timeStamp)) {
+          cancelCanvasGestureForMultiTouch();
+        }
         if (!e.isPrimary || e.button !== 0 || canvasGestureRef.current) return;
         const target = e.target instanceof Element ? e.target : null;
         const isControl = !!target?.closest(
@@ -1457,6 +1733,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           startTransformX: transformState?.positionX ?? 0,
           startTransformY: transformState?.positionY ?? 0,
           scale: transformState?.scale ?? viewport.zoom ?? 1,
+          pointerType: e.pointerType,
+          startTime: e.timeStamp,
+          travel: 0,
         };
 
         if (mode === "select") {
@@ -1532,6 +1811,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           }
           return;
         }
+        gesture.travel = Math.max(gesture.travel, Math.hypot(e.clientX - gesture.startClientX, e.clientY - gesture.startClientY));
         if (gesture.mode === "draw") {
           handleDrawPointerMove(e);
           return;
@@ -1565,13 +1845,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         const y = Math.min(gesture.startWorldY, world.y);
         const w = Math.abs(gesture.startWorldX - world.x);
         const h = Math.abs(gesture.startWorldY - world.y);
+        // Connectors are selected by their path (AFFiNE `containsBound`); their
+        // stored x/y/w/h is only a placeholder.
         const collidingIds = items
-          .filter((item) => isIntersecting(
-            { x: item.x, y: item.y, w: item.w, h: item.h },
-            { x, y, w, h },
-          ))
+          .filter((item) => item.type === "connector"
+            ? connectorIntersectsRect(item, items, { x, y, w, h })
+            : isIntersecting({ x: item.x, y: item.y, w: item.w, h: item.h }, { x, y, w, h }))
           .map((item) => item.id);
-        useSelectionStore.getState().clearAndSelectIds(collidingIds);
+        // Touching one member of a group selects the whole group.
+        useSelectionStore.getState().clearAndSelectIds(resolveGroupSelection(items, collidingIds));
       }}
       onPointerUpCapture={(e) => {
         const gesture = canvasGestureRef.current;
@@ -1677,6 +1959,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       />
       <TransformWrapper
         ref={transformRef}
+        onInit={() => setIsTransformReady(true)}
         initialScale={viewport.zoom}
         initialPositionX={viewport.x}
         initialPositionY={viewport.y}
@@ -1736,7 +2019,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
-                onContextMenu={handleContextMenu}
                 onDoubleClick={(e) => {
                   if (e.target === e.currentTarget && !isDrawing) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -1795,7 +2077,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   />
                 )}
 
-                {items.map((item) => (
+                <WorkspaceConnectorsLayer items={items} interactive={activeTool === "select"} />
+
+                {isTransformReady && items.filter((item) => item.type !== "connector").map((item) => (
                   <StudioItemComponent
                     key={item.id}
                     item={item}
@@ -1849,7 +2133,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? selectedIds
                         : [draggedItemId];
                       const otherBounds = items
-                        .filter((other) => !draggedIds.includes(other.id))
+                        .filter((other) => other.type !== "connector" && !draggedIds.includes(other.id))
                         .map((other) => ({
                           x: other.x,
                           y: other.y,
@@ -1904,7 +2188,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedShapeId(null);
                         setSelectedStickyId(item.id);
                         setEditingStickyId(
-                          !event.shiftKey && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && !isElementLocked(item) && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
@@ -1920,7 +2204,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedFreeTextId(item.id);
                         setEditingFreeTextId(
-                          !event.shiftKey && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && !isElementLocked(item) && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
@@ -1945,7 +2229,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                             : item.type === "free-text" && (selectedFreeTextId === item.id || editingFreeTextId === item.id)
                               ? "rounded-md ring-2 ring-indigo-400/70"
                               : "",
-                      !isMigratedToSelectionOverlay(item.type) && selectedIds.includes(item.id)
+                      // Outline-only types get their orange outline from SelectionOverlay.
+                      !isMigratedToSelectionOverlay(item.type) && !usesOverlayOutlineOnly(item.type) && selectedIds.includes(item.id)
                         ? "ring-2 ring-[#f5a623] ring-offset-1 rounded-md"
                         : "",
                     ].filter(Boolean).join(" ")}
@@ -1975,7 +2260,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                           handleFreeTextSelect(item.id);
                         }}
                         onStartEditing={() => {
-                          if (isPanning) return;
+                          if (isPanning || isElementLocked(item)) return;
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {
@@ -2005,6 +2290,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       />
                     )}
                     {item.type === "image" && <ImageNode item={item as any} />}
+                    {item.type === "resource-card" && <ResourceCard item={item} canOpen={activeTool === "select"} />}
                     {item.type === "shape" && (
                       <ShapeNode
                         item={item as any}
@@ -2023,11 +2309,30 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   hoveredItemId={hoveredItemId}
                   interactive={activeTool === "select"}
                 />
+
+                <ConnectorEditingLayer
+                  items={items}
+                  selectedIds={selectedIds}
+                  enabled={activeTool === "select"}
+                  zoom={viewport.zoom}
+                  screenToWorld={screenToWorld}
+                />
+
+                <ConnectorLabelEditor items={items} />
+
+                <ConnectorCreationLayer
+                  items={items}
+                  selectedIds={selectedIds}
+                  activeTool={activeTool}
+                  zoom={viewport.zoom}
+                  screenToWorld={screenToWorld}
+                  onToolDone={() => setActiveTool("select")}
+                />
               </div>
             </TransformComponent>
 
 
-            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} />
+            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} canUndo={canUndo} canRedo={canRedo} onUndo={handleUndo} onRedo={handleRedo} />
             <AssetDrawer />
 
             {isDrawing && (
@@ -2044,20 +2349,15 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onUndo={handleUndo}
                 onRedo={handleRedo}
                 onClearAll={handleClearAll}
-                canUndo={undoStack.length > 0}
-                canRedo={redoStack.length > 0}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
             )}
 
             <ShapeStyleToolbar />
+            <ConnectorStyleToolbar enabled={activeTool === "select"} />
 
-            {contextMenu && (
-              <ShapeContextMenu
-                x={contextMenu.x}
-                y={contextMenu.y}
-                onClose={() => setContextMenu(null)}
-              />
-            )}
+            {contextMenu && <WorkspaceContextMenu menu={contextMenu} onClose={closeContextMenu} />}
 
             {selectedIds.length <= 1 && (isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
               <TextToolbar
@@ -2095,6 +2395,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onSelectShapeKind={handleSelectShapeKind}
                 onOpen={() => handleSelectShapeKind(activeShapeKind)}
               />
+              <button
+                onClick={() => {
+                  setActiveTool(activeTool === "connector" ? "select" : "connector");
+                  setIsTextToolLocked(false);
+                  setEditingFreeTextId(null);
+                }}
+                className={`p-2 rounded-md transition-colors ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"}`}
+                title="Connector (C) — press C again to switch curve, elbow, straight"
+                aria-label="Connector tool"
+                aria-pressed={activeTool === "connector"}
+              ><Spline size={18} /></button>
               <div className="h-px bg-slate-100 my-1 mx-2" />
               <button
                 onClick={() => {
@@ -2179,6 +2490,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
                   <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} compact />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "connector" ? "select" : "connector"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connector" aria-label="Connector tool" aria-pressed={activeTool === "connector"}><Spline size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>

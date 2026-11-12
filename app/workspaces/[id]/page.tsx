@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useViewerStore } from "@/hooks/use-viewer-store";
+import { centeredCardPosition, findResourceCard, resourceCardProps } from "@/lib/workspace/resource-card";
 import { Loader2, ArrowLeft, Save, CheckCircle2, Video, FileText, Maximize2, RefreshCw, AlertCircle, Music4, Globe } from "lucide-react";
 
 // Dynamically import tldraw to avoid SSR issues
@@ -49,7 +50,7 @@ export default function WorkspacePage() {
     renameWorkspace
   } = useWorkspaceStore();
   
-  const { viewers, closeViewer, openViewer, resetViewers } = useViewerStore();
+  const { viewers, closeViewer, resetViewers } = useViewerStore();
   const [editingTitle, setEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -149,56 +150,59 @@ export default function WorkspacePage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [saveNow]);
 
+  // Opening a resource's workspace (`?assetId=` from the Shelf) never opens
+  // the floating viewer by itself: it makes sure the canvas has a card for the
+  // resource, and clicking the card opens the viewer. Waits for the workspace
+  // to finish loading so the background reload cannot replace the new card.
+  const storeWorkspaceId = useWorkspaceStore((state) => state.workspaceId);
+  const storeIsLoading = useWorkspaceStore((state) => state.isLoading);
   useEffect(() => {
     const assetId = searchParams.get("assetId");
-    if (!assetId) return;
-    const autoOpenKey = `${id}:${assetId}`;
-    if (handledAutoOpenRef.current === autoOpenKey) return;
-    if (viewers.some((viewer) => viewer.id === assetId || viewer.assetId === assetId)) return;
+    if (!assetId || loading || storeIsLoading || storeWorkspaceId !== id) return;
+    const handledKey = `${id}:${assetId}`;
+    if (handledAutoOpenRef.current === handledKey) return;
 
     let active = true;
-
-    const loadAssetViewer = async () => {
-      try {
-        const response = await fetch(`/api/assets/${assetId}`);
-        if (!response.ok) {
-          throw new Error("Failed to load asset");
-        }
-
-        const asset = await response.json();
-        if (!active) return;
-
-        const type =
-          asset.kind === "pdf" ? "pdf" : asset.kind === "video" ? "video" : null;
-        if (!type) return;
-
-        handledAutoOpenRef.current = autoOpenKey;
-        openViewer({
-          id: asset.id,
-          title: asset.title,
-          type,
-          contentUrl: asset.contentUrl,
-          assetId: asset.id,
-          revisionId: asset.currentRevisionId ?? undefined,
-        });
-
-        const nextSearchParams = new URLSearchParams(searchParams.toString());
-        nextSearchParams.delete("assetId");
-        const nextUrl = nextSearchParams.toString()
-          ? `/workspaces/${id}?${nextSearchParams.toString()}`
-          : `/workspaces/${id}`;
-        router.replace(nextUrl);
-      } catch (error) {
-        console.warn("Failed to auto-open asset viewer", error);
-      }
+    const clearParam = () => {
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.delete("assetId");
+      const query = nextSearchParams.toString();
+      router.replace(query ? `/workspaces/${id}?${query}` : `/workspaces/${id}`);
     };
 
-    void loadAssetViewer();
+    const ensureResourceCard = async () => {
+      try {
+        if (!findResourceCard(useWorkspaceStore.getState().items, assetId)) {
+          const response = await fetch(`/api/assets/${assetId}`);
+          if (!response.ok) throw new Error("Failed to load asset");
+          const asset = await response.json();
+          if (!active) return;
+          const props = resourceCardProps({
+            id: assetId,
+            kind: typeof asset.kind === "string" ? asset.kind : "",
+            title: typeof asset.title === "string" ? asset.title : null,
+            sourceHost: typeof asset.sourceHost === "string" ? asset.sourceHost : null,
+          });
+          const store = useWorkspaceStore.getState();
+          if (props && store.workspaceId === id && !findResourceCard(store.items, assetId)) {
+            const position = centeredCardPosition(store.viewport, { w: window.innerWidth, h: window.innerHeight });
+            store.addItem("resource-card", props, position);
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to add the resource card", error);
+      }
+      // Only a run that was not superseded marks the asset handled.
+      if (!active) return;
+      handledAutoOpenRef.current = handledKey;
+      clearParam();
+    };
 
+    void ensureResourceCard();
     return () => {
       active = false;
     };
-  }, [id, openViewer, router, searchParams, viewers]);
+  }, [id, loading, router, searchParams, storeIsLoading, storeWorkspaceId]);
 
   const handleTitleSubmit = () => {
     if (tempTitle.trim() && tempTitle !== title) {

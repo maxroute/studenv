@@ -13,6 +13,7 @@ interface TextNodeProps {
 export function TextNode({ item }: TextNodeProps) {
   const { items, updateItems } = useWorkspaceStore();
   const [isEditing, setIsEditing] = useState(!item.props.text);
+  const isLocked = item.props.locked === true;
   const [editText, setEditText] = useState(item.props.text ?? "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -88,7 +89,7 @@ export function TextNode({ item }: TextNodeProps) {
                 <Check className="w-3 h-3" />
               </button>
             </>
-          ) : (
+          ) : !isLocked && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -108,7 +109,7 @@ export function TextNode({ item }: TextNodeProps) {
         className="flex-1 overflow-auto p-3 bg-white"
         onDoubleClick={(e) => {
             e.stopPropagation();
-            if (!isEditing) setIsEditing(true);
+            if (!isEditing && !isLocked) setIsEditing(true);
         }}
       >
         {isEditing ? (

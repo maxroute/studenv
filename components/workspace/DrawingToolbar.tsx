@@ -577,7 +577,7 @@ export function DrawingToolbar({
           className="dt-btn"
           onClick={onUndo}
           disabled={!canUndo}
-          title="Undo Last Stroke"
+          title="Undo"
         >
           <Undo2 size={16} />
         </button>

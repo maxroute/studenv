@@ -9,12 +9,25 @@ import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { groupItems, ungroupItems } from "./group-engine";
 
+/** Undo or redo one workspace step, keeping only the selected ids that still exist. */
+export function applyWorkspaceHistory(direction: "undo" | "redo") {
+  const store = useWorkspaceStore.getState();
+  const changed = direction === "undo" ? store.undo() : store.redo();
+  if (!changed) return;
+  const existing = new Set(useWorkspaceStore.getState().items.map((item) => item.id));
+  const { selectedIds, clearAndSelectIds } = useSelectionStore.getState();
+  const kept = selectedIds.filter((id) => existing.has(id));
+  if (kept.length !== selectedIds.length) clearAndSelectIds(kept);
+}
+
 interface KeyboardShortcutsOptions {
   onActivateShapeTool?: () => void;
+  /** `C` without modifiers (connector tool / mode cycling). */
+  onActivateConnectorTool?: () => void;
 }
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
-  const { onActivateShapeTool } = options;
+  const { onActivateShapeTool, onActivateConnectorTool } = options;
   const { selectedIds, deselectAll, clearAndSelectIds } = useSelectionStore();
   const {
     items,
@@ -43,6 +56,16 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
+      // ── Undo (Cmd/Ctrl+Z) / Redo (Cmd/Ctrl+Shift+Z, Cmd/Ctrl+Y) ───────────
+      // Cmd+Y is handled on Mac too, so it redoes instead of opening the
+      // browser's History.
+      const isUndoKey = e.key === "z" || e.key === "Z";
+      if (cmdOrCtrl && !e.altKey && (isUndoKey || (!e.shiftKey && (e.key === "y" || e.key === "Y")))) {
+        e.preventDefault();
+        applyWorkspaceHistory(isUndoKey && !e.shiftKey ? "undo" : "redo");
+        return;
+      }
+
       // ── Select All (Ctrl+A) ────────────────────────────────────────────────
       if (cmdOrCtrl && (e.key === "a" || e.key === "A")) {
         e.preventDefault();
@@ -60,6 +83,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       if (!cmdOrCtrl && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         onActivateShapeTool?.();
+        return;
+      }
+
+      if (!cmdOrCtrl && !e.altKey && !e.shiftKey && (e.key === "c" || e.key === "C") && onActivateConnectorTool) {
+        e.preventDefault();
+        onActivateConnectorTool();
         return;
       }
 
@@ -173,5 +202,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     updateItems,
     batchUpdateItems,
     onActivateShapeTool,
+    onActivateConnectorTool,
   ]);
 }

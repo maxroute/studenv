@@ -11,6 +11,8 @@ import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
 import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { getEffectiveRotation, getSelectionFrame, usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
+import { getItemSelectionBounds, groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
 import { beginPointerSession, clearPointerSession, endPointerSession, ownsPointerSession, type PointerSession } from "@/lib/workspace/pointer-session";
 
 interface SelectionOverlayProps {
@@ -60,25 +62,22 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
   const groupDragRef = useRef<{
     pointerId: number;
     startPointer: { x: number; y: number };
-    startPositions: Map<string, { x: number; y: number }>;
+    snapshot: GroupMoveSnapshot;
   } | null>(null);
 
   const handleGroupDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if (allSelectedItems.length < 2 || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const startPositions = new Map<string, { x: number; y: number }>();
-    allSelectedItems.forEach((item) => {
-      if (!(item.props as { locked?: boolean }).locked) {
-        startPositions.set(item.id, { x: item.x, y: item.y });
-      }
-    });
-    if (startPositions.size === 0) return;
+    // Items move by position; connectors only by their free ends, and only
+    // when every element they are attached to is part of the selection.
+    const snapshot = snapshotGroupMove(items, selectedIds);
+    if (snapshot.positions.size === 0 && snapshot.connectors.size === 0) return;
     useSelectionStore.getState().setDraggingIds(allSelectedItems.map((item) => item.id));
     groupDragRef.current = {
       pointerId: event.pointerId,
       startPointer: screenToWorld(event.clientX, event.clientY),
-      startPositions,
+      snapshot,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -91,10 +90,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     const currentPointer = screenToWorld(event.clientX, event.clientY);
     const dx = currentPointer.x - drag.startPointer.x;
     const dy = currentPointer.y - drag.startPointer.y;
-    batchUpdateItems(Array.from(drag.startPositions, ([id, position]) => ({
-      id,
-      changes: { x: position.x + dx, y: position.y + dy },
-    })));
+    batchUpdateItems(groupMoveUpdates(drag.snapshot, dx, dy));
   };
 
   const handleGroupDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -112,14 +108,19 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
   // shared axis-aligned boundary from every selected workspace object.
   const allSelectedItems = items.filter((item) => selectedIds.includes(item.id));
   const selectedItems = allSelectedItems.filter((item) => isMigratedToSelectionOverlay(item.type));
+  // Connectors contribute their path bounds, not their placeholder box.
   const selectionBounds = allSelectedItems.length > 1
     ? allSelectedItems.reduce(
-        (bounds, item) => ({
-          left: Math.min(bounds.left, item.x),
-          top: Math.min(bounds.top, item.y),
-          right: Math.max(bounds.right, item.x + item.w),
-          bottom: Math.max(bounds.bottom, item.y + item.h),
-        }),
+        (bounds, item) => {
+          const box = getItemSelectionBounds(item, items);
+          if (!box) return bounds;
+          return {
+            left: Math.min(bounds.left, box.x),
+            top: Math.min(bounds.top, box.y),
+            right: Math.max(bounds.right, box.x + box.w),
+            bottom: Math.max(bounds.bottom, box.y + box.h),
+          };
+        },
         { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
       )
     : null;
@@ -405,6 +406,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
         <div
           aria-label={`${allSelectedItems.length} objects selected — drag to move selection`}
           data-no-canvas-gesture="true"
+          data-selection-frame="true"
           className="absolute border-2 border-[#f5a623] border-dashed rounded-sm"
           style={{
             left: selectionBounds.left,
@@ -648,6 +650,33 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               ))}
 
 
+          </div>
+        );
+      })}
+      {/* Outline-only frames for items that keep their own react-rnd drag/resize.
+          Same stored geometry and live rotation as the connector handles. */}
+      {draggingIds.length === 0 && allSelectedItems.map((item) => {
+        if (item.type === "connector" || !usesOverlayOutlineOnly(item.type)) return null;
+        const frame = getSelectionFrame(item, getEffectiveRotation(item, rotationPreviews));
+        return (
+          <div
+            key={`outline-${item.id}`}
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: frame.left,
+              top: frame.top,
+              width: frame.width,
+              height: frame.height,
+              pointerEvents: "none",
+              transform: `rotate(${frame.rotation}deg)`,
+              transformOrigin: "center",
+            }}
+          >
+            <div
+              className="absolute inset-0 border border-[#f5a623] pointer-events-none"
+              style={{ borderWidth: Math.max(1.5, 2 / canvasScale) }}
+            />
           </div>
         );
       })}

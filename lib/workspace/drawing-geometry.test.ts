@@ -89,7 +89,11 @@ test("eraser hits the visible edge of a pressure-thickened stroke", () => {
     { x: 100, y: 0, pressure: 1 },
   ], 20);
   const bounds = getStrokeBounds(outline);
-  const visibleEdgePoint = { x: 50, y: bounds.minY - 0.5 };
+  // Use the actual vertex that defines the upper bound. The outline can taper,
+  // so the global minY need not occur at the horizontal midpoint (x = 50).
+  const upperEdgeVertex = outline.find((point) => point.y === bounds.minY);
+  assert.ok(upperEdgeVertex, "expected a vertex at the upper stroke boundary");
+  const visibleEdgePoint = { x: upperEdgeVertex.x, y: upperEdgeVertex.y - 0.5 };
   assert.equal(strokeOutlineIntersectsPolyline(outline, [visibleEdgePoint], 1), true);
 });
 

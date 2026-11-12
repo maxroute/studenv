@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
 
 export const WORKSPACE_SCENE_FORMAT = "second-brain-workspace";
 export const WORKSPACE_SCENE_VERSION = 1;
@@ -39,9 +40,20 @@ const PdfCropSchema = z.object({
   height: z.number().finite().positive(),
 });
 
+/**
+ * Lock and group membership, shared by every element type. Optional so
+ * snapshots saved before they existed parse unchanged (shapes keep their
+ * historical `locked` default of false).
+ */
+const ElementMetaProps = {
+  locked: z.boolean().optional(),
+  groupId: z.string().min(1).optional(),
+};
+
 export const TextNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("text"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().optional(),
     fontSize: z.number().finite().positive().optional(),
@@ -51,6 +63,7 @@ export const TextNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const FreeTextNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("free-text"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().default("#1e1e1e"),
     fontSize: z.number().finite().positive().default(28),
@@ -60,6 +73,7 @@ export const FreeTextNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const StickyNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("sticky"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().optional(),
   }),
@@ -68,6 +82,7 @@ export const StickyNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const PdfPageNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("pdf-page"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     pageNumber: z.number().int().positive(),
@@ -77,6 +92,7 @@ export const PdfPageNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const PdfFragmentNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("pdf-fragment"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     pageNumber: z.number().int().positive(),
@@ -88,6 +104,7 @@ export const PdfFragmentNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("video-anchor"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     startTimeMs: z.number().int().nonnegative(),
@@ -101,15 +118,36 @@ export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const ImageNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("image"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1).optional(),
     src: z.string().min(1).optional(),
     alt: z.string().optional(),
   }),
 });
 
+/** Asset kinds a resource card can open in the floating viewer. */
+export const ResourceCardKindSchema = z.enum(["pdf", "video", "audio", "webpage"]);
+
+/**
+ * A whole PDF, video, audio file or webpage placed on the canvas. Clicking it
+ * opens the floating viewer; connectors attach to it like any element. The
+ * title and host are kept so the card renders without a request.
+ */
+export const ResourceCardNodeSchema = WorkspaceNodeBaseSchema.extend({
+  type: z.literal("resource-card"),
+  props: z.object({
+    ...ElementMetaProps,
+    assetId: z.string().min(1),
+    kind: ResourceCardKindSchema,
+    title: z.string().default(""),
+    sourceHost: z.string().optional(),
+  }),
+});
+
 export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("group"),
   props: z.object({
+    ...ElementMetaProps,
     label: z.string().optional(),
   }),
 });
@@ -123,6 +161,7 @@ const DrawingPointSchema = z.object({
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("drawing"),
   props: z.object({
+    ...ElementMetaProps,
     d: z.string(),
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
@@ -166,6 +205,63 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
+export const ConnectorAnchorSchema = z.enum(["top", "right", "bottom", "left"]);
+
+/** Relative [0..1] position inside an element's unrotated bounds for each named side anchor. */
+export const CONNECTOR_ANCHOR_POSITIONS: Record<z.infer<typeof ConnectorAnchorSchema>, [number, number]> = {
+  top: [0.5, 0],
+  right: [1, 0.5],
+  bottom: [0.5, 1],
+  left: [0, 0.5],
+};
+
+const ConnectorVecSchema = z.tuple([z.number().finite(), z.number().finite()]);
+
+/**
+ * One connector end. With `id`, `position` is relative [0..1] within that
+ * element's unrotated bounds (rotation is applied when resolving); without
+ * `position` the end auto-picks the element's nearest anchor. Without `id`,
+ * `position` is an absolute world point (a free end).
+ */
+export const ConnectorEndSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    position: ConnectorVecSchema.optional(),
+  })
+  .refine((end) => Boolean(end.id || end.position), {
+    message: "A connector end needs an element id or a position",
+  });
+
+export const ConnectorModeSchema = z.enum(["straight", "elbow", "curve"]);
+export const ConnectorStrokeStyleSchema = z.enum(["solid", "dash"]);
+export const ConnectorEndpointStyleSchema = z.enum(["none", "arrow", "triangle", "circle", "diamond"]);
+
+export const DEFAULT_CONNECTOR_MODE: z.infer<typeof ConnectorModeSchema> = "curve";
+export const DEFAULT_CONNECTOR_COLOR = "#929292";
+export const DEFAULT_CONNECTOR_STROKE_WIDTH = 2;
+
+export const ConnectorLabelSchema = z.object({
+  text: z.string(),
+  /** Fraction 0..1 along the connector path where the label is centred. */
+  offset: z.number().min(0).max(1).default(0.5),
+});
+
+export const ConnectorNodeSchema = WorkspaceNodeBaseSchema.extend({
+  type: z.literal("connector"),
+  props: z.object({
+    ...ElementMetaProps,
+    source: ConnectorEndSchema,
+    target: ConnectorEndSchema,
+    mode: ConnectorModeSchema.default(DEFAULT_CONNECTOR_MODE),
+    color: z.string().default(DEFAULT_CONNECTOR_COLOR),
+    strokeWidth: z.number().finite().positive().default(DEFAULT_CONNECTOR_STROKE_WIDTH),
+    strokeStyle: ConnectorStrokeStyleSchema.default("solid"),
+    frontEndpointStyle: ConnectorEndpointStyleSchema.default("none"),
+    rearEndpointStyle: ConnectorEndpointStyleSchema.default("arrow"),
+    label: ConnectorLabelSchema.optional(),
+  }),
+});
+
 export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   TextNodeSchema,
   FreeTextNodeSchema,
@@ -174,9 +270,11 @@ export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   PdfFragmentNodeSchema,
   VideoAnchorNodeSchema,
   ImageNodeSchema,
+  ResourceCardNodeSchema,
   GroupNodeSchema,
   DrawingNodeSchema,
   ShapeNodeSchema,
+  ConnectorNodeSchema,
 ]);
 
 export const WorkspaceSceneSchema = z.object({
@@ -196,9 +294,18 @@ export type PdfPageNode = z.infer<typeof PdfPageNodeSchema>;
 export type PdfFragmentNode = z.infer<typeof PdfFragmentNodeSchema>;
 export type VideoAnchorNode = z.infer<typeof VideoAnchorNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
+export type ResourceCardNode = z.infer<typeof ResourceCardNodeSchema>;
+export type ResourceCardKind = z.infer<typeof ResourceCardKindSchema>;
 export type GroupNode = z.infer<typeof GroupNodeSchema>;
 export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
+export type ConnectorNode = z.infer<typeof ConnectorNodeSchema>;
+export type ConnectorAnchor = z.infer<typeof ConnectorAnchorSchema>;
+export type ConnectorEnd = z.infer<typeof ConnectorEndSchema>;
+export type ConnectorMode = z.infer<typeof ConnectorModeSchema>;
+export type ConnectorStrokeStyle = z.infer<typeof ConnectorStrokeStyleSchema>;
+export type ConnectorEndpointStyle = z.infer<typeof ConnectorEndpointStyleSchema>;
+export type ConnectorLabel = z.infer<typeof ConnectorLabelSchema>;
 export type WorkspaceNode = z.infer<typeof WorkspaceNodeSchema>;
 export type WorkspaceNodeType = WorkspaceNode["type"];
 export type WorkspaceScene = z.infer<typeof WorkspaceSceneSchema>;
@@ -215,9 +322,11 @@ const DEFAULT_NODE_SIZE: Record<WorkspaceNodeType, { w: number; h: number }> = {
   "pdf-fragment": { w: 400, h: 500 },
   "video-anchor": { w: 200, h: 120 },
   image: { w: 320, h: 240 },
+  "resource-card": { w: 280, h: 88 },
   group: { w: 400, h: 300 },
   drawing: { w: 100, h: 100 },
   shape: { w: 120, h: 120 },
+  connector: { w: 1, h: 1 },
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -235,6 +344,62 @@ function coerceNumber(value: unknown, fallback: number) {
 function coercePositiveNumber(value: unknown, fallback: number) {
   const parsed = coerceNumber(value, fallback);
   return parsed > 0 ? parsed : fallback;
+}
+
+function coerceConnectorVec(value: unknown): [number, number] | undefined {
+  if (!Array.isArray(value) || value.length !== 2) return undefined;
+  const [x, y] = value;
+  return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y)
+    ? [x, y]
+    : undefined;
+}
+
+function coerceConnectorEnd(value: unknown): { id?: string; position?: [number, number] } {
+  const record = asObject(value) ?? {};
+  const id = typeof record.id === "string" && record.id.length > 0 ? record.id : undefined;
+  const position = coerceConnectorVec(record.position);
+  return { ...(id ? { id } : {}), ...(position ? { position } : {}) };
+}
+
+function legacyAnchorPosition(anchor: unknown): [number, number] | undefined {
+  const parsed = ConnectorAnchorSchema.safeParse(anchor);
+  return parsed.success ? [...CONNECTOR_ANCHOR_POSITIONS[parsed.data]] : undefined;
+}
+
+/**
+ * Normalises connector props to the v2 model. v1 connectors
+ * (`sourceId`/`sourceAnchor`/`targetId`/`targetAnchor`, straight only) are
+ * converted to relative side positions and keep their straight appearance.
+ */
+function normalizeConnectorProps(props: Record<string, unknown>) {
+  const isLegacy = !("source" in props) && !("target" in props) && ("sourceId" in props || "targetId" in props);
+  const source = isLegacy
+    ? { id: coerceString(props.sourceId) || undefined, position: legacyAnchorPosition(props.sourceAnchor) }
+    : coerceConnectorEnd(props.source);
+  const target = isLegacy
+    ? { id: coerceString(props.targetId) || undefined, position: legacyAnchorPosition(props.targetAnchor) }
+    : coerceConnectorEnd(props.target);
+  const label = asObject(props.label);
+
+  return {
+    source,
+    target,
+    mode: ConnectorModeSchema.safeParse(props.mode).success
+      ? props.mode
+      : isLegacy ? "straight" : DEFAULT_CONNECTOR_MODE,
+    color: coerceString(props.color, DEFAULT_CONNECTOR_COLOR),
+    strokeWidth: coercePositiveNumber(props.strokeWidth, DEFAULT_CONNECTOR_STROKE_WIDTH),
+    strokeStyle: ConnectorStrokeStyleSchema.safeParse(props.strokeStyle).success ? props.strokeStyle : "solid",
+    frontEndpointStyle: ConnectorEndpointStyleSchema.safeParse(props.frontEndpointStyle).success
+      ? props.frontEndpointStyle
+      : "none",
+    rearEndpointStyle: ConnectorEndpointStyleSchema.safeParse(props.rearEndpointStyle).success
+      ? props.rearEndpointStyle
+      : "arrow",
+    ...(label && typeof label.text === "string" && label.text.length > 0
+      ? { label: { text: label.text, offset: Math.min(1, Math.max(0, coerceNumber(label.offset, 0.5))) } }
+      : {}),
+  };
 }
 
 function coerceInteger(value: unknown, fallback: number) {
@@ -306,6 +471,15 @@ function coerceCrop(value: unknown): PdfCrop {
   });
 }
 
+/** Keeps a valid lock flag and group id from legacy or partially valid props. */
+function coerceElementMeta(props: Record<string, unknown>) {
+  const groupId = coerceOptionalString(props.groupId);
+  return {
+    ...(typeof props.locked === "boolean" ? { locked: props.locked } : {}),
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
 function buildNodeBase(raw: Record<string, unknown>) {
   return {
     id: coerceOptionalString(raw.id) ?? `item-${Math.random().toString(36).slice(2, 11)}`,
@@ -338,6 +512,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "text",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceOptionalString(props.color),
           fontSize: typeof props.fontSize === "number" ? props.fontSize : undefined,
@@ -348,6 +523,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "free-text",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceString(props.color, "#1e1e1e"),
           fontSize: typeof props.fontSize === "number" ? props.fontSize : 28,
@@ -358,6 +534,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "sticky",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceOptionalString(props.color),
         },
@@ -367,6 +544,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "pdf-page",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -376,6 +554,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "pdf-page",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -387,6 +566,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "pdf-fragment",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -398,6 +578,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "pdf-fragment",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -411,6 +592,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "video-anchor",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           startTimeMs: coerceNonNegativeInteger(props.startTimeMs, 0),
@@ -427,6 +609,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "video-anchor",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               startTimeMs: coerceNonNegativeInteger(props.startTimeMs, 0),
@@ -445,16 +628,32 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "image",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceOptionalString(props.assetId),
           src: coerceOptionalString(props.src),
           alt: coerceOptionalString(props.alt),
         },
       });
+    case "resource-card": {
+      const card = ResourceCardNodeSchema.safeParse({
+        ...base,
+        type: "resource-card",
+        props: {
+          ...coerceElementMeta(props),
+          assetId: coerceString(props.assetId),
+          kind: props.kind,
+          title: coerceString(props.title),
+          sourceHost: coerceOptionalString(props.sourceHost),
+        },
+      });
+      return card.success ? card.data : null;
+    }
     case "group":
       return GroupNodeSchema.parse({
         ...base,
         type: "group",
         props: {
+          ...coerceElementMeta(props),
           label: coerceOptionalString(props.label),
         },
       });
@@ -463,6 +662,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "drawing",
         props: {
+          ...coerceElementMeta(props),
           d: coerceString(props.d),
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
@@ -470,6 +670,16 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           outline: props.outline === true,
         },
       });
+    case "connector": {
+      // A connector with an unusable end is dropped on its own instead of
+      // failing the whole scene parse (which would fall back to an empty scene).
+      const connector = ConnectorNodeSchema.safeParse({
+        ...base,
+        type: "connector",
+        props: { ...normalizeConnectorProps(props), ...coerceElementMeta(props) },
+      });
+      return connector.success ? connector.data : null;
+    }
     case "shape": {
       const fillObj = asObject(props.fill) ?? {};
       const strokeObj = asObject(props.stroke) ?? {};
@@ -511,12 +721,14 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
 export function parseWorkspaceScene(value: unknown): WorkspaceScene {
   const parsed = WorkspaceSceneSchema.safeParse(value);
   if (parsed.success) {
-    return parsed.data;
+    // Connectors attached to a missing element cannot render; older snapshots
+    // may contain them because some deletions did not cascade.
+    return { ...parsed.data, items: withoutOrphanConnectors(parsed.data.items) };
   }
 
   const record = asObject(value);
   const items = Array.isArray(record?.items)
-    ? record.items.map(parseWorkspaceNode).filter(Boolean)
+    ? withoutOrphanConnectors(record.items.map(parseWorkspaceNode).filter((node): node is WorkspaceNode => node !== null))
     : [];
   
   const workspaceAssetIds = Array.isArray(record?.workspaceAssetIds)
@@ -604,6 +816,8 @@ export function getWorkspaceNodeText(node: WorkspaceNode) {
       return (node.props.alt ?? "").trim();
     case "group":
       return (node.props.label ?? "").trim();
+    case "resource-card":
+      return node.props.title.trim();
     default:
       return "";
   }

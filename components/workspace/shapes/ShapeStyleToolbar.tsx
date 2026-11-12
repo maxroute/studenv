@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import {
-  Minus, MoreHorizontal, Lock, Unlock, Sparkles, Square,
+  Minus, MoreHorizontal, Lock, Unlock, Sparkles, Square, Spline,
   Check, SlidersHorizontal,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
+import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import type { ShapeNode } from "@/types/workspace";
 
 const PRESET_COLORS = [
@@ -43,6 +44,8 @@ function Checkerboard() {
 
 export function ShapeStyleToolbar() {
   const { selectedIds } = useSelectionStore();
+  const connectorGestureActive = useConnectorUiStore((state) => state.gestureActive);
+  const requestQuickConnect = useConnectorUiStore((state) => state.requestQuickConnect);
   const { items, updateItemProps } = useWorkspaceStore();
   const [mode, setMode] = useState<StyleMode>("fill");
   const [moreOpen, setMoreOpen] = useState(false);
@@ -53,6 +56,8 @@ export function ShapeStyleToolbar() {
     (item): item is ShapeNode => selectedIds.includes(item.id) && item.type === "shape"
   );
   if (selectedIds.length !== 1 || selectedShapes.length !== 1) return null;
+  // AFFiNE hides element toolbars while a connector is being created.
+  if (connectorGestureActive) return null;
 
   const shape = selectedShapes[0];
   const props = shape.props as any;
@@ -150,6 +155,26 @@ export function ShapeStyleToolbar() {
         )}
 
         {divider}
+
+        {!isLocked && props.kind !== "line" && props.kind !== "arrow" && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                setColorsOpen(false);
+                setMoreOpen(false);
+                // Quick connect: the connector follows the pointer; click a target to attach.
+                requestQuickConnect({ sourceId: shape.id, clientX: event.clientX, clientY: event.clientY });
+              }}
+              title="Draw connector"
+              aria-label="Draw connector"
+              className={buttonClass}
+            >
+              <Spline size={18} />
+            </button>
+            {divider}
+          </>
+        )}
 
         <div className="relative shrink-0">
           <button type="button" onClick={() => { setMoreOpen((open) => !open); setColorsOpen(false); }} title="More shape options" aria-label="More shape options" aria-expanded={moreOpen} className={`${buttonClass} ${moreOpen ? activeClass : ""}`}>

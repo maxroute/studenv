@@ -55,7 +55,7 @@ export function FreeTextNode({
     const nextHeight = Math.max(40, Math.min(360, measureRef.current.scrollHeight + 8));
 
     if (nextWidth !== item.w || nextHeight !== item.h) {
-      updateItem(item.id, { w: nextWidth, h: nextHeight });
+      updateItem(item.id, { w: nextWidth, h: nextHeight }, { recordHistory: false });
     }
   }, [editText, isEditing, item.h, item.id, item.props.fontSize, item.props.text, item.w, updateItem]);
 
