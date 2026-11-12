@@ -125,6 +125,25 @@ export const ImageNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
+/** Asset kinds a resource card can open in the floating viewer. */
+export const ResourceCardKindSchema = z.enum(["pdf", "video", "audio", "webpage"]);
+
+/**
+ * A whole PDF, video, audio file or webpage placed on the canvas. Clicking it
+ * opens the floating viewer; connectors attach to it like any element. The
+ * title and host are kept so the card renders without a request.
+ */
+export const ResourceCardNodeSchema = WorkspaceNodeBaseSchema.extend({
+  type: z.literal("resource-card"),
+  props: z.object({
+    ...ElementMetaProps,
+    assetId: z.string().min(1),
+    kind: ResourceCardKindSchema,
+    title: z.string().default(""),
+    sourceHost: z.string().optional(),
+  }),
+});
+
 export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("group"),
   props: z.object({
@@ -251,6 +270,7 @@ export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   PdfFragmentNodeSchema,
   VideoAnchorNodeSchema,
   ImageNodeSchema,
+  ResourceCardNodeSchema,
   GroupNodeSchema,
   DrawingNodeSchema,
   ShapeNodeSchema,
@@ -274,6 +294,8 @@ export type PdfPageNode = z.infer<typeof PdfPageNodeSchema>;
 export type PdfFragmentNode = z.infer<typeof PdfFragmentNodeSchema>;
 export type VideoAnchorNode = z.infer<typeof VideoAnchorNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
+export type ResourceCardNode = z.infer<typeof ResourceCardNodeSchema>;
+export type ResourceCardKind = z.infer<typeof ResourceCardKindSchema>;
 export type GroupNode = z.infer<typeof GroupNodeSchema>;
 export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
@@ -300,6 +322,7 @@ const DEFAULT_NODE_SIZE: Record<WorkspaceNodeType, { w: number; h: number }> = {
   "pdf-fragment": { w: 400, h: 500 },
   "video-anchor": { w: 200, h: 120 },
   image: { w: 320, h: 240 },
+  "resource-card": { w: 280, h: 88 },
   group: { w: 400, h: 300 },
   drawing: { w: 100, h: 100 },
   shape: { w: 120, h: 120 },
@@ -611,6 +634,20 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           alt: coerceOptionalString(props.alt),
         },
       });
+    case "resource-card": {
+      const card = ResourceCardNodeSchema.safeParse({
+        ...base,
+        type: "resource-card",
+        props: {
+          ...coerceElementMeta(props),
+          assetId: coerceString(props.assetId),
+          kind: props.kind,
+          title: coerceString(props.title),
+          sourceHost: coerceOptionalString(props.sourceHost),
+        },
+      });
+      return card.success ? card.data : null;
+    }
     case "group":
       return GroupNodeSchema.parse({
         ...base,
@@ -779,6 +816,8 @@ export function getWorkspaceNodeText(node: WorkspaceNode) {
       return (node.props.alt ?? "").trim();
     case "group":
       return (node.props.label ?? "").trim();
+    case "resource-card":
+      return node.props.title.trim();
     default:
       return "";
   }

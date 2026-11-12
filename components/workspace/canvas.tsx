@@ -1,7 +1,6 @@
 "use client";
 
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
-import { useViewerStore } from "@/hooks/use-viewer-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Hand,
@@ -44,7 +43,6 @@ import { TextToolbar } from "./TextToolbar";
 import {
   WORKSPACE_UPLOAD_ACCEPT,
   getAssetKindLabel,
-  getViewerTypeForAssetKind,
   inferUploadAssetKind,
 } from "@/lib/utils/media-assets";
 import { ImageNode } from "./items/ImageNode";
@@ -61,6 +59,8 @@ import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { WorkspaceContextMenu, type WorkspaceContextMenuState } from "./WorkspaceContextMenu";
 import { isElementLocked } from "@/lib/workspace/element-lock";
 import { resolveGroupSelection } from "@/lib/workspace/group-engine";
+import { resourceCardProps, type ResourceAsset } from "@/lib/workspace/resource-card";
+import { ResourceCard } from "./items/ResourceCard";
 import {
   LONG_PRESS_DURATION_MS,
   LongPressTracker,
@@ -700,6 +700,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     );
   }, []);
 
+  /** Adds a resource card centred on `center`; undefined for assets that get no card (images, snapshots). */
+  const addResourceCard = useCallback(
+    (asset: ResourceAsset, center: { x: number; y: number }) => {
+      const props = resourceCardProps(asset);
+      if (!props) return undefined;
+      return addItem("resource-card", props, { x: center.x - props.w / 2, y: center.y - props.h / 2 });
+    },
+    [addItem],
+  );
+
   const importFileToWorkspace = useCallback(
     async (file: File, position?: { x: number; y: number }) => {
       const mimeType = file.type || "application/octet-stream";
@@ -721,28 +731,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       toast.loading(`Uploading ${assetLabel}...`, { id: "upload" });
       const uploaded = await uploadWorkspaceAsset(file);
       const assetId = uploaded.assetId;
-      const revisionId = uploaded.revisionId;
 
       registerWorkspaceAsset(assetId);
-
-
-      if (assetKind === "pdf") {
-        addItem(
-          "pdf-fragment",
-          {
-            assetId,
-            revisionId,
-            pageNumber: 1,
-            w: 400,
-            h: 500,
-          },
-          nextPosition,
-        );
-
-        useViewerStore.getState().open(assetId, "pdf", 1);
-        toast.success("PDF imported", { id: "upload" });
-        return;
-      }
 
       if (assetKind === "image") {
         addItem(
@@ -760,12 +750,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         return;
       }
 
-      useViewerStore
-        .getState()
-        .open(assetId, getViewerTypeForAssetKind(assetKind) ?? "video", 1);
+      // PDFs, videos and audio become a resource card; clicking it opens the viewer.
+      addResourceCard({ id: assetId, kind: assetKind, title: file.name }, nextPosition);
       toast.success(`${assetLabel} imported`, { id: "upload" });
     },
-    [addItem, viewport.x, viewport.y, viewport.zoom],
+    [addItem, addResourceCard, viewport.x, viewport.y, viewport.zoom],
   );
 
   const handleToolbarImageUpload = useCallback(() => {
@@ -829,15 +818,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             return;
           }
 
-          const viewerType = getViewerTypeForAssetKind(assetKind);
-          if (!viewerType) {
-            toast.error("That asset can't be opened from the canvas yet");
+          if (!addResourceCard({ id: asset.assetId, kind: assetKind, title: asset.title }, { x, y })) {
+            toast.error("That asset can't be added to the canvas yet");
             return;
           }
-
-          const viewerStore = useViewerStore.getState();
-          await viewerStore.open(asset.assetId, viewerType, 1);
-          toast.success(`${getAssetKindLabel(assetKind)} opened`);
+          toast.success(`${getAssetKindLabel(assetKind)} added to canvas`);
           return;
         } catch (error) {
           console.error("Internal drop failed", error);
@@ -857,7 +842,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         toast.error(error.message || "Failed to import", { id: "upload" });
       }
     },
-    [importFileToWorkspace, screenToWorld],
+    [addResourceCard, importFileToWorkspace, screenToWorld],
   );
 
   useEffect(() => {
@@ -887,24 +872,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         return;
       }
 
-      const viewerType = getViewerTypeForAssetKind(asset.kind);
-      if (!viewerType) {
-        toast.error("That asset can't be opened from the canvas yet");
+      if (!addResourceCard({ id: asset.id, kind: asset.kind, title: asset.title }, { x, y })) {
+        toast.error("That asset can't be added to the canvas yet");
         return;
       }
-
-      try {
-        await useViewerStore.getState().open(asset.id, viewerType, 1);
-        toast.success(`${getAssetKindLabel(asset.kind)} opened`);
-      } catch (error) {
-        console.error("Touch asset drop failed", error);
-        toast.error("Couldn't add that asset to the workspace");
-      }
+      toast.success(`${getAssetKindLabel(asset.kind)} added to canvas`);
     };
 
     window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
     return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
-  }, [addItem, registerWorkspaceAsset, screenToWorld]);
+  }, [addItem, addResourceCard, registerWorkspaceAsset, screenToWorld]);
 
   useEffect(() => {
     if (syncTimerRef.current) {
@@ -2313,6 +2290,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       />
                     )}
                     {item.type === "image" && <ImageNode item={item as any} />}
+                    {item.type === "resource-card" && <ResourceCard item={item} canOpen={activeTool === "select"} />}
                     {item.type === "shape" && (
                       <ShapeNode
                         item={item as any}
