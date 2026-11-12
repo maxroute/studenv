@@ -8,13 +8,21 @@ import {
   parseWorkspaceSceneJson,
   serializeWorkspaceScene,
 } from "@/types/workspace";
-import { connectorsForSelection, isConnectorAttachedToAny, remapConnector } from "@/lib/workspace/connector-lifecycle";
+import { connectorsForSelection, isConnectorAttachedToAny, remapConnector, withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
+import { WorkspaceHistory, sameItems } from "@/lib/workspace/workspace-history";
 
 const newItemId = () => `item-${Math.random().toString(36).slice(2, 11)}`;
 
 type StudioItemUpdate = Partial<
   Pick<StudioItem, "x" | "y" | "w" | "h" | "rotation" | "zIndex">
 >;
+
+/**
+ * `recordHistory: false` is for changes that are not user edits and must not
+ * become an undo step or clear redo: layout derived from content (auto-size,
+ * natural image size) and items removed because their server asset was deleted.
+ */
+type ItemChangeOptions = { recordHistory?: boolean };
 
 interface WorkspaceState {
   workspaceId: string | null;
@@ -42,11 +50,11 @@ interface WorkspaceState {
   }) => void;
   registerWorkspaceAsset: (assetId: string) => void;
   unregisterWorkspaceAsset: (assetId: string) => void;
-  updateItems: (items: StudioItem[]) => void;
+  updateItems: (items: StudioItem[], options?: ItemChangeOptions) => void;
   updateViewport: (viewport: WorkspaceViewport) => void;
   /** Adds an item on top of the stack; returns its id, or undefined when the props are rejected. */
   addItem: (type: StudioItemType, props: unknown, position?: { x: number; y: number }) => string | undefined;
-  updateItem: (id: string, updates: StudioItemUpdate) => void;
+  updateItem: (id: string, updates: StudioItemUpdate, options?: ItemChangeOptions) => void;
   updateItemProps: (id: string, propsUpdate: any) => void;
   batchUpdateItems: (updates: Array<{ id: string; changes: StudioItemUpdate; props?: any }>) => void;
   removeItem: (id: string) => void;
@@ -58,7 +66,16 @@ interface WorkspaceState {
   copyItems: (ids: string[]) => void;
   cutItems: (ids: string[]) => void;
   pasteItems: (offset?: { x: number; y: number }) => void;
-  
+
+  // Undo / redo of item changes (viewport is not part of history)
+  canUndo: boolean;
+  canRedo: boolean;
+  /** Returns true when a step was undone. */
+  undo: () => boolean;
+  /** Returns true when a step was redone. */
+  redo: () => boolean;
+  /** Ends the current undo step; called at each new pointer press / key action. */
+  breakHistoryCapture: () => void;
 
   syncWithServer: () => Promise<void>;
   saveNow: () => Promise<void>;
@@ -85,6 +102,33 @@ function clearLegacyWorkspaceCache() {
 export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
   clearLegacyWorkspaceCache();
 
+  const history = new WorkspaceHistory();
+
+  /** Publish the history flags only when they change, to avoid re-rendering every subscriber. */
+  const historyFlags = (): Partial<WorkspaceState> => {
+    const { canUndo, canRedo } = get();
+    return canUndo === history.canUndo && canRedo === history.canRedo
+      ? {}
+      : { canUndo: history.canUndo, canRedo: history.canRedo };
+  };
+
+  /**
+   * Every item mutation goes through here so it joins the undo history and a
+   * deleted element never leaves a connector attached to nothing.
+   */
+  const commitItems = (
+    nextItems: StudioItem[],
+    options?: ItemChangeOptions,
+    extra?: Partial<WorkspaceState>,
+  ) => {
+    const items = withoutOrphanConnectors(nextItems);
+    const previous = get().items;
+    if (options?.recordHistory !== false && !sameItems(previous, items)) {
+      history.record(previous);
+    }
+    set({ ...extra, items, isDirty: true, ...historyFlags() });
+  };
+
   return {
     workspaceId: null,
     title: "Untitled Workspace",
@@ -99,6 +143,8 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     isSaving: false,
     lastSavedAt: null,
     copiedItems: [],
+    canUndo: false,
+    canRedo: false,
 
     loadWorkspace: async (id: string) => {
       set({ isLoading: true, error: null, workspaceId: null, isSaving: false });
@@ -116,7 +162,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         
         const parsedScene = parseWorkspaceSceneJson(data.sceneJson);
 
+        history.reset();
         set({
+          canUndo: false,
+          canRedo: false,
           workspaceId: id,
           title: data.title,
           coverAssetId: typeof data.coverAssetId === "string" ? data.coverAssetId : null,
@@ -137,7 +186,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     hydrateWorkspace: (payload) => {
       const parsedScene = parseWorkspaceSceneJson(payload.sceneJson);
 
+      history.reset();
       set({
+        canUndo: false,
+        canRedo: false,
         workspaceId: payload.id,
         title: payload.title,
         coverAssetId:
@@ -154,8 +206,8 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       });
     },
 
-    updateItems: (items: StudioItem[]) => {
-      set({ items, isDirty: true });
+    updateItems: (items: StudioItem[], options?: ItemChangeOptions) => {
+      commitItems(items, options);
     },
 
     registerWorkspaceAsset: (assetId: string) => {
@@ -203,14 +255,14 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         return undefined;
       }
 
-      set({ items: [...items, newItem], isDirty: true });
+      commitItems([...items, newItem]);
       return newItem.id;
     },
 
-    updateItem: (id: string, updates: StudioItemUpdate) => {
+    updateItem: (id: string, updates: StudioItemUpdate, options?: ItemChangeOptions) => {
       const { items } = get();
-      set({
-        items: items.map((item: StudioItem) => {
+      commitItems(
+        items.map((item: StudioItem) => {
           if (item.id !== id) return item;
           let updated = { ...item, ...updates };
 
@@ -247,25 +299,24 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
           return updated;
         }),
-        isDirty: true,
-      });
+        options,
+      );
     },
 
     updateItemProps: (id, propsUpdate) => {
       const { items } = get();
-      set({
-        items: items.map((item: StudioItem) =>
+      commitItems(
+        items.map((item: StudioItem) =>
           item.id === id ? { ...item, props: { ...item.props, ...propsUpdate } } : item
         ),
-        isDirty: true,
-      });
+      );
     },
 
     batchUpdateItems: (updates) => {
       const { items } = get();
       const updateMap = new Map(updates.map(u => [u.id, u]));
-      set({
-        items: items.map((item: StudioItem) => {
+      commitItems(
+        items.map((item: StudioItem) => {
           const up = updateMap.get(item.id);
           if (!up) return item;
           let mergedChanges = { ...up.changes };
@@ -306,25 +357,22 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
           return { ...item, ...mergedChanges, props: mergedProps };
         }),
-        isDirty: true,
-      });
+      );
     },
 
     removeItem: (id: string) => {
       const { items } = get();
-      set({ 
-        items: items.filter((item: StudioItem) => item.id !== id && !isConnectorAttachedToAny(item, new Set([id]))),
-        isDirty: true 
-      });
+      commitItems(
+        items.filter((item: StudioItem) => item.id !== id && !isConnectorAttachedToAny(item, new Set([id]))),
+      );
     },
 
     removeItems: (ids) => {
       const { items } = get();
       const idSet = new Set(ids);
-      set({
-        items: items.filter((item: StudioItem) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
-        isDirty: true,
-      });
+      commitItems(
+        items.filter((item: StudioItem) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
+      );
     },
 
     duplicateItems: (ids) => {
@@ -354,7 +402,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         });
         return copy ? [copy] : [];
       });
-      set({ items: [...items, ...duplicatedNodes, ...duplicatedConnectors], isDirty: true });
+      commitItems([...items, ...duplicatedNodes, ...duplicatedConnectors]);
     },
 
     copyItems: (ids) => {
@@ -369,10 +417,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       const { items, copyItems } = get();
       copyItems(ids);
       const idSet = new Set(ids);
-      set({
-        items: items.filter((item) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
-        isDirty: true,
-      });
+      commitItems(items.filter((item) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)));
     },
 
     pasteItems: (offset) => {
@@ -404,7 +449,25 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
       });
 
       const pasted = [...pastedNodes, ...pastedConnectors];
-      set({ items: [...items, ...pasted], copiedItems: pasted, isDirty: true });
+      commitItems([...items, ...pasted], undefined, { copiedItems: pasted });
+    },
+
+    undo: () => {
+      const restored = history.undo(get().items);
+      set(restored ? { items: restored, isDirty: true, ...historyFlags() } : historyFlags());
+      return restored !== null;
+    },
+
+    redo: () => {
+      const restored = history.redo(get().items);
+      set(restored ? { items: restored, isDirty: true, ...historyFlags() } : historyFlags());
+      return restored !== null;
+    },
+
+    breakHistoryCapture: () => {
+      history.breakCapture(get().items);
+      const flags = historyFlags();
+      if (Object.keys(flags).length > 0) set(flags);
     },
 
     syncWithServer: async () => {

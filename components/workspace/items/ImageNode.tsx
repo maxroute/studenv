@@ -104,7 +104,7 @@ export function ImageNode({ item }: ImageNodeProps) {
     appliedNaturalSizeRef.current = sourceKey;
 
     if (Math.abs(naturalSize.w - currentItem.w) > 1 || Math.abs(naturalSize.h - currentItem.h) > 1) {
-      useWorkspaceStore.getState().updateItem(item.id, naturalSize);
+      useWorkspaceStore.getState().updateItem(item.id, naturalSize, { recordHistory: false });
     }
   }, [activeSource, item.id]);
 

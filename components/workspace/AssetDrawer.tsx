@@ -243,6 +243,8 @@ export function AssetDrawer() {
           const props = item.props as Record<string, unknown> | undefined;
           return props?.assetId !== asset.id;
         }),
+        // The asset no longer exists on the server, so undo must not restore items that reference it.
+        { recordHistory: false },
       );
       toast.success("Resource deleted", { id: `asset-delete-${asset.id}` });
     } catch (error) {

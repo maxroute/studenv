@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
-import { createWorkspaceItem, createWorkspaceScene, parseWorkspaceSceneJson, serializeWorkspaceScene } from "@/types/workspace";
+import { createWorkspaceItem, createWorkspaceScene, parseWorkspaceSceneJson, serializeWorkspaceScene, type StudioItem } from "@/types/workspace";
 
 function fixture() {
   const source = createWorkspaceItem("image", { src: "https://example.com/source.png" }, { x: 20, y: 30, zIndex: 1 })!;
@@ -155,4 +155,123 @@ test("a selected connector whose attached element is not selected is not copied 
   assert.equal(useWorkspaceStore.getState().copiedItems.filter((item) => item.type === "connector").length, 0);
   useWorkspaceStore.getState().copyItems([toOther.id, node.id, other.id]);
   assert.equal(useWorkspaceStore.getState().copiedItems.filter((item) => item.type === "connector").length, 1);
+});
+
+// ── Stage 6: history, orphan cleanup and reload integrity ─────────────────
+
+function hydrate(items: ReturnType<typeof createWorkspaceItem>[]) {
+  useWorkspaceStore.getState().hydrateWorkspace({
+    id: "ws-lifecycle",
+    title: "Lifecycle",
+    sceneJson: serializeWorkspaceScene({ items: items.filter((item): item is StudioItem => item !== null) }),
+  });
+}
+const itemIds = () => useWorkspaceStore.getState().items.map((item) => item.id).sort();
+
+test("a deletion that bypasses removeItems (eraser, asset removal) still drops attached connectors", () => {
+  const { node, other, halfFree, toOther } = v2Fixture();
+  const free = createWorkspaceItem("connector", { source: { position: [0, 0] }, target: { position: [9, 9] } }, { id: "free", x: 0, y: 0, zIndex: 9 })!;
+  hydrate([node, other, halfFree, toOther, free]);
+  const store = useWorkspaceStore.getState();
+  store.breakHistoryCapture();
+  store.updateItems(store.items.filter((item) => item.id !== node.id));
+  assert.deepEqual(itemIds(), [other.id, "free"].sort());
+});
+
+test("undoing a cascade delete restores the element and its connectors in one step", () => {
+  const { node, other, halfFree, toOther } = v2Fixture();
+  hydrate([node, other, halfFree, toOther]);
+  const before = itemIds();
+  useWorkspaceStore.getState().breakHistoryCapture();
+  useWorkspaceStore.getState().removeItems([node.id]);
+  assert.equal(useWorkspaceStore.getState().undo(), true);
+  assert.deepEqual(itemIds(), before);
+  assert.equal(useWorkspaceStore.getState().canUndo, false);
+});
+
+test("duplicate, paste and cut with connectors are each one undo step; the clipboard survives undoing a cut", () => {
+  const { node, other, toOther } = v2Fixture();
+  hydrate([node, other, toOther]);
+  const original = itemIds();
+  const s = () => useWorkspaceStore.getState();
+
+  s().breakHistoryCapture();
+  s().duplicateItems([node.id, other.id]);
+  assert.equal(s().items.length, 6);
+  s().breakHistoryCapture();
+  s().undo();
+  assert.deepEqual(itemIds(), original);
+
+  s().breakHistoryCapture();
+  s().cutItems([node.id, other.id]);
+  assert.equal(s().items.length, 0);
+  s().breakHistoryCapture();
+  s().undo();
+  assert.deepEqual(itemIds(), original);
+  assert.equal(s().copiedItems.filter((item) => item.type === "connector").length, 1);
+
+  s().breakHistoryCapture();
+  s().pasteItems();
+  assert.equal(s().items.length, 6);
+  s().breakHistoryCapture();
+  s().undo();
+  assert.deepEqual(itemIds(), original);
+  s().redo();
+  assert.equal(s().items.length, 6);
+});
+
+/** Save and reload as the app does it: client serialize → snapshot route → workspace GET → client parse. */
+function saveAndReload(items: ReturnType<typeof createWorkspaceItem>[]) {
+  const clientJson = serializeWorkspaceScene({ items: items.filter((item): item is StudioItem => item !== null) });
+  const storedJson = serializeWorkspaceScene(parseWorkspaceSceneJson(clientJson));
+  const loadedJson = serializeWorkspaceScene(parseWorkspaceSceneJson(storedJson));
+  return { clientJson, loadedJson, scene: parseWorkspaceSceneJson(loadedJson) };
+}
+
+test("reload keeps every connector mode, style, label and free end exactly, and is stable", () => {
+  const { node, other } = v2Fixture();
+  const connectors = (["straight", "elbow", "curve"] as const).map((mode, index) =>
+    createWorkspaceItem("connector", {
+      source: { id: node.id, position: [1, 0.5] },
+      target: index === 2 ? { position: [500, -40] } : { id: other.id },
+      mode,
+      color: "#123456",
+      strokeWidth: 5,
+      strokeStyle: "dash",
+      frontEndpointStyle: "circle",
+      rearEndpointStyle: "triangle",
+      label: { text: `label ${mode}`, offset: index / 2 },
+    }, { id: `c-${mode}`, x: 0, y: 0, zIndex: 10 + index }),
+  );
+  const { clientJson, loadedJson } = saveAndReload([node, other, ...connectors]);
+  assert.equal(loadedJson, clientJson);
+  assert.equal(saveAndReload(parseWorkspaceSceneJson(loadedJson).items).loadedJson, loadedJson);
+});
+
+test("reload migrates a v1 connector once and keeps it stable afterwards", () => {
+  const { node, other } = v2Fixture();
+  const raw = JSON.parse(serializeWorkspaceScene({ items: [node, other] }));
+  raw.items.push({
+    id: "legacy", type: "connector", x: 0, y: 0, w: 1, h: 1, rotation: 0, zIndex: 9,
+    props: { sourceId: node.id, sourceAnchor: "right", targetId: other.id, targetAnchor: "left" },
+  });
+  const first = serializeWorkspaceScene(parseWorkspaceSceneJson(JSON.stringify(raw)));
+  const legacy = parseWorkspaceSceneJson(first).items.find((item) => item.id === "legacy");
+  assert.ok(legacy && legacy.type === "connector");
+  assert.deepEqual(legacy.props.source, { id: node.id, position: [1, 0.5] });
+  assert.deepEqual(legacy.props.target, { id: other.id, position: [0, 0.5] });
+  assert.equal(legacy.props.mode, "straight");
+  assert.equal(serializeWorkspaceScene(parseWorkspaceSceneJson(first)), first);
+});
+
+test("loading a saved scene drops connectors attached to a missing element", () => {
+  const { node, other, halfFree, toOther } = v2Fixture();
+  // Saved before the cascade fix: `node` was erased but its connectors stayed.
+  const valid = JSON.parse(serializeWorkspaceScene({ items: [node, other, halfFree, toOther] }));
+  valid.items = valid.items.filter((item: { id: string }) => item.id !== node.id);
+  assert.deepEqual(parseWorkspaceSceneJson(JSON.stringify(valid)).items.map((item) => item.id), [other.id]);
+
+  // Same through the lenient path (a legacy item forces per-node parsing).
+  valid.items.push({ id: "v1", type: "connector", x: 0, y: 0, w: 1, h: 1, rotation: 0, zIndex: 9, props: { sourceId: other.id, targetId: "gone" } });
+  assert.deepEqual(parseWorkspaceSceneJson(JSON.stringify(valid)).items.map((item) => item.id), [other.id]);
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
 
 export const WORKSPACE_SCENE_FORMAT = "second-brain-workspace";
 export const WORKSPACE_SCENE_VERSION = 1;
@@ -642,12 +643,14 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
 export function parseWorkspaceScene(value: unknown): WorkspaceScene {
   const parsed = WorkspaceSceneSchema.safeParse(value);
   if (parsed.success) {
-    return parsed.data;
+    // Connectors attached to a missing element cannot render; older snapshots
+    // may contain them because some deletions did not cascade.
+    return { ...parsed.data, items: withoutOrphanConnectors(parsed.data.items) };
   }
 
   const record = asObject(value);
   const items = Array.isArray(record?.items)
-    ? record.items.map(parseWorkspaceNode).filter(Boolean)
+    ? withoutOrphanConnectors(record.items.map(parseWorkspaceNode).filter((node): node is WorkspaceNode => node !== null))
     : [];
   
   const workspaceAssetIds = Array.isArray(record?.workspaceAssetIds)

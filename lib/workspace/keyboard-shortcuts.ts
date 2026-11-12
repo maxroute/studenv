@@ -9,6 +9,17 @@ import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { groupItems, ungroupItems } from "./group-engine";
 
+/** Undo or redo one workspace step, keeping only the selected ids that still exist. */
+export function applyWorkspaceHistory(direction: "undo" | "redo") {
+  const store = useWorkspaceStore.getState();
+  const changed = direction === "undo" ? store.undo() : store.redo();
+  if (!changed) return;
+  const existing = new Set(useWorkspaceStore.getState().items.map((item) => item.id));
+  const { selectedIds, clearAndSelectIds } = useSelectionStore.getState();
+  const kept = selectedIds.filter((id) => existing.has(id));
+  if (kept.length !== selectedIds.length) clearAndSelectIds(kept);
+}
+
 interface KeyboardShortcutsOptions {
   onActivateShapeTool?: () => void;
   /** `C` without modifiers (connector tool / mode cycling). */
@@ -44,6 +55,14 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
 
       const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      // ── Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z, Ctrl+Y off Mac) ────────────────
+      const isUndoKey = e.key === "z" || e.key === "Z";
+      if (cmdOrCtrl && !e.altKey && (isUndoKey || (!isMac && !e.shiftKey && (e.key === "y" || e.key === "Y")))) {
+        e.preventDefault();
+        applyWorkspaceHistory(isUndoKey && !e.shiftKey ? "undo" : "redo");
+        return;
+      }
 
       // ── Select All (Ctrl+A) ────────────────────────────────────────────────
       if (cmdOrCtrl && (e.key === "a" || e.key === "A")) {

@@ -121,7 +121,7 @@ Priority: **R** = required for parity, **O** = optional / AFFiNE-flagged, **N/A*
 | E3 | Dragging an endpoint handle re-runs target detection: reattach to another element / anchor / outline point, or detach to a free point; one undo step | E8; live undo test | — | Missing | Same `findConnectionTarget`; single history entry per gesture | Unit + Browser | R |
 | E4 | Delete/Backspace deletes selected connectors; Escape deselects | standard edgeless selection | — | Missing | Selection integration | Browser | R |
 | E5 | Flip direction swaps start/end **styles** only (geometry unchanged) | `config.ts` flip | — | Missing | Toolbar action | Unit | R |
-| E6 | Undo/redo for create, reattach, style, mode, label | live undo | Studenv has **no workspace undo/redo** (only drawing toolbar) | Missing infrastructure | See decision D-1 | Unit + Browser | R |
+| E6 | Undo/redo for create, reattach, style, mode, label | live undo | Workspace undo/redo (stage 6) | Done | Store-level history (D-1); one step per pointer press / key action | Unit (`workspace-history.test.ts`); Browser pending | R |
 
 ### F. Appearance and styling
 
@@ -149,9 +149,9 @@ Priority: **R** = required for parity, **O** = optional / AFFiNE-flagged, **N/A*
 | # | AFFiNE behaviour | Studenv now | Gap | Implementation | Tests | P |
 |---|---|---|---|---|---|---|
 | H1 | Serialize/reload keeps source/target/mode/styles/label | v1 props only | New fields | v2 schema + v1 migration in `parseWorkspaceSceneJson` | Unit round trip; reload in browser | R |
-| H2 | Missing endpoint element → path not updated (connector kept but stale) | dropped from render | Studenv already safer | Keep: render nothing for missing bound ends; free ends still render | Unit | R |
-| H3 | Undo/redo across all connector operations | none | see D-1 | — | — | R |
-| H4 | Copy/paste/duplicate/cut | v1 implemented | extend to v2 | — | Unit | R |
+| H2 | Missing endpoint element → path not updated (connector kept but stale) | Connector removed with its element on every deletion path, and dropped on load if already orphaned (stage 6) | Studenv stricter | `withoutOrphanConnectors` on store commit and scene parse; free ends unaffected | Unit | R |
+| H3 | Undo/redo across all connector operations | Done (stage 6) | — | Every item mutation goes through the store history | Unit | R |
+| H4 | Copy/paste/duplicate/cut | v2 implemented; each is one undo step | — | `connector-lifecycle.ts` | Unit | R |
 
 ### I. Input and responsive
 
@@ -176,7 +176,7 @@ Priority: **R** = required for parity, **O** = optional / AFFiNE-flagged, **N/A*
 3. **Creation** — auto-complete arrows (hover, ghost, click-create, drag, drop panel), connector tool + `C` + mode cycling, quick connect, Escape/cancel. Remove v1 on-edge dots.
 4. **Selection & editing** — hit testing, marquee, endpoint handles with reattach/detach, delete, drag rules for free connectors.
 5. **Toolbar & labels** — style toolbar (colour, width, dash, start/end style, flip, mode, add text), multi-select editing, last-used defaults, label editor and drag.
-6. **History & lifecycle** — workspace undo/redo (per D-1), clipboard/duplicate on v2, reload integrity.
+6. **History & lifecycle** — workspace undo/redo (per D-1), clipboard/duplicate on v2, reload integrity. *Implemented:* undo/redo for all item changes (`Cmd/Ctrl+Z`, `Shift+Cmd/Ctrl+Z`, `Ctrl+Y` off Mac, drawing toolbar); automatic layout updates and asset-deletion removals are not undo steps; orphaned connectors are dropped on commit and on load; save → snapshot route → load is verified lossless and stable for all connector modes, styles, labels, free ends and v1 migration. Browser verification pending.
 7. **Parity verification** — side-by-side AFFiNE vs Studenv scenarios (§3) on desktop and mobile emulation; regression suites; build.
 
 Each stage is a separate commit on `feat/workspace-smart-connectors-v2` with a stage report.

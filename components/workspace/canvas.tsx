@@ -59,7 +59,7 @@ import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
-import { useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
 import {
   beginPointerSession,
   clearPointerSession,
@@ -73,7 +73,6 @@ import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/w
 
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
-type HistoryEntry = StudioItem[];
 
 function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void }) {
   const [scale, setScale] = useState(1);
@@ -194,13 +193,6 @@ function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, stro
   };
 }
 
-function cloneItemsSnapshot(items: StudioItem[]): HistoryEntry {
-  return items.map((item) => ({
-    ...item,
-    props: { ...item.props },
-  })) as HistoryEntry;
-}
-
 function clampScale(scale: number) {
   return Math.max(0.1, Math.min(5, scale));
 }
@@ -221,7 +213,7 @@ interface StudioCanvasProps {
 }
 
 export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
-  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset } =
+  const { workspaceId, items, viewport, workspaceAssetIds, isLoading, addItem, updateItem, updateItems, updateViewport, syncWithServer, registerWorkspaceAsset, canUndo, canRedo, breakHistoryCapture } =
     useWorkspaceStore();
 
   // Unified Workspace Tool State Machine (Active Tool is Single Source of Truth)
@@ -415,8 +407,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
   const [textFontSize, setTextFontSize] = useState(28);
-  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
-  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
   const imageUploadInputRef = useRef<HTMLInputElement>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -875,10 +865,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, [items, viewport, workspaceAssetIds, syncWithServer]);
 
+  // Undo steps are capture groups: everything changed between one pointer
+  // press or key action and the next one undoes together. Window capture phase
+  // runs before any canvas, item or toolbar handler sees the event. Typing in a
+  // text field does not split the step; the field keeps its native undo.
   useEffect(() => {
-    setUndoStack([]);
-    setRedoStack([]);
-  }, [_workspaceId]);
+    const breakOnPointer = () => breakHistoryCapture();
+    const breakOnKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      breakHistoryCapture();
+    };
+    window.addEventListener("pointerdown", breakOnPointer, true);
+    window.addEventListener("keydown", breakOnKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", breakOnPointer, true);
+      window.removeEventListener("keydown", breakOnKey, true);
+    };
+  }, [breakHistoryCapture]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -1110,11 +1116,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
 
   const commitDrawingItems = useCallback(
     (nextItems: StudioItem[]) => {
-      setUndoStack((prev) => [...prev, cloneItemsSnapshot(items)]);
-      setRedoStack([]);
       updateItems(nextItems);
     },
-    [items, updateItems],
+    [updateItems],
   );
 
   const eraserRadius = Math.max(drawStrokeWidth * 2, 14);
@@ -1166,25 +1170,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     [commitDrawingItems, eraserRadius, items],
   );
 
-  const handleUndo = useCallback(() => {
-    setUndoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const previous = prev[prev.length - 1];
-      setRedoStack((future) => [...future, cloneItemsSnapshot(items)]);
-      updateItems(cloneItemsSnapshot(previous));
-      return prev.slice(0, -1);
-    });
-  }, [items, updateItems]);
-
-  const handleRedo = useCallback(() => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const next = prev[prev.length - 1];
-      setUndoStack((past) => [...past, cloneItemsSnapshot(items)]);
-      updateItems(cloneItemsSnapshot(next));
-      return prev.slice(0, -1);
-    });
-  }, [items, updateItems]);
+  const handleUndo = useCallback(() => applyWorkspaceHistory("undo"), []);
+  const handleRedo = useCallback(() => applyWorkspaceHistory("redo"), []);
 
   const handleClearAll = useCallback(() => {
     const drawingItems = items.filter((item) => item.type === "drawing");
@@ -2097,8 +2084,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onUndo={handleUndo}
                 onRedo={handleRedo}
                 onClearAll={handleClearAll}
-                canUndo={undoStack.length > 0}
-                canRedo={redoStack.length > 0}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
             )}
 

@@ -14,6 +14,19 @@ export function isConnectorAttachedToAny(item: StudioItem, ids: ReadonlySet<stri
 }
 
 /**
+ * Drops connectors whose attached element no longer exists. Deletions that
+ * filter the item list directly (eraser, asset removal) would otherwise leave
+ * connectors that cannot render but are saved and reloaded forever. Returns
+ * the same array when nothing is dropped.
+ */
+export function withoutOrphanConnectors<T extends StudioItem>(items: T[]): T[] {
+  const ids = new Set(items.map((item) => item.id));
+  const isOrphan = (item: StudioItem) =>
+    item.type === "connector" && getConnectorBoundIds(item).some((id) => !ids.has(id));
+  return items.some(isOrphan) ? items.filter((item) => !isOrphan(item)) : items;
+}
+
+/**
  * True when every attached end is inside `ids` and at least one end is
  * attached — the connector can travel with those nodes (AFFiNE
  * `isConnectorAndBindingsAllSelected`).
