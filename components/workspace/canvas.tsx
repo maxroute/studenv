@@ -62,7 +62,7 @@ import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
-import { TouchHistoryGesture } from "@/lib/workspace/touch-history-gesture";
+import { TouchHistoryGesture, shouldCancelForMultiTouch } from "@/lib/workspace/touch-history-gesture";
 import {
   beginPointerSession,
   clearPointerSession,
@@ -344,6 +344,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     startTransformX: number;
     startTransformY: number;
     scale: number;
+    /** Input type, start time and travel decide whether a second finger cancels it. */
+    pointerType: string;
+    startTime: number;
+    travel: number;
   } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
@@ -906,19 +910,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
     const gesture = new TouchHistoryGesture();
-    const down = (event: PointerEvent) => gesture.down(event.pointerId, event.pointerType, event.clientX, event.clientY, event.timeStamp);
+    // Listen on window in the capture phase: React's canvas handlers run at
+    // the React root (above the wrapper) and stop propagation of the first
+    // finger, so a wrapper listener would never see it. Only touches that
+    // start on the canvas count.
+    const down = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !wrapper.contains(event.target)) return;
+      gesture.down(event.pointerId, event.pointerType, event.clientX, event.clientY, event.timeStamp);
+    };
     const move = (event: PointerEvent) => gesture.move(event.pointerId, event.clientX, event.clientY);
     const up = (event: PointerEvent) => {
       const action = gesture.up(event.pointerId, event.timeStamp);
       if (action) applyWorkspaceHistory(action);
     };
     const cancel = (event: PointerEvent) => gesture.cancel(event.pointerId);
-    wrapper.addEventListener("pointerdown", down, { capture: true, passive: true });
+    window.addEventListener("pointerdown", down, { capture: true, passive: true });
     window.addEventListener("pointermove", move, { capture: true, passive: true });
     window.addEventListener("pointerup", up, { capture: true, passive: true });
     window.addEventListener("pointercancel", cancel, { capture: true, passive: true });
     return () => {
-      wrapper.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerdown", down, true);
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       window.removeEventListener("pointercancel", cancel, true);
@@ -1334,6 +1345,36 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     [commitDrawingItems, drawColor, drawStrokeWidth, drawTool, eraseAtPath, items, screenToWorld],
   );
 
+  /**
+   * Ends the one-finger canvas gesture without committing it: the pen dot or
+   * eraser touch is dropped and a pending text box is not created. Sticky
+   * notes (created on press), shape creation and text dismissal keep running.
+   */
+  const cancelCanvasGestureForMultiTouch = useCallback(() => {
+    const gesture = canvasGestureRef.current;
+    if (!gesture) return;
+    const owner = { pointerId: gesture.pointerId };
+    if (gesture.mode === "draw") {
+      drawPointerSessionRef.current = endPointerSession(drawPointerSessionRef.current, owner);
+      currentPathRef.current = [];
+      eraserPathRef.current = [];
+      setCurrentPath([]);
+      setEraserPath([]);
+    } else if (gesture.mode === "text") {
+      textPointerSessionRef.current = endPointerSession(textPointerSessionRef.current, owner);
+    } else if (gesture.mode === "select") {
+      setSelectionBox(null);
+      setSelectionScreenBox(null);
+    } else if (gesture.mode === "pan") {
+      setIsPanDragging(false);
+    } else {
+      return;
+    }
+    canvasGestureRef.current = null;
+    const wrapper = wrapperRef.current;
+    if (wrapper?.hasPointerCapture(gesture.pointerId)) wrapper.releasePointerCapture(gesture.pointerId);
+  }, []);
+
   const handleTextPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
@@ -1462,6 +1503,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         touchAction: "none",
       }}
       onPointerDownCapture={(e) => {
+        // A second finger landing early makes this a multi-finger gesture
+        // (two-finger tap = undo, pan, pinch): discard the first finger's
+        // tool action instead of committing it on release (Procreate).
+        const activeGesture = canvasGestureRef.current;
+        if (!e.isPrimary && activeGesture && shouldCancelForMultiTouch(activeGesture, e.pointerType, e.timeStamp)) {
+          cancelCanvasGestureForMultiTouch();
+        }
         if (!e.isPrimary || e.button !== 0 || canvasGestureRef.current) return;
         const target = e.target instanceof Element ? e.target : null;
         const isControl = !!target?.closest(
@@ -1512,6 +1560,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           startTransformX: transformState?.positionX ?? 0,
           startTransformY: transformState?.positionY ?? 0,
           scale: transformState?.scale ?? viewport.zoom ?? 1,
+          pointerType: e.pointerType,
+          startTime: e.timeStamp,
+          travel: 0,
         };
 
         if (mode === "select") {
@@ -1587,6 +1638,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           }
           return;
         }
+        gesture.travel = Math.max(gesture.travel, Math.hypot(e.clientX - gesture.startClientX, e.clientY - gesture.startClientY));
         if (gesture.mode === "draw") {
           handleDrawPointerMove(e);
           return;

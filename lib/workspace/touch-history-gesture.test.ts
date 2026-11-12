@@ -42,3 +42,18 @@ test("a finger added late (pinch started slowly) cancels", () => {
   g.up(1, 320);
   assert.equal(g.up(2, 330), null);
 });
+
+test("a second finger landing early cancels the first finger's mark (no dot from a two-finger tap)", async () => {
+  const { shouldCancelForMultiTouch } = await import("./touch-history-gesture");
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "touch", startTime: 0, travel: 0 }, "touch", 40), true);
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "touch", startTime: 0, travel: 30 }, "touch", 200), true, "within the tap window");
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "touch", startTime: 0, travel: 4 }, "touch", 900), true, "late but the first finger has not moved");
+});
+
+test("a stroke already being drawn, or a pen or mouse gesture, is kept", async () => {
+  const { shouldCancelForMultiTouch } = await import("./touch-history-gesture");
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "touch", startTime: 0, travel: 120 }, "touch", 900), false);
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "pen", startTime: 0, travel: 0 }, "touch", 40), false, "palm touching while writing with a pen");
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "mouse", startTime: 0, travel: 0 }, "touch", 40), false);
+  assert.equal(shouldCancelForMultiTouch({ pointerType: "touch", startTime: 0, travel: 0 }, "pen", 40), false);
+});

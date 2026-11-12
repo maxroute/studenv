@@ -60,3 +60,25 @@ export class TouchHistoryGesture {
     this.fingers.delete(pointerId);
   }
 }
+
+/** The one-finger tool gesture in progress when another pointer lands. */
+export type PrimaryTouchGesture = {
+  pointerType: string;
+  /** Event timestamp of its pointerdown (ms). */
+  startTime: number;
+  /** Furthest distance it has travelled from its start (screen px). */
+  travel: number;
+};
+
+/**
+ * Procreate rule: a second finger landing early turns a one-finger action
+ * into a multi-finger gesture, so the first finger's mark (a stroke dot, an
+ * eraser touch, a text box) must be discarded instead of committed. Early
+ * means within the tap window, or before the first finger has really moved;
+ * a stroke already being drawn is kept. Pens and mice are never cancelled by
+ * a touch (palm), and only touches cancel.
+ */
+export function shouldCancelForMultiTouch(primary: PrimaryTouchGesture, secondPointerType: string, now: number): boolean {
+  if (primary.pointerType !== "touch" || secondPointerType !== "touch") return false;
+  return now - primary.startTime <= TOUCH_TAP_MAX_DURATION_MS || primary.travel <= TOUCH_TAP_MAX_MOVE_PX;
+}
