@@ -59,6 +59,8 @@ import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { WorkspaceContextMenu, type WorkspaceContextMenuState } from "./WorkspaceContextMenu";
+import { isElementLocked } from "@/lib/workspace/element-lock";
+import { resolveGroupSelection } from "@/lib/workspace/group-engine";
 import {
   LONG_PRESS_DURATION_MS,
   LongPressTracker,
@@ -1216,6 +1218,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       if (path.length === 0) return;
       const eraserSamples = resampleStrokePoints(path, 3);
       const nextItems = items.filter((item) => {
+        // The eraser passes over locked elements.
+        if (isElementLocked(item)) return true;
         if (item.type === "shape") {
           const rotation = ((item.rotation ?? 0) * Math.PI) / 180;
           const cos = Math.cos(rotation), sin = Math.sin(rotation);
@@ -1871,7 +1875,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             ? connectorIntersectsRect(item, items, { x, y, w, h })
             : isIntersecting({ x: item.x, y: item.y, w: item.w, h: item.h }, { x, y, w, h }))
           .map((item) => item.id);
-        useSelectionStore.getState().clearAndSelectIds(collidingIds);
+        // Touching one member of a group selects the whole group.
+        useSelectionStore.getState().clearAndSelectIds(resolveGroupSelection(items, collidingIds));
       }}
       onPointerUpCapture={(e) => {
         const gesture = canvasGestureRef.current;
@@ -2206,7 +2211,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedShapeId(null);
                         setSelectedStickyId(item.id);
                         setEditingStickyId(
-                          !event.shiftKey && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && !isElementLocked(item) && selectedStickyId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
@@ -2222,7 +2227,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         setSelectedDrawingId(null);
                         setSelectedFreeTextId(item.id);
                         setEditingFreeTextId(
-                          !event.shiftKey && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
+                          !event.shiftKey && !isElementLocked(item) && selectedFreeTextId === item.id && isAlreadySelected && isSingleSelection
                             ? item.id
                             : null
                         );
@@ -2278,7 +2283,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                           handleFreeTextSelect(item.id);
                         }}
                         onStartEditing={() => {
-                          if (isPanning) return;
+                          if (isPanning || isElementLocked(item)) return;
                           startFreeTextEditing(item.id);
                         }}
                         onFinishEditing={(saved) => {

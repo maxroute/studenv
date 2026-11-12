@@ -11,6 +11,7 @@
 
 import type { StudioItem } from "@/types/workspace";
 import { getItemSelectionBounds } from "./connector-selection";
+import { groupSelection } from "./element-lock";
 
 export const LONG_PRESS_DURATION_MS = 1000;
 export const LONG_PRESS_MOVE_TOLERANCE_PX = 8;
@@ -78,10 +79,6 @@ export function isContextMenuKey(event: { key: string; shiftKey: boolean; ctrlKe
   return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
 }
 
-function groupIdOf(item: StudioItem): string | undefined {
-  return (item.props as { groupId?: string }).groupId;
-}
-
 /**
  * The selection the menu acts on. Opening it on an element that is already
  * selected keeps the whole selection (like a desktop file manager); opening it
@@ -89,19 +86,7 @@ function groupIdOf(item: StudioItem): string | undefined {
  */
 export function selectionForContextMenu(targetId: string, selectedIds: readonly string[], items: readonly StudioItem[]): string[] {
   if (selectedIds.includes(targetId)) return [...selectedIds];
-  const target = items.find((item) => item.id === targetId);
-  if (!target) return [];
-  const groupId = groupIdOf(target);
-  if (!groupId) return [targetId];
-  return [targetId, ...items.filter((item) => item.id !== targetId && groupIdOf(item) === groupId).map((item) => item.id)];
-}
-
-/**
- * Only shapes persist `locked` and `groupId` today; other schemas strip them,
- * so lock and group are offered only when every selected element keeps them.
- */
-export function supportsLockAndGroup(item: StudioItem): boolean {
-  return item.type === "shape";
+  return groupSelection(targetId, items);
 }
 
 /**

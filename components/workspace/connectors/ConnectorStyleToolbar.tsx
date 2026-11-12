@@ -15,6 +15,7 @@ import {
   type ConnectorStyle,
 } from "@/lib/workspace/connector-style";
 import { CONNECTOR_MODE_CYCLE } from "@/lib/workspace/connector-autocomplete";
+import { isElementLocked } from "@/lib/workspace/element-lock";
 
 type Panel = "color" | "start" | "end" | "mode" | null;
 
@@ -107,6 +108,8 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
     setPanel(null);
     setEditingLabel({ connectorId: connector.id, offset: connector.props.label?.offset ?? 0.5 });
   };
+  // Locked connectors keep their label and cannot be deleted (unlock first).
+  const allLocked = connectors.every(isElementLocked);
   // A visible delete (AFFiNE keeps it under "more"): the only way to delete a
   // connector on touch and pen devices without a keyboard.
   const deleteSelected = () => {
@@ -237,7 +240,7 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
         )}
       </div>
 
-      {connectors.length === 1 && (
+      {connectors.length === 1 && !allLocked && (
         <>
           {divider}
           <button type="button" onClick={addText} title={connectors[0].props.label ? "Edit text" : "Add text"} aria-label={connectors[0].props.label ? "Edit text" : "Add text"} className={`${buttonClass} w-8`}>
@@ -247,7 +250,7 @@ export function ConnectorStyleToolbar({ enabled }: { enabled: boolean }) {
       )}
 
       {divider}
-      <button type="button" onClick={deleteSelected} title="Delete" aria-label="Delete connector" className={`${buttonClass} w-8 hover:bg-red-500/20 hover:text-red-300`}>
+      <button type="button" onClick={deleteSelected} disabled={allLocked} title={allLocked ? "Locked" : "Delete"} aria-label="Delete connector" className={`${buttonClass} w-8 hover:bg-red-500/20 hover:text-red-300 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-white/70`}>
         <Trash2 size={16} />
       </button>
     </div>

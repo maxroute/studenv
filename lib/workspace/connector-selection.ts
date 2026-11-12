@@ -11,6 +11,7 @@ import { computeConnectorRoute } from "./connector-routing";
 import { routeIncludesPoint, sampleRoute } from "./connector-path";
 import { getConnectorBoundIds } from "./connector-lifecycle";
 import type { Vec } from "./connector-anchors";
+import { isElementLocked } from "./element-lock";
 
 type Rect = { x: number; y: number; w: number; h: number };
 type ItemLookup = readonly StudioItem[] | Map<string, StudioItem>;
@@ -85,7 +86,8 @@ export type GroupMoveSnapshot = {
 
 /**
  * Snapshot of what a drag of `selectedIds` moves: unlocked items by position,
- * and connectors whose attached elements are all selected by their free ends.
+ * and unlocked connectors whose attached elements are all selected by their
+ * free ends.
  * Connectors are never moved through their placeholder x/y.
  */
 export function snapshotGroupMove(items: readonly StudioItem[], selectedIds: Iterable<string>): GroupMoveSnapshot {
@@ -95,7 +97,7 @@ export function snapshotGroupMove(items: readonly StudioItem[], selectedIds: Ite
   for (const item of items) {
     if (!selected.has(item.id)) continue;
     if (item.type === "connector") {
-      if (connectorMovesWithSelection(item, selected)) connectors.set(item.id, item.props);
+      if (!isElementLocked(item) && connectorMovesWithSelection(item, selected)) connectors.set(item.id, item.props);
     } else if (!("locked" in item.props && item.props.locked)) {
       positions.set(item.id, { x: item.x, y: item.y });
     }

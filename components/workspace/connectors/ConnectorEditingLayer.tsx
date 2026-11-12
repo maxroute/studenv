@@ -11,6 +11,7 @@ import { getConnectorRoute, groupMoveUpdates, snapshotGroupMove, type GroupMoveS
 import { getPointAtOffset } from "@/lib/workspace/connector-path";
 import { getLabelOffsetAtPoint } from "@/lib/workspace/connector-label";
 import type { Vec } from "@/lib/workspace/connector-anchors";
+import { groupSelection, isElementLocked } from "@/lib/workspace/element-lock";
 import { ConnectionOverlay, CONNECTION_EMPHASIS_COLOR } from "../ConnectionOverlay";
 
 type EndName = "source" | "target";
@@ -100,7 +101,7 @@ export function ConnectorEditingLayer({
       // Pressing the label of the selected connector slides it along the path (AFFiNE).
       const connector = live.current.items.find((item): item is ConnectorNode => item.id === connectorId && item.type === "connector");
       const label = connector?.props.label;
-      if (part === "label" && connector && label && selection.selectedIds.length === 1 && selection.selectedIds[0] === connectorId) {
+      if (part === "label" && connector && label && !isElementLocked(connector) && selection.selectedIds.length === 1 && selection.selectedIds[0] === connectorId) {
         const route = getConnectorRoute(connector, live.current.items);
         if (!route) return;
         const world = live.current.screenToWorld(event.clientX, event.clientY);
@@ -116,7 +117,10 @@ export function ConnectorEditingLayer({
         return;
       }
 
-      if (!selection.selectedIds.includes(connectorId)) selection.select(connectorId);
+      // A grouped connector selects its whole group, like any other element.
+      if (!selection.selectedIds.includes(connectorId)) {
+        selection.clearAndSelectIds(groupSelection(connectorId, live.current.items));
+      }
 
       const snapshot = snapshotGroupMove(live.current.items, useSelectionStore.getState().selectedIds);
       bodyDragRef.current = {
@@ -137,6 +141,7 @@ export function ConnectorEditingLayer({
       bodyDragRef.current = null;
       labelDragRef.current = null;
       useSelectionStore.getState().select(connectorId);
+      if (isElementLocked(connector)) return;
       // An existing label is edited where it is; otherwise the new label
       // starts at the clicked point projected onto the path.
       const offset = connector.props.label?.offset ?? getLabelOffsetAtPoint(route, live.current.screenToWorld(event.clientX, event.clientY));
@@ -301,7 +306,9 @@ export function ConnectorEditingLayer({
     setEndDrag(next);
   };
 
-  const ends: Array<{ end: EndName; point: Vec }> = route
+  // A locked connector keeps its ends: no handles to re-route it.
+  const locked = selectedConnector ? isElementLocked(selectedConnector) : false;
+  const ends: Array<{ end: EndName; point: Vec }> = route && !locked
     ? [
         { end: "source", point: route.points[0] },
         { end: "target", point: route.points[route.points.length - 1] },

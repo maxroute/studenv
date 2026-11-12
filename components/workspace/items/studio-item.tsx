@@ -5,7 +5,7 @@ import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { Rnd } from "react-rnd";
-import { X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { ROTATE_CORNERS, ROTATE_ZONE_COARSE_PX, ROTATE_ZONE_PX, getRotateCursor, getRotateZoneBox } from "@/lib/workspace/rotate-handles";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
@@ -113,10 +113,12 @@ export function StudioItemComponent({
   };
 
   const isLocked = (item.props as { locked?: boolean }).locked === true;
+  const isSelected = useSelectionStore((state) => state.selectedIds.includes(item.id));
 
   const disableInteraction = isDrawingMode;
-  const draggingDisabled = disableDragging ?? (disableInteraction || isRotating || isLocked);
-  const resizingEnabled = enableResizing ?? (!disableInteraction && !isLocked);
+  // A lock always wins over the per-type flags the canvas passes in.
+  const draggingDisabled = isLocked || (disableDragging ?? (disableInteraction || isRotating));
+  const resizingEnabled = !isLocked && (enableResizing ?? !disableInteraction);
 
   useEffect(() => {
     if (!isRotating) return;
@@ -415,6 +417,27 @@ export function StudioItemComponent({
                 />
               );
             })}
+          </div>
+        )}
+
+        {isLocked && isSelected && (
+          // Constant on-screen size at any zoom, just above the top-left corner.
+          <div
+            aria-label="Locked"
+            title="Locked"
+            data-element-lock-badge={item.id}
+            className="pointer-events-none absolute z-30 flex items-center justify-center rounded-full bg-white text-red-500 shadow-sm ring-1 ring-red-300"
+            style={{
+              left: 0,
+              bottom: "100%",
+              width: 18,
+              height: 18,
+              marginBottom: 4 / Math.max(canvasScale, 0.01),
+              transform: `scale(${1 / Math.max(canvasScale, 0.01)})`,
+              transformOrigin: "bottom left",
+            }}
+          >
+            <Lock className="h-2.5 w-2.5" />
           </div>
         )}
 

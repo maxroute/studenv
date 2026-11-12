@@ -40,9 +40,20 @@ const PdfCropSchema = z.object({
   height: z.number().finite().positive(),
 });
 
+/**
+ * Lock and group membership, shared by every element type. Optional so
+ * snapshots saved before they existed parse unchanged (shapes keep their
+ * historical `locked` default of false).
+ */
+const ElementMetaProps = {
+  locked: z.boolean().optional(),
+  groupId: z.string().min(1).optional(),
+};
+
 export const TextNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("text"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().optional(),
     fontSize: z.number().finite().positive().optional(),
@@ -52,6 +63,7 @@ export const TextNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const FreeTextNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("free-text"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().default("#1e1e1e"),
     fontSize: z.number().finite().positive().default(28),
@@ -61,6 +73,7 @@ export const FreeTextNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const StickyNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("sticky"),
   props: z.object({
+    ...ElementMetaProps,
     text: z.string().default(""),
     color: z.string().optional(),
   }),
@@ -69,6 +82,7 @@ export const StickyNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const PdfPageNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("pdf-page"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     pageNumber: z.number().int().positive(),
@@ -78,6 +92,7 @@ export const PdfPageNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const PdfFragmentNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("pdf-fragment"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     pageNumber: z.number().int().positive(),
@@ -89,6 +104,7 @@ export const PdfFragmentNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("video-anchor"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1),
     revisionId: z.string().min(1).optional(),
     startTimeMs: z.number().int().nonnegative(),
@@ -102,6 +118,7 @@ export const VideoAnchorNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const ImageNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("image"),
   props: z.object({
+    ...ElementMetaProps,
     assetId: z.string().min(1).optional(),
     src: z.string().min(1).optional(),
     alt: z.string().optional(),
@@ -111,6 +128,7 @@ export const ImageNodeSchema = WorkspaceNodeBaseSchema.extend({
 export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("group"),
   props: z.object({
+    ...ElementMetaProps,
     label: z.string().optional(),
   }),
 });
@@ -124,6 +142,7 @@ const DrawingPointSchema = z.object({
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("drawing"),
   props: z.object({
+    ...ElementMetaProps,
     d: z.string(),
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
@@ -211,6 +230,7 @@ export const ConnectorLabelSchema = z.object({
 export const ConnectorNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("connector"),
   props: z.object({
+    ...ElementMetaProps,
     source: ConnectorEndSchema,
     target: ConnectorEndSchema,
     mode: ConnectorModeSchema.default(DEFAULT_CONNECTOR_MODE),
@@ -428,6 +448,15 @@ function coerceCrop(value: unknown): PdfCrop {
   });
 }
 
+/** Keeps a valid lock flag and group id from legacy or partially valid props. */
+function coerceElementMeta(props: Record<string, unknown>) {
+  const groupId = coerceOptionalString(props.groupId);
+  return {
+    ...(typeof props.locked === "boolean" ? { locked: props.locked } : {}),
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
 function buildNodeBase(raw: Record<string, unknown>) {
   return {
     id: coerceOptionalString(raw.id) ?? `item-${Math.random().toString(36).slice(2, 11)}`,
@@ -460,6 +489,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "text",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceOptionalString(props.color),
           fontSize: typeof props.fontSize === "number" ? props.fontSize : undefined,
@@ -470,6 +500,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "free-text",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceString(props.color, "#1e1e1e"),
           fontSize: typeof props.fontSize === "number" ? props.fontSize : 28,
@@ -480,6 +511,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "sticky",
         props: {
+          ...coerceElementMeta(props),
           text: coerceString(props.text),
           color: coerceOptionalString(props.color),
         },
@@ -489,6 +521,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "pdf-page",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -498,6 +531,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "pdf-page",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -509,6 +543,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "pdf-fragment",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -520,6 +555,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "pdf-fragment",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               pageNumber: coercePositiveInteger(props.pageNumber, 1),
@@ -533,6 +569,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "video-anchor",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceString(props.assetId),
           revisionId: coerceOptionalString(props.revisionId),
           startTimeMs: coerceNonNegativeInteger(props.startTimeMs, 0),
@@ -549,6 +586,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
             ...base,
             type: "video-anchor",
             props: {
+              ...coerceElementMeta(props),
               assetId: coerceString(props.assetId),
               revisionId: coerceOptionalString(props.revisionId),
               startTimeMs: coerceNonNegativeInteger(props.startTimeMs, 0),
@@ -567,6 +605,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "image",
         props: {
+          ...coerceElementMeta(props),
           assetId: coerceOptionalString(props.assetId),
           src: coerceOptionalString(props.src),
           alt: coerceOptionalString(props.alt),
@@ -577,6 +616,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "group",
         props: {
+          ...coerceElementMeta(props),
           label: coerceOptionalString(props.label),
         },
       });
@@ -585,6 +625,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
         ...base,
         type: "drawing",
         props: {
+          ...coerceElementMeta(props),
           d: coerceString(props.d),
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
@@ -598,7 +639,7 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
       const connector = ConnectorNodeSchema.safeParse({
         ...base,
         type: "connector",
-        props: normalizeConnectorProps(props),
+        props: { ...normalizeConnectorProps(props), ...coerceElementMeta(props) },
       });
       return connector.success ? connector.data : null;
     }

@@ -10,8 +10,10 @@ import {
 } from "@/types/workspace";
 import { connectorsForSelection, isConnectorAttachedToAny, remapConnector, withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
 import { WorkspaceHistory, sameItems } from "@/lib/workspace/workspace-history";
+import { unlockedIds, withFreshGroupIds } from "@/lib/workspace/element-lock";
 
 const newItemId = () => `item-${Math.random().toString(36).slice(2, 11)}`;
+const newGroupId = () => `group-${Math.random().toString(36).slice(2, 11)}`;
 
 type StudioItemUpdate = Partial<
   Pick<StudioItem, "x" | "y" | "w" | "h" | "rotation" | "zIndex">
@@ -369,7 +371,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     removeItems: (ids) => {
       const { items } = get();
-      const idSet = new Set(ids);
+      // Locked elements are never deleted.
+      const idSet = new Set(unlockedIds(items, ids));
+      if (idSet.size === 0) return;
       commitItems(
         items.filter((item: StudioItem) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)),
       );
@@ -402,7 +406,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         });
         return copy ? [copy] : [];
       });
-      commitItems([...items, ...duplicatedNodes, ...duplicatedConnectors]);
+      commitItems([...items, ...withFreshGroupIds([...duplicatedNodes, ...duplicatedConnectors], newGroupId)]);
     },
 
     copyItems: (ids) => {
@@ -415,8 +419,11 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     cutItems: (ids) => {
       const { items, copyItems } = get();
-      copyItems(ids);
-      const idSet = new Set(ids);
+      // Locked elements are neither cut nor removed.
+      const cuttable = unlockedIds(items, ids);
+      if (cuttable.length === 0) return;
+      copyItems(cuttable);
+      const idSet = new Set(cuttable);
       commitItems(items.filter((item) => !idSet.has(item.id) && !isConnectorAttachedToAny(item, idSet)));
     },
 
@@ -448,7 +455,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
         return pasted ? [pasted] : [];
       });
 
-      const pasted = [...pastedNodes, ...pastedConnectors];
+      const pasted = withFreshGroupIds([...pastedNodes, ...pastedConnectors], newGroupId);
       commitItems([...items, ...pasted], undefined, { copiedItems: pasted });
     },
 

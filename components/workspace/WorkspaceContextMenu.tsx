@@ -23,7 +23,8 @@ import { bringForward, bringToFront, sendBackward, sendToBack } from "@/lib/work
 import { groupItems, ungroupItems } from "@/lib/workspace/group-engine";
 import { applyWorkspaceHistory } from "@/lib/workspace/keyboard-shortcuts";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
-import { clampMenuPosition, pasteOffsetForPoint, supportsLockAndGroup } from "@/lib/workspace/context-menu";
+import { clampMenuPosition, pasteOffsetForPoint } from "@/lib/workspace/context-menu";
+import { elementGroupId, isElementLocked, setElementsLocked } from "@/lib/workspace/element-lock";
 
 export type WorkspaceContextMenuState = {
   /** Screen point the menu opens from. */
@@ -108,15 +109,15 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
   let entries: MenuEntry[];
   if (isElementMenu) {
     const ids = selectedItems.map((item) => item.id);
-    const lockable = selectedItems.every(supportsLockAndGroup);
-    const allLocked = lockable && selectedItems.every((item) => (item.props as { locked?: boolean }).locked === true);
-    const anyGrouped = lockable && selectedItems.some((item) => !!(item.props as { groupId?: string }).groupId);
+    const allLocked = selectedItems.every(isElementLocked);
+    const anyGrouped = selectedItems.some((item) => !!elementGroupId(item));
     const onlyConnector = selectedItems.length === 1 && selectedItems[0].type === "connector" ? selectedItems[0] : null;
     const reorder = (fn: typeof bringForward) => store().updateItems(fn(store().items, ids));
 
     entries = [
       { kind: "item", label: "Copy", icon: <Copy size={ICON} />, shortcut: `${mod}C`, run: () => store().copyItems(ids) },
-      { kind: "item", label: "Cut", icon: <Scissors size={ICON} />, shortcut: `${mod}X`, run: () => { store().cutItems(ids); selection().deselectAll(); } },
+      // Locked elements are left in place: Cut and Delete skip them.
+      { kind: "item", label: "Cut", icon: <Scissors size={ICON} />, shortcut: `${mod}X`, disabled: allLocked, run: () => { store().cutItems(ids); selection().deselectAll(); } },
       { kind: "item", label: "Paste", icon: <Clipboard size={ICON} />, shortcut: `${mod}V`, disabled: copiedItems.length === 0, run: () => store().pasteItems() },
       { kind: "item", label: "Duplicate", icon: <CopyPlus size={ICON} />, shortcut: `${mod}D`, run: () => store().duplicateItems(ids) },
       ...(onlyConnector
@@ -126,6 +127,7 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
               kind: "item",
               label: onlyConnector.props.label?.text ? "Edit text" : "Add text",
               icon: <Type size={ICON} />,
+              disabled: allLocked,
               run: () => useConnectorUiStore.getState().setEditingLabel({ connectorId: onlyConnector.id, offset: onlyConnector.props.label?.offset ?? 0.5 }),
             } as const,
           ]
@@ -135,7 +137,7 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
       { kind: "item", label: "Bring forward", icon: <Layers size={ICON} />, run: () => reorder(bringForward) },
       { kind: "item", label: "Send backward", icon: <Layers size={ICON} />, run: () => reorder(sendBackward) },
       { kind: "item", label: "Send to back", icon: <Layers size={ICON} />, run: () => reorder(sendToBack) },
-      ...(lockable && (ids.length > 1 || anyGrouped)
+      ...(ids.length > 1 || anyGrouped
         ? [
             { kind: "separator" } as const,
             ...(ids.length > 1
@@ -147,7 +149,7 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
                   run: () => {
                     const { items: next, newGroupId } = groupItems(store().items, ids);
                     store().updateItems(next);
-                    selection().clearAndSelectIds(next.filter((item) => (item.props as { groupId?: string }).groupId === newGroupId).map((item) => item.id));
+                    selection().clearAndSelectIds(next.filter((item) => elementGroupId(item) === newGroupId).map((item) => item.id));
                   },
                 } as const]
               : []),
@@ -156,17 +158,13 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
               : []),
           ]
         : []),
-      ...(lockable
-        ? [
-            { kind: "separator" } as const,
-            {
-              kind: "item",
-              label: allLocked ? "Unlock" : "Lock",
-              icon: allLocked ? <Unlock size={ICON} /> : <Lock size={ICON} />,
-              run: () => ids.forEach((id) => store().updateItemProps(id, { locked: !allLocked })),
-            } as const,
-          ]
-        : []),
+      { kind: "separator" },
+      {
+        kind: "item",
+        label: allLocked ? "Unlock" : "Lock",
+        icon: allLocked ? <Unlock size={ICON} /> : <Lock size={ICON} />,
+        run: () => store().updateItems(setElementsLocked(store().items, ids, !allLocked)),
+      },
       { kind: "separator" },
       {
         kind: "item",
@@ -174,6 +172,7 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
         icon: <Trash2 size={ICON} />,
         shortcut: "⌫",
         danger: true,
+        disabled: allLocked,
         run: () => { store().removeItems(ids); selection().deselectAll(); },
       },
     ];

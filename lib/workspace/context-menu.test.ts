@@ -7,7 +7,6 @@ import {
   pasteOffsetForPoint,
   selectionCenter,
   selectionForContextMenu,
-  supportsLockAndGroup,
 } from "./context-menu";
 import { createWorkspaceItem, type StudioItem } from "@/types/workspace";
 
@@ -69,12 +68,6 @@ test("opening on a selected element keeps the selection; another element selects
   assert.deepEqual(selectionForContextMenu("a", ["c"], items), ["a", "b"]);
   assert.deepEqual(selectionForContextMenu("free", [], items), ["free"]);
   assert.deepEqual(selectionForContextMenu("missing", ["c"], items), []);
-});
-
-test("lock and group are offered only for elements whose schema keeps them", () => {
-  assert.equal(supportsLockAndGroup(a), true);
-  assert.equal(supportsLockAndGroup(c), false);
-  assert.equal(supportsLockAndGroup(free), false);
 });
 
 test("the menu flips and clamps to stay on screen", () => {
