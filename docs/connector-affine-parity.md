@@ -176,7 +176,34 @@ Priority: **R** = required for parity, **O** = optional / AFFiNE-flagged, **N/A*
 3. **Creation** — auto-complete arrows (hover, ghost, click-create, drag, drop panel), connector tool + `C` + mode cycling, quick connect, Escape/cancel. Remove v1 on-edge dots.
 4. **Selection & editing** — hit testing, marquee, endpoint handles with reattach/detach, delete, drag rules for free connectors.
 5. **Toolbar & labels** — style toolbar (colour, width, dash, start/end style, flip, mode, add text), multi-select editing, last-used defaults, label editor and drag.
-6. **History & lifecycle** — workspace undo/redo (per D-1), clipboard/duplicate on v2, reload integrity. *Implemented:* undo/redo for all item changes (`Cmd/Ctrl+Z`, `Shift+Cmd/Ctrl+Z`, `Ctrl+Y` off Mac, drawing toolbar); automatic layout updates and asset-deletion removals are not undo steps; orphaned connectors are dropped on commit and on load; save → snapshot route → load is verified lossless and stable for all connector modes, styles, labels, free ends and v1 migration. Browser verification pending.
+6. **History & lifecycle** — workspace undo/redo (per D-1), clipboard/duplicate on v2, reload integrity. *Implemented:* undo/redo for all item changes (`Cmd/Ctrl+Z`, `Shift+Cmd/Ctrl+Z`, `Ctrl+Y` off Mac, drawing toolbar); automatic layout updates and asset-deletion removals are not undo steps; orphaned connectors are dropped on commit and on load; save → snapshot route → load is verified lossless and stable for all connector modes, styles, labels, free ends and v1 migration. Browser-verified in stage 7.
 7. **Parity verification** — side-by-side AFFiNE vs Studenv scenarios (§3) on desktop and mobile emulation; regression suites; build.
 
 Each stage is a separate commit on `feat/workspace-smart-connectors-v2` with a stage report.
+
+## 6. Stage 7 — parity verification results (2026-11-12)
+
+Checked against the AFFiNE behaviour recorded in §1–§3 on: desktop browser (mouse/keyboard), the browser at 375 px with touch emulation (`pointer: coarse`), and the iPhone 18 Pro simulator with real touch input. Test scene: the connector parity test workspace (all modes, all endpoint styles, dash, labels, rotated rectangle/triangle/diamond, stickies); restored to its exact original snapshot afterwards. Automated: 9 workspace suites pass; `tsc`, lint and production build clean.
+
+| Area | Items | Desktop | Phone size | iPhone touch |
+|---|---|---|---|---|
+| A. Discovery | A1 arrows 22 px outside, rotated, 46 px hit · A2 hover fill · A3 300 ms ghost + dashed preview, avoids connected shapes · A4/A5 candidate anchors on the rotated diamond's real outline, nearest filled | ✅ | ✅ (46 px) | ✅ tap/drag (no hover on touch, by design) |
+| B. Creation | B1 drag from arrow to a shape · B3 drop panel (shapes, text, sticky, same object) · B4 click/tap arrow creates next shape · B5 connector tool, returns to Select **with the connector selected** · B6 `C` cycles Curve → Elbowed → Straight, remembered · B7 quick connect · B8 Escape / click-away cancels | ✅ | ✅ | ✅ B1, B4 |
+| C. Attachment | C4 ends follow a moved shape · C5 deleting a shape removes its connectors, one undo restores all | ✅ | — | — |
+| D. Routing | D1 three modes · D4 elbow leaves/enters perpendicular with 20 px stubs (checked against the router output) | ✅ | — | — |
+| E. Editing | E1 click and marquee select · E2 12 px handles, constant 12 px at 10 %–500 % zoom · E3 reattach (nearest anchor) and detach to a free point · E4 Delete / Escape · E5 flip swaps caps only · E6 undo | ✅ | ✅ (44 px handles) | ✅ E1, E3 |
+| F. Styling | F1 toolbar · F2 none/arrow/triangle/circle/diamond · F3 dash `12 12` · F4 last-used style · F5 multi-select shows common value, applies to all, hides Add text | ✅ | ✅ toolbar and popups fit 375 px | — |
+| G. Labels | G1 editor, Escape commits · G3 line masked around label · G4 drag slides along the path | ✅ | — | — |
+| H. Lifecycle | H1 reload keeps mode, colour, width, dash, flipped caps, label and offset, reattached end | ✅ | — | ✅ two-finger undo |
+| I. Input | I2 screen-space handles · I3 ≥44 px touch targets for arrows and handles | ✅ | ✅ | ✅ |
+
+**Fixed during stage 7**
+- B5: the connector tool switched back to Select but did not select the new connector (`ConnectorCreationLayer`).
+- I3: connector endpoint handles had a 24 px hit area on touch screens; now 44 px on coarse pointers (24 px with a mouse, as AFFiNE).
+
+**Known differences (not fixed)**
+- B4: AFFiNE enters text editing on the new shape; Studenv shapes have no text.
+- B3: choosing an object from the drop panel and the drop itself are two undo steps (not compared with AFFiNE).
+- Touch: a tapped auto-complete arrow keeps its hover colour (iOS sticky hover); the connector toolbar buttons are 32 px tall (below 44 px).
+- Deferred by decision D-5: groups as connector targets (C8), rough style (F6); optional G5 label text styling.
+

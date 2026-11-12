@@ -154,11 +154,13 @@ export function ConnectorCreationLayer({
       threshold: 0,
       resolveSource: () => ({ end: start.end, id: start.targetId }),
       onCommit: (draft) => {
-        createConnector(draft.source, draft.target.end);
+        const id = createConnector(draft.source, draft.target.end);
+        // AFFiNE: the tool returns to Select with the new connector selected.
         onToolDone();
+        if (id) select(id);
       },
     });
-  }, [createConnector, gesture, items, onToolDone, screenToWorld, zoom]);
+  }, [createConnector, gesture, items, onToolDone, screenToWorld, select, zoom]);
 
   // ── quick connect (shape toolbar button) ───────────────────────────────
   useEffect(() => {

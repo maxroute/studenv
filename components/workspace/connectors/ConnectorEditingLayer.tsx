@@ -327,7 +327,8 @@ export function ConnectorEditingLayer({
         </svg>
       )}
       {ends.map(({ end, point }) => (
-        // 24 px invisible hit area (touch-friendly) around AFFiNE's 12 px handle.
+        // Invisible hit area around AFFiNE's 12 px handle: 24 px for a mouse,
+        // 44 px on touch screens (finger-sized target).
         <div
           key={end}
           role="button"
@@ -335,7 +336,7 @@ export function ConnectorEditingLayer({
           data-connector-endpoint={end}
           data-no-canvas-gesture="true"
           onPointerDown={(event) => startEndDrag(event, end)}
-          className="pointer-events-auto absolute flex touch-none items-center justify-center"
+          className="pointer-events-auto absolute flex touch-none items-center justify-center [@media(pointer:coarse)]:!h-[44px] [@media(pointer:coarse)]:!w-[44px]"
           style={{
             left: point.x,
             top: point.y,
