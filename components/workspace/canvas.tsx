@@ -16,6 +16,8 @@ import {
   Spline,
   Type,
   X,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
@@ -60,6 +62,7 @@ import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
+import { TouchHistoryGesture } from "@/lib/workspace/touch-history-gesture";
 import {
   beginPointerSession,
   clearPointerSession,
@@ -74,7 +77,11 @@ import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/w
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
 
-function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void }) {
+// Undo/redo buttons: finger-sized (44 px) on coarse pointers, compact otherwise.
+const HISTORY_BUTTON_CLASS =
+  "flex h-[30px] w-[32px] items-center justify-center text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent [@media(pointer:coarse)]:h-[44px] [@media(pointer:coarse)]:w-[44px]";
+
+function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint, canUndo, canRedo, onUndo, onRedo }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void; canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }) {
   const [scale, setScale] = useState(1);
   const zoomAnimationTime = 140;
   const handleFitToScreen = () => {
@@ -123,6 +130,12 @@ function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint }: {
         </div>
       )}
       <div className="flex items-center">
+      <button type="button" onClick={onUndo} disabled={!canUndo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Undo" aria-label="Undo">
+        <Undo2 size={15} />
+      </button>
+      <button type="button" onClick={onRedo} disabled={!canRedo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Redo" aria-label="Redo">
+        <Redo2 size={15} />
+      </button>
       <button
         onClick={() => handleStepZoom(-1)}
         className="p-1.5 hover:bg-slate-50 transition-colors border-r"
@@ -885,6 +898,32 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       window.removeEventListener("keydown", breakOnKey, true);
     };
   }, [breakHistoryCapture]);
+
+  // Two-finger tap = undo, three-finger tap = redo on the canvas. Listeners
+  // are passive and never prevent default, so pan, pinch and tools behave as
+  // before; the gesture only fires when all fingers lift without moving.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const gesture = new TouchHistoryGesture();
+    const down = (event: PointerEvent) => gesture.down(event.pointerId, event.pointerType, event.clientX, event.clientY, event.timeStamp);
+    const move = (event: PointerEvent) => gesture.move(event.pointerId, event.clientX, event.clientY);
+    const up = (event: PointerEvent) => {
+      const action = gesture.up(event.pointerId, event.timeStamp);
+      if (action) applyWorkspaceHistory(action);
+    };
+    const cancel = (event: PointerEvent) => gesture.cancel(event.pointerId);
+    wrapper.addEventListener("pointerdown", down, { capture: true, passive: true });
+    window.addEventListener("pointermove", move, { capture: true, passive: true });
+    window.addEventListener("pointerup", up, { capture: true, passive: true });
+    window.addEventListener("pointercancel", cancel, { capture: true, passive: true });
+    return () => {
+      wrapper.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
+    };
+  }, []);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -2067,7 +2106,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             </TransformComponent>
 
 
-            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} />
+            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} canUndo={canUndo} canRedo={canRedo} onUndo={handleUndo} onRedo={handleRedo} />
             <AssetDrawer />
 
             {isDrawing && (

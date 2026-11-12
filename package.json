@@ -24,7 +24,7 @@
     "test:workspace-image": "tsx --test lib/workspace/image-sizing.test.ts",
     "test:workspace-image-resize": "tsx --test lib/workspace/image-resize.test.ts",
     "test:workspace-connectors": "tsx --test lib/workspace/connector-geometry.test.ts lib/workspace/connector-lifecycle.test.ts lib/workspace/selection-frame.test.ts lib/workspace/connector-anchors.test.ts lib/workspace/connector-target.test.ts lib/workspace/connector-routing.test.ts lib/workspace/connector-path.test.ts lib/workspace/connector-label.test.ts lib/workspace/connector-autocomplete.test.ts lib/workspace/rotate-handles.test.ts lib/workspace/connector-selection.test.ts lib/workspace/connector-style.test.ts",
-    "test:workspace-history": "tsx --test lib/workspace/workspace-history.test.ts",
+    "test:workspace-history": "tsx --test lib/workspace/workspace-history.test.ts lib/workspace/touch-history-gesture.test.ts",
     "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image && npm run test:workspace-image-resize && npm run test:workspace-connectors && npm run test:workspace-history"
   },
   "prisma": {

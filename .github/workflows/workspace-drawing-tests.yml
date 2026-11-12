@@ -50,6 +50,8 @@ on:
       - "lib/workspace/rotate-handles.test.ts"
       - "lib/workspace/workspace-history.ts"
       - "lib/workspace/workspace-history.test.ts"
+      - "lib/workspace/touch-history-gesture.ts"
+      - "lib/workspace/touch-history-gesture.test.ts"
       - "hooks/use-workspace-store.ts"
       - "types/workspace.ts"
       - "package.json"
