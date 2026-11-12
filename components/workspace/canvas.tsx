@@ -58,7 +58,14 @@ import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
-import { ShapeContextMenu } from "./shapes/ShapeContextMenu";
+import { WorkspaceContextMenu, type WorkspaceContextMenuState } from "./WorkspaceContextMenu";
+import {
+  LONG_PRESS_DURATION_MS,
+  LongPressTracker,
+  isContextMenuKey,
+  selectionCenter,
+  selectionForContextMenu,
+} from "@/lib/workspace/context-menu";
 import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
@@ -76,6 +83,9 @@ import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/w
 
 
 type CanvasPoint = { x: number; y: number; pressure?: number };
+
+// Text fields and the open menu keep the browser's own context menu.
+const CONTEXT_MENU_NATIVE_TARGETS = 'input, textarea, [contenteditable="true"], [data-workspace-context-menu]';
 
 // Undo/redo buttons: finger-sized (44 px) on coarse pointers, compact otherwise.
 const HISTORY_BUTTON_CLASS =
@@ -349,25 +359,12 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     startTime: number;
     travel: number;
   } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
   const { selectedIds } = useSelectionStore();
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const itemEl = target.closest("[data-shape-id]");
-
-    if (itemEl) {
-      e.preventDefault();
-      const itemId = itemEl.getAttribute("data-shape-id")!;
-      const { selectedIds: selIds, select } = useSelectionStore.getState();
-      if (!selIds.includes(itemId)) {
-        select(itemId);
-      }
-      setContextMenu({ x: e.clientX, y: e.clientY });
-    }
-  }, []);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const activateShapeTool = useCallback((kind?: ShapeKind) => {
     const targetKind = kind ?? activeShapeKind;
@@ -636,6 +633,47 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       y: (clientY - rect.top - posY) / scale,
     };
   }, []);
+
+  /**
+   * Opens the workspace context menu for whatever is under `target`: a
+   * connector, any other element (selecting it, plus its group, unless it is
+   * already selected) or the empty canvas. Returns false for text fields and
+   * controls, which keep the browser's own menu.
+   */
+  const openContextMenu = useCallback((clientX: number, clientY: number, target: Element | null, fromKeyboard: boolean) => {
+    if (!target || target.closest(CONTEXT_MENU_NATIVE_TARGETS)) return false;
+    const connectorId =
+      target.closest("[data-connector-hit]")?.getAttribute("data-connector-hit") ??
+      target.closest("[data-connector-label-id]")?.getAttribute("data-connector-label-id");
+    const elementId = connectorId ?? target.closest("[data-workspace-item-id]")?.getAttribute("data-workspace-item-id");
+    const { selectedIds: current, clearAndSelectIds } = useSelectionStore.getState();
+    // The multi-selection frame lies over the selected elements: it stands for them.
+    const onSelectionFrame = !elementId && current.length > 0 && !!target.closest("[data-selection-frame]");
+    if (!elementId && !onSelectionFrame && target.closest('button, a, select, [role="button"], [data-no-canvas-gesture]')) return false;
+
+    if (elementId) {
+      const next = selectionForContextMenu(elementId, current, useWorkspaceStore.getState().items);
+      if (next.length === 0) return false;
+      if (next.length !== current.length || next.some((id, index) => id !== current[index])) clearAndSelectIds(next);
+    } else if (!onSelectionFrame) {
+      // The empty-canvas menu acts on the canvas, so clear the selection the
+      // same way a press on empty canvas does.
+      clearAndSelectIds([]);
+      setSelectedStickyId(null);
+      setSelectedFreeTextId(null);
+      setSelectedDrawingId(null);
+      setSelectedImageId(null);
+    }
+    setEditingStickyId(null);
+    setContextMenu({
+      x: clientX,
+      y: clientY,
+      world: screenToWorld(clientX, clientY),
+      target: elementId || onSelectionFrame ? "selection" : "canvas",
+      fromKeyboard,
+    });
+    return true;
+  }, [screenToWorld]);
 
   const zoomAtClientPoint = useCallback((clientX: number, clientY: number, nextScale: number, animationTime = 140) => {
     if (!wrapperRef.current) return;
@@ -1375,6 +1413,157 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     if (wrapper?.hasPointerCapture(gesture.pointerId)) wrapper.releasePointerCapture(gesture.pointerId);
   }, []);
 
+  // Context menu triggers other than the mouse (see lib/workspace/context-menu):
+  // a 1 s finger or pen long-press in the select and hand tools, the pen
+  // barrel button, and Shift+F10 / the Menu key. Window capture listeners see
+  // presses before canvas and item handlers can stop them; they never prevent
+  // default, so drags, pans and two-finger undo work as before.
+  const contextMenuLive = useRef({ activeTool, openContextMenu, cancelCanvasGesture: cancelCanvasGestureForMultiTouch });
+  contextMenuLive.current = { activeTool, openContextMenu, cancelCanvasGesture: cancelCanvasGestureForMultiTouch };
+  const lastPointerTypeRef = useRef("mouse");
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const press = new LongPressTracker();
+    let timer: number | null = null;
+    let pressTarget: Element | null = null;
+    let suppressClickUntil = 0;
+    let firedPointerId: number | null = null;
+    const clearTimer = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+    };
+    const onCanvas = (target: EventTarget | null): target is Element =>
+      target instanceof Element && wrapper.contains(target) && !target.closest("[data-workspace-context-menu]");
+
+    const down = (event: PointerEvent) => {
+      lastPointerTypeRef.current = event.pointerType;
+      const wasPending = press.pending;
+      if (!onCanvas(event.target)) {
+        press.cancel();
+        clearTimer();
+        return;
+      }
+      if (event.pointerType === "pen" && event.button === 2) {
+        press.cancel();
+        clearTimer();
+        contextMenuLive.current.openContextMenu(event.clientX, event.clientY, event.target, false);
+        return;
+      }
+      const tool = contextMenuLive.current.activeTool;
+      const started = (tool === "select" || tool === "pan") && event.button === 0 && !wasPending &&
+        !event.target.closest(CONTEXT_MENU_NATIVE_TARGETS) &&
+        press.down(event.pointerId, event.pointerType, event.clientX, event.clientY);
+      if (!started) {
+        press.cancel();
+        clearTimer();
+        return;
+      }
+      pressTarget = event.target;
+      clearTimer();
+      timer = window.setTimeout(() => {
+        timer = null;
+        const fired = press.fire();
+        if (!fired) return;
+        contextMenuLive.current.cancelCanvasGesture();
+        if (contextMenuLive.current.openContextMenu(fired.x, fired.y, pressTarget, false)) {
+          firedPointerId = fired.pointerId;
+          suppressClickUntil = Number.POSITIVE_INFINITY;
+        }
+      }, LONG_PRESS_DURATION_MS);
+    };
+    const move = (event: PointerEvent) => {
+      press.move(event.pointerId, event.clientX, event.clientY);
+      if (!press.pending) clearTimer();
+    };
+    const end = (event: PointerEvent) => {
+      press.end(event.pointerId);
+      if (!press.pending) clearTimer();
+      // The click that follows lifting a long-press must not act on the element.
+      if (event.pointerId === firedPointerId) {
+        firedPointerId = null;
+        suppressClickUntil = event.timeStamp + 400;
+      }
+    };
+    const click = (event: MouseEvent) => {
+      if (event.timeStamp > suppressClickUntil) return;
+      suppressClickUntil = 0;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: true });
+    window.addEventListener("pointermove", move, { capture: true, passive: true });
+    window.addEventListener("pointerup", end, { capture: true, passive: true });
+    window.addEventListener("pointercancel", end, { capture: true, passive: true });
+    window.addEventListener("click", click, true);
+    return () => {
+      clearTimer();
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
+      window.removeEventListener("click", click, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    let keyboardOpenedAt = -Infinity;
+    const keydown = (event: KeyboardEvent) => {
+      if (!isContextMenuKey(event)) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && (active.isContentEditable || active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.closest("[data-workspace-context-menu]"))) return;
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
+      event.preventDefault();
+      keyboardOpenedAt = event.timeStamp;
+      const rect = wrapper.getBoundingClientRect();
+      const { selectedIds: ids } = useSelectionStore.getState();
+      const center = selectionCenter(ids, useWorkspaceStore.getState().items);
+      const ts = transformRef.current?.instance?.transformState;
+      const scale = ts?.scale ?? 1;
+      const x = center ? rect.left + (ts?.positionX ?? 0) + center.x * scale : rect.left + rect.width / 2;
+      const y = center ? rect.top + (ts?.positionY ?? 0) + center.y * scale : rect.top + rect.height / 2;
+      setContextMenu({
+        x,
+        y,
+        world: center ?? screenToWorld(x, y),
+        target: center ? "selection" : "canvas",
+        fromKeyboard: true,
+      });
+    };
+    // Some platforms still send `contextmenu` for the Menu key; the menu is already open.
+    const nativeMenu = (event: MouseEvent) => {
+      if (event.timeStamp - keyboardOpenedAt < 1000) event.preventDefault();
+    };
+    window.addEventListener("keydown", keydown);
+    window.addEventListener("contextmenu", nativeMenu, true);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      window.removeEventListener("contextmenu", nativeMenu, true);
+    };
+  }, [screenToWorld]);
+
+  // A tool switch closes the menu (it belongs to the selection it opened on).
+  useEffect(() => {
+    setContextMenu(null);
+  }, [activeTool]);
+
+  /**
+   * Mouse / touchpad right-click. Touch and pen long-presses are timed above,
+   * so the browser's own long-press menu is suppressed on the canvas.
+   */
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target || target.closest(CONTEXT_MENU_NATIVE_TARGETS)) return;
+    const pointerType = lastPointerTypeRef.current;
+    if (pointerType === "touch" || pointerType === "pen") {
+      e.preventDefault();
+      return;
+    }
+    if (openContextMenu(e.clientX, e.clientY, target, false)) e.preventDefault();
+  }, [openContextMenu]);
+
   const handleTextPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
@@ -1485,6 +1674,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     <div
       ref={wrapperRef}
       className="w-full h-full relative bg-[#f8fafc] overflow-visible"
+      onContextMenu={handleContextMenu}
       data-workspace-canvas="true"
       data-workspace-tool={activeTool}
       style={{
@@ -1501,6 +1691,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 ? "text"
                 : undefined,
         touchAction: "none",
+        // No iOS long-press callout: a 1 s press opens the workspace menu.
+        WebkitTouchCallout: "none",
       }}
       onPointerDownCapture={(e) => {
         // A second finger landing early makes this a multi-finger gesture
@@ -1845,7 +2037,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
-                onContextMenu={handleContextMenu}
                 onDoubleClick={(e) => {
                   if (e.target === e.currentTarget && !isDrawing) {
                     const { x, y } = screenToWorld(e.clientX, e.clientY);
@@ -2183,13 +2374,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             <ShapeStyleToolbar />
             <ConnectorStyleToolbar enabled={activeTool === "select"} />
 
-            {contextMenu && (
-              <ShapeContextMenu
-                x={contextMenu.x}
-                y={contextMenu.y}
-                onClose={() => setContextMenu(null)}
-              />
-            )}
+            {contextMenu && <WorkspaceContextMenu menu={contextMenu} onClose={closeContextMenu} />}
 
             {selectedIds.length <= 1 && (isTextToolActive || !!selectedFreeTextId || !!editingFreeTextId) && (
               <TextToolbar

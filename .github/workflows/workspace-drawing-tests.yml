@@ -52,6 +52,8 @@ on:
       - "lib/workspace/workspace-history.test.ts"
       - "lib/workspace/touch-history-gesture.ts"
       - "lib/workspace/touch-history-gesture.test.ts"
+      - "lib/workspace/context-menu.ts"
+      - "lib/workspace/context-menu.test.ts"
       - "hooks/use-workspace-store.ts"
       - "types/workspace.ts"
       - "package.json"
