@@ -56,9 +56,11 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-      // ── Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z, Ctrl+Y off Mac) ────────────────
+      // ── Undo (Cmd/Ctrl+Z) / Redo (Cmd/Ctrl+Shift+Z, Cmd/Ctrl+Y) ───────────
+      // Cmd+Y is handled on Mac too, so it redoes instead of opening the
+      // browser's History.
       const isUndoKey = e.key === "z" || e.key === "Z";
-      if (cmdOrCtrl && !e.altKey && (isUndoKey || (!isMac && !e.shiftKey && (e.key === "y" || e.key === "Y")))) {
+      if (cmdOrCtrl && !e.altKey && (isUndoKey || (!e.shiftKey && (e.key === "y" || e.key === "Y")))) {
         e.preventDefault();
         applyWorkspaceHistory(isUndoKey && !e.shiftKey ? "undo" : "redo");
         return;
