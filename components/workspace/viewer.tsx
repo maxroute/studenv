@@ -787,8 +787,12 @@ export function FloatingViewer({
         />
       )}
       {/* Header */}
-      <div className="viewer-drag-handle flex items-center justify-between px-3 py-2 bg-slate-50 border-b cursor-move group">
-        <div className="flex items-center gap-2 overflow-hidden mr-4">
+      {/* The window controls always stay visible. On phones the tool buttons
+          move to their own full-width second row; from `sm` up the header is
+          one row and the tools wrap instead of pushing the controls past the
+          viewer's clipped right edge. */}
+      <div className="viewer-drag-handle flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-3 py-2 bg-slate-50 border-b cursor-move group">
+        <div className="order-1 flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
             <div className="w-1 h-1 rounded-full bg-slate-400" />
             <div className="w-1 h-1 rounded-full bg-slate-400" />
@@ -797,7 +801,7 @@ export function FloatingViewer({
           <span className="text-xs font-semibold text-slate-700 truncate">{title}</span>
         </div>
         
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="order-3 flex w-full min-w-0 flex-wrap items-center gap-1 sm:order-2 sm:w-auto sm:justify-end">
           {type === "video" && youTubeSource ? (
             <button
               onClick={() =>
@@ -969,7 +973,9 @@ export function FloatingViewer({
               document.body,
             )}
           </div>
-          <div className="w-px h-4 bg-slate-300 mx-1" />
+        </div>
+        <div className="order-2 flex shrink-0 items-center gap-1 sm:order-3">
+          <div className="hidden sm:block w-px h-4 bg-slate-300 mx-1" />
           <button onClick={() => {
             setViewerMinimized(id, true);
             if (maximized) setMaximized(false);
