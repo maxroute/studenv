@@ -9,8 +9,11 @@ import type { CollectionRecord, ItemRecord, ItemStatus } from "@/types";
 
 type DetailPanelProps = {
   item: ItemRecord | null;
+  /** True once `item.notes` comes from the full item, not a list row (which has no notes). */
+  notesLoaded: boolean;
   collections: CollectionRecord[];
-  onUpdate: (payload: Partial<ItemRecord>) => void;
+  /** Resolves to false when the save failed. */
+  onUpdate: (payload: Partial<ItemRecord>) => Promise<boolean>;
   onToggleCollection: (collection: CollectionRecord) => void;
   onDelete: () => void;
   onOpenSource: () => void;
@@ -39,6 +42,7 @@ function dedupeTags(tags: ItemRecord["tags"]) {
 
 export function DetailPanel({
   item,
+  notesLoaded,
   collections,
   onUpdate,
   onToggleCollection,
@@ -48,7 +52,11 @@ export function DetailPanel({
   openSourceLabel = "Open Source",
 }: DetailPanelProps) {
   const router = useRouter();
-  const [notes, setNotes] = useState(item?.notes ?? "");
+  // Draft notes, tagged with the item they belong to so a draft is never saved
+  // onto another item while the selection changes.
+  const [notesDraft, setNotesDraft] = useState<{ itemId: string; text: string } | null>(null);
+  // The notes value last loaded from or sent to the server for the draft's item.
+  const savedNotesRef = useRef<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState(item?.url ?? "");
   const [saved, setSaved] = useState(false);
   const [sourceSaved, setSourceSaved] = useState(false);
@@ -60,9 +68,23 @@ export function DetailPanel({
   );
   const playlistReport = getYouTubePlaylistProgressReport(item?.url, savedProgress?.playlist);
 
+  const itemId = item?.id;
+  const loadedNotes = item?.notes ?? "";
+
+  // Seed the draft once per item, and only from the full item. Later refreshes
+  // of `item.notes` must not replace what the user is typing.
   useEffect(() => {
-    setNotes(item?.notes ?? "");
-  }, [item?.id]);
+    if (!itemId || !notesLoaded) {
+      setNotesDraft(null);
+      savedNotesRef.current = null;
+      return;
+    }
+    setNotesDraft((draft) => {
+      if (draft?.itemId === itemId) return draft;
+      savedNotesRef.current = loadedNotes;
+      return { itemId, text: loadedNotes };
+    });
+  }, [itemId, notesLoaded, loadedNotes]);
 
   useEffect(() => {
     setSourceUrl(item?.url ?? "");
@@ -74,20 +96,30 @@ export function DetailPanel({
   }, [onUpdate]);
 
   useEffect(() => {
-    if (!item?.id) {
+    if (!itemId || !notesDraft || notesDraft.itemId !== itemId) {
+      return;
+    }
+    const text = notesDraft.text;
+    if (text === savedNotesRef.current) {
       return;
     }
 
     const timeout = window.setTimeout(() => {
-      if (notes !== (item.notes ?? "")) {
-        onUpdateRef.current({ notes });
+      const previous = savedNotesRef.current;
+      savedNotesRef.current = text;
+      void onUpdateRef.current({ notes: text }).then((ok) => {
+        if (!ok) {
+          // Let the next edit retry instead of believing this text is stored.
+          if (savedNotesRef.current === text) savedNotesRef.current = previous;
+          return;
+        }
         setSaved(true);
         window.setTimeout(() => setSaved(false), 1800);
-      }
+      });
     }, 700);
 
     return () => window.clearTimeout(timeout);
-  }, [notes, item?.id, item?.notes]);
+  }, [notesDraft, itemId]);
 
   if (!item) {
     return (
@@ -350,10 +382,15 @@ export function DetailPanel({
             <span className={`notes-saved ${saved ? "show" : ""}`}>Saved</span>
           </div>
           <textarea
+            aria-busy={!notesDraft}
             className="notes-area"
-            placeholder="Add your thoughts, highlights, takeaways..."
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            placeholder={notesDraft ? "Add your thoughts, highlights, takeaways..." : "Loading notes..."}
+            readOnly={!notesDraft}
+            value={notesDraft?.text ?? ""}
+            onChange={(event) => {
+              if (!itemId) return;
+              setNotesDraft({ itemId, text: event.target.value });
+            }}
           />
         </div>
 
