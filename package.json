@@ -29,7 +29,8 @@
     "test:workspace-context-menu": "tsx --test lib/workspace/context-menu.test.ts",
     "test:workspace-lock": "tsx --test lib/workspace/element-lock.test.ts",
     "test:workspace-resource-card": "tsx --test lib/workspace/resource-card.test.ts",
-    "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image && npm run test:workspace-image-resize && npm run test:workspace-connectors && npm run test:workspace-history && npm run test:workspace-context-menu && npm run test:workspace-lock && npm run test:workspace-resource-card"
+    "test:workspace-forward-compat": "tsx --test lib/workspace/scene-forward-compat.test.ts",
+    "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image && npm run test:workspace-image-resize && npm run test:workspace-connectors && npm run test:workspace-history && npm run test:workspace-context-menu && npm run test:workspace-lock && npm run test:workspace-resource-card && npm run test:workspace-forward-compat"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

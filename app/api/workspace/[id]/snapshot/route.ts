@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import * as workspaceService from "@/lib/services/workspace.service";
+import { CLIENT_OUTDATED_CODE, isClientBuildAccepted } from "@/lib/workspace/scene-compat";
 import { parseWorkspaceSceneJson, serializeWorkspaceScene } from "@/types/workspace";
 
 export async function POST(
@@ -9,7 +10,14 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
-    const { sceneJson, cameraJson } = await req.json();
+    const { sceneJson, cameraJson, clientBuild } = await req.json();
+    if (!isClientBuildAccepted(clientBuild)) {
+      // An outdated tab could drop content a newer build wrote; it must reload first.
+      return NextResponse.json(
+        { error: "Refresh to keep editing.", code: CLIENT_OUTDATED_CODE },
+        { status: 409 },
+      );
+    }
     const normalizedSceneJson = serializeWorkspaceScene(
       parseWorkspaceSceneJson(sceneJson),
     );
