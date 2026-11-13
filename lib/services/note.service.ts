@@ -8,6 +8,7 @@ import { revisionsToPrune, shouldCheckpoint } from "@/lib/notes/revision-policy"
 import { sortKeyBetween } from "@/lib/notes/sort-key";
 import { auditLog } from "@/lib/repositories/base.repository";
 import * as noteRepository from "@/lib/repositories/note.repository";
+import { replaceNoteLinks } from "@/lib/services/link-index.service";
 import type { Db } from "@/lib/repositories/note.repository";
 
 type RequestContext = { ip?: string | null; userAgent?: string | null };
@@ -48,6 +49,8 @@ export function onNoteWrite(hook: NoteWriteHook) {
   writeHooks.push(hook);
 }
 async function runWriteHooks(ownerId: string, noteId: string, prepared: PreparedNoteDoc, db: Db) {
+  // The link index is rebuilt for this note in the same transaction (§3.3).
+  await replaceNoteLinks(ownerId, noteId, prepared.refs, db);
   for (const hook of writeHooks) await hook({ ownerId, noteId, prepared, db });
 }
 

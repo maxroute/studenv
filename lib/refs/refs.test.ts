@@ -183,12 +183,14 @@ test("references link only to pages that exist", () => {
     assert.ok(ref);
     return refToUrl(ref);
   };
-  assert.deepEqual(linkableRefTypes(), ["item", "workspace"]);
+  assert.deepEqual(linkableRefTypes(), ["item", "note", "workspace"]);
   assert.equal(url("item:cmwf8ojuj0003t20i21g2h3x6"), "/shelf/cmwf8ojuj0003t20i21g2h3x6");
   assert.equal(url("workspace:ws1"), "/workspaces/ws1");
   assert.equal(url("workspace:ws1#item-ab12"), "/workspaces/ws1?focus=item-ab12");
   assert.equal(url("workspace:ws1#a%26b"), "/workspaces/ws1?focus=a%26b", "the node id is encoded for the query");
-  assert.equal(url("note:n1#b_8f2kq0x1zt"), null, "no notes page yet");
+  assert.equal(url("note:n1#b_8f2kq0x1zt"), "/notes/n1#b_8f2kq0x1zt", "block anchors become the fragment");
+  assert.equal(url("note:n1"), "/notes/n1");
+  assert.equal(url("note:n1#not-a-block"), "/notes/n1", "unknown anchor forms open the whole note");
   assert.equal(url("asset:a#page4"), null, "no asset viewer route with page or time yet");
   assert.equal(url("item:.."), null, "dot segments never become paths");
   assert.equal(url("item:a%2Fb"), "/shelf/a%2Fb", "escapes stay escaped in the path");

@@ -67,7 +67,10 @@ export async function updateWorkspaceCoverAsset(
  * concurrent writers, avoiding duplicate versions without scanning/locking
  * snapshot rows independently.
  */
-export async function saveSnapshot(input: SaveSnapshotInput) {
+/** Runs inside the snapshot transaction after the snapshot row is written (link index, Stage 6). */
+export type SnapshotSavedHook = (tx: Prisma.TransactionClient) => Promise<void>;
+
+export async function saveSnapshot(input: SaveSnapshotInput, afterSave?: SnapshotSavedHook) {
   return prisma.$transaction(async (tx) => {
     const allocation = await tx.$queryRaw<Array<{ version: number }>>(Prisma.sql`
       UPDATE "Workspace"
@@ -103,6 +106,8 @@ export async function saveSnapshot(input: SaveSnapshotInput) {
         createdBy: input.createdBy,
       },
     });
+
+    if (afterSave) await afterSave(tx);
 
     return snapshot;
   }, {

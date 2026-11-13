@@ -1,6 +1,7 @@
 import * as workspaceRepository from "@/lib/repositories/workspace.repository";
 import { CreateWorkspaceInput, SaveSnapshotInput } from "@/lib/models/workspace.model";
 import { auditLog } from "@/lib/repositories/base.repository";
+import { applySceneLinks, planSceneLinks } from "@/lib/services/link-index.service";
 
 export async function createWorkspace(
   input: CreateWorkspaceInput,
@@ -85,7 +86,11 @@ export async function saveSnapshot(
   input: SaveSnapshotInput,
   context?: { ip?: string | null; userAgent?: string | null }
 ) {
-  const snapshot = await workspaceRepository.saveSnapshot(input);
+  // Links are extracted before the transaction and written inside it (§3.3).
+  const linkPlan = planSceneLinks(input.workspaceId, input.sceneJson);
+  const snapshot = await workspaceRepository.saveSnapshot(input, (tx) =>
+    applySceneLinks(input.createdBy, input.workspaceId, linkPlan, tx),
+  );
 
   await auditLog({
     userId: input.createdBy,
