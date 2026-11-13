@@ -76,6 +76,7 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   tasks               Task[]
+  notes               Note[]
 }
 
 model Session {
@@ -130,6 +131,7 @@ model Item {
   itemTags        ItemTag[]
   collectionItems CollectionItem[]
   mediaAsset      MediaAsset?
+  note            Note?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -594,4 +596,67 @@ model Task {
   @@index([userId, status])
   @@index([userId, dueDate])
   @@index([userId, order])
+}
+
+// ---------------------------------------------------------------------------
+// Notes (docs/notes-v1-foundations-design.md §1, §4)
+// ---------------------------------------------------------------------------
+
+enum NoteRevisionReason {
+  checkpoint
+  manual
+  before_restore
+  before_overwrite
+  migration
+}
+
+model Note {
+  id             String    @id @default(cuid())
+  ownerId        String
+  /// Shelf entry (Item.type = note). Only top-level notes have one.
+  itemId         String?   @unique
+  /// Parent page; null at the top level.
+  parentId       String?
+  /// Fractional index among siblings.
+  sortKey        String    @db.VarChar(64)
+  title          String    @db.VarChar(500)
+  /// Versioned envelope (lib/notes/note-format.ts).
+  docJson        String    @db.Text
+  docFormat      Int
+  /// Optimistic concurrency: saves name the version they were based on.
+  version        Int       @default(1)
+  /// Derived from docJson for search and excerpts.
+  plainText      String    @db.Text
+  searchVector   Unsupported("tsvector")? @map("search_vector")
+  lastRevisionAt DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  item      Item?          @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  parent    Note?          @relation("NoteTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Note[]         @relation("NoteTree")
+  revisions NoteRevision[]
+
+  @@index([ownerId, parentId, sortKey])
+  @@index([ownerId, updatedAt(sort: Desc)])
+}
+
+model NoteRevision {
+  id        String             @id @default(cuid())
+  noteId    String
+  /// The Note.version this snapshot represents.
+  version   Int
+  title     String             @db.VarChar(500)
+  docJson   String             @db.Text
+  docFormat Int
+  reason    NoteRevisionReason
+  createdBy String
+  createdAt DateTime           @default(now())
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, version, reason])
+  @@index([noteId, createdAt(sort: Desc)])
 }
