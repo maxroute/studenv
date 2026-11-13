@@ -18,7 +18,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.mjs",
-    "test:security": "tsx --test lib/security/request.test.ts",
+    "test:security": "tsx --test lib/security/request.test.ts lib/services/ai-generate.service.test.ts",
     "test:workspace-pointer": "tsx --test lib/workspace/pointer-session.test.ts",
     "test:workspace-drawing": "tsx --test lib/workspace/drawing-geometry.test.ts",
     "test:workspace-image": "tsx --test lib/workspace/image-sizing.test.ts",
