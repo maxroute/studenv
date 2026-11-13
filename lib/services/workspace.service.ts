@@ -32,6 +32,11 @@ export async function getWorkspace(userId: string, id: string) {
   return workspace;
 }
 
+/** For pickers: ids and titles without loading scenes. */
+export async function listWorkspaceTitles(userId: string) {
+  return workspaceRepository.listWorkspaceTitles(userId);
+}
+
 export async function listWorkspaces(userId: string) {
   return workspaceRepository.findAllWorkspaces(userId);
 }

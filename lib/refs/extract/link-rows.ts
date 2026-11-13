@@ -67,6 +67,9 @@ export function extractSceneRefs(items: readonly WorkspaceNode[]): SourceRef[] {
       case "resource-card":
         push(assetRef(node.props.assetId), "card", node.id);
         break;
+      case "note-card":
+        push(parseRef(`note:${encodeRefPart(node.props.noteId, "id")}${node.props.blockId ? `#${node.props.blockId}` : ""}`), "card", node.id);
+        break;
       case "pdf-page":
       case "pdf-fragment":
         push(assetRef(node.props.assetId, assetRefType.formatAnchor?.({ kind: "page", page: node.props.pageNumber })), "embed", node.id);

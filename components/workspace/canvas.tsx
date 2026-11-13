@@ -6,6 +6,7 @@ import {
   Hand,
   ImagePlus,
   StickyNote,
+  FileText,
   Lock,
   Maximize2,
   Minus,
@@ -61,6 +62,9 @@ import { isElementLocked } from "@/lib/workspace/element-lock";
 import { resolveGroupSelection } from "@/lib/workspace/group-engine";
 import { resourceCardProps, type ResourceAsset } from "@/lib/workspace/resource-card";
 import { ResourceCard } from "./items/ResourceCard";
+import { NoteCard } from "./items/NoteCard";
+import { noteCardProps } from "@/lib/workspace/note-card";
+import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import {
   LONG_PRESS_DURATION_MS,
   LongPressTracker,
@@ -687,6 +691,25 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     [addItem],
   );
 
+  /**
+   * Creates a page in Notes and puts its card in the middle of the screen,
+   * then opens it in the side panel. Notes made here are top-level, so they
+   * are also on the Shelf.
+   */
+  const addNoteCard = useCallback(async () => {
+    try {
+      const response = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Untitled" }) });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.ok) throw new Error(json?.error ?? "The note could not be created.");
+      const props = noteCardProps({ id: json.data.id, title: json.data.title });
+      const center = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+      addItem("note-card", props, { x: center.x - props.w / 2, y: center.y - props.h / 2 });
+      useNotePanelStore.getState().open(json.data.id);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }, [addItem, screenToWorld]);
+
   const importFileToWorkspace = useCallback(
     async (file: File, position?: { x: number; y: number }) => {
       const mimeType = file.type || "application/octet-stream";
@@ -859,6 +882,31 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     window.addEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
     return () => window.removeEventListener("workspace-asset-touch-drop", handleTouchAssetDrop);
   }, [addItem, addResourceCard, registerWorkspaceAsset, screenToWorld]);
+
+  // Deep links (`/workspaces/[id]?focus=<nodeId>`): centre the element in the
+  // visible canvas at the current zoom and select it. The page sends the event
+  // once the scene has loaded; the canvas owns the transform.
+  useEffect(() => {
+    const handleFocusItem = (event: Event) => {
+      const id = event instanceof CustomEvent && typeof event.detail?.id === "string" ? event.detail.id : null;
+      const target = id ? useWorkspaceStore.getState().items.find((item) => item.id === id) : null;
+      const wrapper = wrapperRef.current;
+      const transform = transformRef.current;
+      if (!target || !wrapper || !transform) return;
+      const rect = wrapper.getBoundingClientRect();
+      const scale = transform.instance.transformState.scale || 1;
+      transform.setTransform(
+        rect.width / 2 - (target.x + target.w / 2) * scale,
+        rect.height / 2 - (target.y + target.h / 2) * scale,
+        scale,
+        240,
+        "easeOut",
+      );
+      useSelectionStore.getState().clearAndSelectIds([target.id]);
+    };
+    window.addEventListener("workspace-focus-item", handleFocusItem);
+    return () => window.removeEventListener("workspace-focus-item", handleFocusItem);
+  }, []);
 
   useEffect(() => {
     if (syncTimerRef.current) {
@@ -2263,6 +2311,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     )}
                     {item.type === "image" && <ImageNode item={item as any} />}
                     {item.type === "resource-card" && <ResourceCard item={item} canOpen={activeTool === "select"} />}
+                    {item.type === "note-card" && <NoteCard item={item} canOpen={activeTool === "select"} />}
                     {item.type === "shape" && (
                       <ShapeNode
                         item={item as any}
@@ -2396,6 +2445,13 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 title="Sticky Note — click the canvas to place"
               ><StickyNote size={18} /></button>
               <button
+                type="button"
+                onClick={() => void addNoteCard()}
+                className="p-2 rounded-md transition-colors hover:bg-slate-50 text-slate-400"
+                title="Note page — a page from Notes on the canvas"
+                aria-label="Add a note page"
+              ><FileText size={18} /></button>
+              <button
                 onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); }}
                 onDoubleClick={() => activateTextTool(true)}
                 className={`relative p-2 rounded-md transition-colors ${isTextToolActive ? (isTextToolLocked ? "bg-amber-100 text-amber-700 ring-2 ring-amber-500/50" : "bg-indigo-50 text-indigo-600") : "hover:bg-slate-50 text-slate-400"}`}
@@ -2465,6 +2521,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   <button type="button" onClick={() => { setActiveTool(activeTool === "connector" ? "select" : "connector"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connector" aria-label="Connector tool" aria-pressed={activeTool === "connector"}><Spline size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
                   <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
+                  <button type="button" onClick={() => { setMobileToolbarOpen(false); void addNoteCard(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Note page" aria-label="Add a note page"><FileText size={20}/></button>
                   <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
                   <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
                   <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />

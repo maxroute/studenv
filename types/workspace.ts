@@ -153,6 +153,22 @@ export const ResourceCardNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
+/**
+ * A page from Notes on the canvas. Title and excerpt are a cache for drawing
+ * the card without a request; the note itself is the source of truth.
+ * `blockId` pins the card to one section of the note.
+ */
+export const NoteCardNodeSchema = WorkspaceNodeBaseSchema.extend({
+  type: z.literal("note-card"),
+  props: z.object({
+    ...ElementMetaProps,
+    noteId: z.string().min(1),
+    title: z.string().default(""),
+    excerpt: z.string().max(280).default(""),
+    blockId: z.string().optional(),
+  }),
+});
+
 export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("group"),
   props: z.object({
@@ -274,6 +290,7 @@ export const WorkspaceNodeSchema = z.discriminatedUnion("type", [
   VideoAnchorNodeSchema,
   ImageNodeSchema,
   ResourceCardNodeSchema,
+  NoteCardNodeSchema,
   GroupNodeSchema,
   DrawingNodeSchema,
   ShapeNodeSchema,
@@ -299,6 +316,7 @@ export type VideoAnchorNode = z.infer<typeof VideoAnchorNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
 export type ResourceCardNode = z.infer<typeof ResourceCardNodeSchema>;
 export type ResourceCardKind = z.infer<typeof ResourceCardKindSchema>;
+export type NoteCardNode = z.infer<typeof NoteCardNodeSchema>;
 export type GroupNode = z.infer<typeof GroupNodeSchema>;
 export type DrawingNode = z.infer<typeof DrawingNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
@@ -341,6 +359,7 @@ const DEFAULT_NODE_SIZE: Record<WorkspaceNodeType, { w: number; h: number }> = {
   "video-anchor": { w: 200, h: 120 },
   image: { w: 320, h: 240 },
   "resource-card": { w: 280, h: 88 },
+  "note-card": { w: 280, h: 160 },
   group: { w: 400, h: 300 },
   drawing: { w: 100, h: 100 },
   shape: { w: 120, h: 120 },
@@ -640,6 +659,20 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
       });
       return card.success ? card.data : null;
     }
+    case "note-card": {
+      const card = NoteCardNodeSchema.safeParse({
+        ...base,
+        type: "note-card",
+        props: {
+          ...coerceElementMeta(props),
+          noteId: coerceString(props.noteId),
+          title: coerceString(props.title),
+          excerpt: coerceString(props.excerpt).slice(0, 280),
+          blockId: coerceOptionalString(props.blockId),
+        },
+      });
+      return card.success ? card.data : null;
+    }
     case "group":
       return GroupNodeSchema.parse({
         ...base,
@@ -848,6 +881,8 @@ export function getWorkspaceNodeText(node: WorkspaceNode) {
       return (node.props.label ?? "").trim();
     case "resource-card":
       return node.props.title.trim();
+    case "note-card":
+      return [node.props.title, node.props.excerpt].filter(Boolean).join(" ").trim();
     default:
       return "";
   }

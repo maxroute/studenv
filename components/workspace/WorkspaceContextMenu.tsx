@@ -5,6 +5,7 @@ import {
   Clipboard,
   Copy,
   CopyPlus,
+  FileText,
   FolderClosed,
   FolderOpen,
   Layers,
@@ -25,6 +26,40 @@ import { applyWorkspaceHistory } from "@/lib/workspace/keyboard-shortcuts";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import { clampMenuPosition, pasteOffsetForPoint } from "@/lib/workspace/context-menu";
 import { elementGroupId, isElementLocked, setElementsLocked } from "@/lib/workspace/element-lock";
+import { replaceStickyWithNoteCard, stickyNoteText } from "@/lib/workspace/note-card";
+import { textToNoteDoc } from "@/lib/notes/legacy-text";
+import { useNotePanelStore } from "@/hooks/use-note-panel-store";
+import { toast } from "react-hot-toast";
+import type { StickyNode } from "@/types/workspace";
+
+/**
+ * "Turn into note": creates a page in Notes from the sticky's text, then swaps
+ * the sticky for a card in one change (connectors stay attached). Undo brings
+ * the sticky back but keeps the note: the action is one-way for the note.
+ */
+async function turnStickyIntoNote(sticky: StickyNode) {
+  const confirmed = window.confirm(
+    "Turn this sticky into a note? A page is created in Notes and the sticky becomes its card. Undo brings the sticky back but keeps the note.",
+  );
+  if (!confirmed) return;
+  const { title, body } = stickyNoteText(sticky.props.text);
+  try {
+    const response = await fetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, doc: textToNoteDoc(body) }),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.ok) throw new Error(json?.error ?? "The note could not be created.");
+    const store = useWorkspaceStore.getState();
+    const next = replaceStickyWithNoteCard(store.items, sticky.id, { id: json.data.id, title: json.data.title, excerpt: body });
+    if (!next) throw new Error("The sticky was removed before the note was ready.");
+    store.updateItems(next);
+    useNotePanelStore.getState().open(json.data.id);
+  } catch (error) {
+    toast.error((error as Error).message);
+  }
+}
 
 export type WorkspaceContextMenuState = {
   /** Screen point the menu opens from. */
@@ -112,6 +147,7 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
     const allLocked = selectedItems.every(isElementLocked);
     const anyGrouped = selectedItems.some((item) => !!elementGroupId(item));
     const onlyConnector = selectedItems.length === 1 && selectedItems[0].type === "connector" ? selectedItems[0] : null;
+    const onlySticky = selectedItems.length === 1 && selectedItems[0].type === "sticky" ? selectedItems[0] : null;
     const reorder = (fn: typeof bringForward) => store().updateItems(fn(store().items, ids));
 
     entries = [
@@ -120,6 +156,18 @@ export function WorkspaceContextMenu({ menu, onClose }: { menu: WorkspaceContext
       { kind: "item", label: "Cut", icon: <Scissors size={ICON} />, shortcut: `${mod}X`, disabled: allLocked, run: () => { store().cutItems(ids); selection().deselectAll(); } },
       { kind: "item", label: "Paste", icon: <Clipboard size={ICON} />, shortcut: `${mod}V`, disabled: copiedItems.length === 0, run: () => store().pasteItems() },
       { kind: "item", label: "Duplicate", icon: <CopyPlus size={ICON} />, shortcut: `${mod}D`, run: () => store().duplicateItems(ids) },
+      ...(onlySticky
+        ? [
+            { kind: "separator" } as const,
+            {
+              kind: "item",
+              label: "Turn into note",
+              icon: <FileText size={ICON} />,
+              disabled: allLocked,
+              run: () => void turnStickyIntoNote(onlySticky),
+            } as const,
+          ]
+        : []),
       ...(onlyConnector
         ? [
             { kind: "separator" } as const,

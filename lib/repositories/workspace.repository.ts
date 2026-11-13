@@ -31,6 +31,15 @@ export async function findWorkspaceById(id: string, userId: string) {
   });
 }
 
+/** Ids and titles only (no snapshots), for pickers. */
+export function listWorkspaceTitles(userId: string) {
+  return prisma.workspace.findMany({
+    where: { ownerId: userId },
+    select: { id: true, title: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 export async function findAllWorkspaces(userId: string) {
   return prisma.workspace.findMany({
     where: { ownerId: userId },
