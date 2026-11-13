@@ -11,9 +11,10 @@ import { ItemGrid } from "@/components/items/item-grid";
 import { Modal } from "@/components/ui/modal";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useCollections } from "@/hooks/useCollections";
-import { useItems } from "@/hooks/useItems";
+import { useItem, useItems } from "@/hooks/useItems";
 import { usePlaybackStore } from "@/hooks/usePlaybackStore";
 import { useSearch } from "@/hooks/useSearch";
+import { buildItemUpdatePayload } from "@/lib/utils/item-patch";
 import { isYouTubeUrl } from "@/lib/utils/youtube";
 import type { ItemFilters, ItemRecord, ItemStatus } from "@/types";
 
@@ -46,10 +47,6 @@ const statusOrder: Record<ItemStatus, number> = {
   reading: 1,
   done: 2,
 };
-
-function dedupeTagNames(names: string[]) {
-  return [...new Set(names)];
-}
 
 export function DashboardClient() {
   const searchParams = useSearchParams();
@@ -186,6 +183,21 @@ export function DashboardClient() {
     () => visibleItems.find((item) => item.id === selectedId) ?? null,
     [selectedId, visibleItems],
   );
+  // List rows leave out `notes` and shorten `excerpt`; the detail panel needs
+  // the full record before it can show or save notes.
+  const { item: selectedDetail, mutate: mutateSelectedDetail } = useItem(
+    selectedItem?.id ?? null,
+  );
+  const selectedDetailItem = useMemo<ItemRecord | null>(
+    () =>
+      selectedItem && selectedDetail?.id === selectedItem.id
+        ? { ...selectedItem, notes: selectedDetail.notes, excerpt: selectedDetail.excerpt }
+        : selectedItem,
+    [selectedDetail, selectedItem],
+  );
+  const selectedNotesLoaded = Boolean(
+    selectedItem && selectedDetail?.id === selectedItem.id,
+  );
   const canPlaySelectedInApp = Boolean(
     selectedItem?.type === "video" && isYouTubeUrl(selectedItem.url),
   );
@@ -309,14 +321,20 @@ export function DashboardClient() {
   }, []);
 
   async function patchItem(item: ItemRecord, payload: Partial<ItemRecord>) {
-    const shouldUpdateTags = Object.prototype.hasOwnProperty.call(
-      payload,
-      "tags",
-    );
-    const nextTags =
-      shouldUpdateTags && Array.isArray(payload.tags)
-        ? dedupeTagNames(payload.tags.map((tag) => tag.name))
-        : undefined;
+    const body = buildItemUpdatePayload(item, payload);
+
+    if (Object.keys(body).length === 0) {
+      return true;
+    }
+
+    const isSelectedDetail = selectedDetail?.id === item.id;
+
+    if (isSelectedDetail) {
+      await mutateSelectedDetail(
+        (current) => (current ? ({ ...current, ...payload } as ItemRecord) : current),
+        { revalidate: false },
+      );
+    }
 
     await mutate(
       (current) =>
@@ -329,20 +347,17 @@ export function DashboardClient() {
     );
 
     try {
-      await updateItem(item.id, {
-        title: payload.title ?? item.title,
-        type: payload.type ?? item.type,
-        url: payload.url ?? item.url,
-        excerpt: payload.excerpt ?? item.excerpt,
-        notes: payload.notes ?? item.notes,
-        status: payload.status ?? item.status,
-        starred: payload.starred ?? item.starred,
-        ...(shouldUpdateTags ? { tags: nextTags ?? [] } : {}),
-      });
+      await updateItem(item.id, body);
+      if (isSelectedDetail) {
+        void mutateSelectedDetail();
+      }
       return true;
     } catch (error) {
       toast.error((error as Error).message);
       await mutate();
+      if (isSelectedDetail) {
+        void mutateSelectedDetail();
+      }
       return false;
     }
   }
@@ -516,7 +531,8 @@ export function DashboardClient() {
         />
 
         <DetailPanel
-          item={selectedItem}
+          item={selectedDetailItem}
+          notesLoaded={selectedNotesLoaded}
           collections={collections}
           onClose={() => setDetailDrawerOpen(false)}
           onDelete={() => setConfirmDeleteOpen(true)}
@@ -536,8 +552,8 @@ export function DashboardClient() {
             void toggleCollectionMembership(selectedItem, collection.id);
           }}
           onUpdate={(payload) => {
-            if (!selectedItem) return;
-            void patchItem(selectedItem, payload);
+            if (!selectedDetailItem) return Promise.resolve(false);
+            return patchItem(selectedDetailItem, payload);
           }}
         />
       </div>
