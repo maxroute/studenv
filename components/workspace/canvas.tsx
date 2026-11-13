@@ -37,7 +37,7 @@ import { FreeTextNode } from "./items/FreeTextNode";
 import { StickyNode, STICKY_NOTE_COLORS } from "./items/StickyNode";
 import { AssetDrawer } from "./AssetDrawer";
 import { DrawingNode } from "./items/DrawingNode";
-import { createStrokeOutline, getStrokeBounds, outlineToPath, resampleStrokePoints, strokeOutlineIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
+import { createStrokeOutline, outlineToPath, resampleStrokePoints, strokeOutlineIntersectsPolyline } from "@/lib/workspace/drawing-geometry";
 import { DrawingToolbar, DrawTool } from "./DrawingToolbar";
 import { TextToolbar } from "./TextToolbar";
 import {
@@ -82,9 +82,12 @@ import {
 
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 import { getImageDisplaySizeFromFile, getImageDisplaySizeFromUrl } from "@/lib/workspace/image-sizing";
+import type { DrawingPoint } from "@/lib/ink/stroke-format";
+import { beginStroke, finishStroke, samplesToPoints, type PenSample, type StrokeClock } from "@/lib/ink/pen-session";
+import { buildDrawingFromWorldPoints } from "@/lib/ink/stroke-builder";
 
 
-type CanvasPoint = { x: number; y: number; pressure?: number };
+type CanvasPoint = DrawingPoint;
 
 // Text fields and the open menu keep the browser's own context menu.
 const CONTEXT_MENU_NATIVE_TARGETS = 'input, textarea, [contenteditable="true"], [data-workspace-context-menu]';
@@ -189,34 +192,6 @@ function buildStrokePath(points: CanvasPoint[]) {
   return `M ${points[0].x} ${points[0].y} ${points.slice(1).map((point) => `L ${point.x} ${point.y}`).join(" ")}`;
 }
 
-
-function createDrawingFromWorldPoints(points: CanvasPoint[], color: string, strokeWidth: number) {
-  // Persist the exact same sample sequence used by the live preview. Re-sampling
-  // here changes the pressure curve at pen-up, making the saved stroke look
-  // different from what the user just drew.
-  const normalizedPoints = points;
-  const outline = createStrokeOutline(normalizedPoints, strokeWidth);
-  const bounds = getStrokeBounds(outline);
-  const padding = 2;
-  const x = bounds.minX - padding;
-  const y = bounds.minY - padding;
-  const localPoints = normalizedPoints.map((point) => ({
-    x: point.x - x,
-    y: point.y - y,
-    ...(point.pressure === undefined ? {} : { pressure: point.pressure }),
-  }));
-  const localOutline = outline.map((point) => ({ x: point.x - x, y: point.y - y }));
-  return {
-    x, y,
-    w: Math.max(bounds.maxX - bounds.minX + padding * 2, 1),
-    h: Math.max(bounds.maxY - bounds.minY + padding * 2, 1),
-    d: outlineToPath(localOutline),
-    points: localPoints,
-    color,
-    strokeWidth,
-    outline: true,
-  };
-}
 
 function clampScale(scale: number) {
   return Math.max(0.1, Math.min(5, scale));
@@ -419,6 +394,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   // pointer-up must never depend on a render having committed the latest move.
   const currentPathRef = useRef<CanvasPoint[]>([]);
   const eraserPathRef = useRef<CanvasPoint[]>([]);
+  // Time base and input type of the stroke being drawn, fixed at pointer-down.
+  const strokeClockRef = useRef<StrokeClock | null>(null);
   const [drawColor, setDrawColor] = useState("#1e1e1e");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
   const [textColor, setTextColor] = useState("#1e1e1e");
@@ -1257,8 +1234,11 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       drawPointerSessionRef.current = session;
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const pressure = e.pointerType === "mouse" || e.pressure <= 0 ? undefined : e.pressure;
-      const point = { x, y, pressure };
+      const { clock, point } = beginStroke(
+        { x, y, pressure: e.pressure, pointerType: e.pointerType, timeStamp: e.timeStamp },
+        performance.timeOrigin + e.timeStamp,
+      );
+      strokeClockRef.current = clock;
       setMousePos({ x, y });
 
       if (drawTool === "eraser") {
@@ -1281,12 +1261,16 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       const coalesced = typeof nativeEvent.getCoalescedEvents === "function"
         ? nativeEvent.getCoalescedEvents()
         : [];
-      const samples = coalesced.length ? coalesced : [nativeEvent];
-      const points = samples.map((sample) => {
-        const world = screenToWorld(sample.clientX, sample.clientY);
-        const pressure = sample.pointerType === "mouse" || sample.pressure <= 0 ? undefined : sample.pressure;
-        return { ...world, pressure };
-      });
+      const samples: PenSample[] = (coalesced.length ? coalesced : [nativeEvent]).map((sample) => ({
+        ...screenToWorld(sample.clientX, sample.clientY),
+        pressure: sample.pressure,
+        pointerType: sample.pointerType,
+        timeStamp: sample.timeStamp,
+      }));
+      const clock = strokeClockRef.current;
+      if (!clock) return;
+      const activePath = drawTool === "eraser" ? eraserPathRef.current : currentPathRef.current;
+      const points = samplesToPoints(samples, clock, activePath[activePath.length - 1]);
       const point = points[points.length - 1];
       if (!point) return;
       setMousePos({ x: point.x, y: point.y });
@@ -1314,31 +1298,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
       e.preventDefault();
 
       const { x, y } = screenToWorld(e.clientX, e.clientY);
-      const penSamples = currentPathRef.current;
-      const eraserSamples = eraserPathRef.current;
-      const lastPenPoint = penSamples[penSamples.length - 1];
-      const lastEraserPoint = eraserSamples[eraserSamples.length - 1];
-      // Pen-up reports zero pressure on many browsers. Preserve the last
-      // actual sample so final geometry matches the pressure-sensitive preview.
-      const pressure = e.pointerType === "mouse"
-        ? undefined
-        : e.pressure > 0
-          ? e.pressure
-          : drawTool === "pen"
-            ? lastPenPoint?.pressure
-            : lastEraserPoint?.pressure;
-      const finalPoint: CanvasPoint = { x, y, ...(pressure === undefined ? {} : { pressure }) };
-      const completedPenPath =
-        penSamples.length > 0 && (!lastPenPoint || lastPenPoint.x !== x || lastPenPoint.y !== y)
-          ? [...penSamples, finalPoint]
-          : penSamples;
-      const completedEraserPath =
-        eraserSamples.length > 0 && (!lastEraserPoint || lastEraserPoint.x !== x || lastEraserPoint.y !== y)
-          ? [...eraserSamples, finalPoint]
-          : eraserSamples;
+      const clock = strokeClockRef.current;
+      strokeClockRef.current = null;
+      // Pen-up often reports zero pressure; finishStroke keeps the last real
+      // pressure so the saved stroke matches the live preview.
+      const up: PenSample = { x, y, pressure: e.pressure, pointerType: e.pointerType, timeStamp: e.timeStamp };
+      const completedPenPath = clock ? finishStroke(currentPathRef.current, up, clock) : currentPathRef.current;
+      const completedEraserPath = clock ? finishStroke(eraserPathRef.current, up, clock) : eraserPathRef.current;
 
       if (drawTool === "pen" && completedPenPath.length > 0) {
-        const drawing = createDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth);
+        const drawing = buildDrawingFromWorldPoints(completedPenPath, drawColor, drawStrokeWidth, {
+          startedAt: clock?.startedAt,
+          pointerType: clock?.pointerType,
+        });
         const newItem = createWorkspaceItem("drawing", drawing, {
           x: drawing.x,
           y: drawing.y,

@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
+import {
+  DrawingPointSchema,
+  StrokeDataProps,
+  coerceStartedAt,
+  coerceStrokePointerType,
+  coerceStrokePoints,
+} from "@/lib/ink/stroke-format";
+
+export { DrawingPointSchema };
 
 export const WORKSPACE_SCENE_FORMAT = "second-brain-workspace";
 export const WORKSPACE_SCENE_VERSION = 1;
@@ -152,12 +161,6 @@ export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
-const DrawingPointSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  pressure: z.number().finite().min(0).max(1).optional(),
-});
-
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("drawing"),
   props: z.object({
@@ -165,7 +168,7 @@ export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
     d: z.string(),
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
-    points: z.array(DrawingPointSchema).optional(),
+    ...StrokeDataProps,
     outline: z.boolean().default(false),
   }),
 });
@@ -424,32 +427,6 @@ function coerceOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-function coercePointArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const points = value
-    .map((point) => {
-      const record = asObject(point);
-      if (!record) return null;
-
-      const x = coerceNumber(record.x, Number.NaN);
-      const y = coerceNumber(record.y, Number.NaN);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) {
-        return null;
-      }
-
-      const pressure = typeof record.pressure === "number" && Number.isFinite(record.pressure)
-        ? Math.max(0, Math.min(1, record.pressure))
-        : undefined;
-      return { x, y, ...(pressure === undefined ? {} : { pressure }) };
-    })
-    .filter(Boolean) as Array<{ x: number; y: number }>;
-
-  return points.length > 0 ? points : undefined;
-}
-
 function coerceViewport(value: unknown): WorkspaceViewport {
   const record = asObject(value);
 
@@ -666,7 +643,9 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           d: coerceString(props.d),
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
-          points: coercePointArray(props.points),
+          points: coerceStrokePoints(props.points),
+          startedAt: coerceStartedAt(props.startedAt),
+          pointerType: coerceStrokePointerType(props.pointerType),
           outline: props.outline === true,
         },
       });
