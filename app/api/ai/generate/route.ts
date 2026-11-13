@@ -19,6 +19,7 @@ const runAiGenerate = createAiGenerateService({
   saveSummary: aiRepository.saveSummary,
   findSavedFlashcards: aiRepository.findSavedFlashcards,
   saveFlashcardsIfNone: aiRepository.saveFlashcardsIfNone,
+  replaceRegenerableFlashcards: aiRepository.replaceRegenerableFlashcards,
   generateSummary,
   generateFlashcards,
   generateQuiz,

@@ -238,6 +238,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             <span className="nav-icon">✎</span>
             Pages
           </button>
+          <button
+            className={`nav-item ${pathname.startsWith("/flashcards") ? "active" : ""}`}
+            type="button"
+            onClick={() => {
+              router.push("/flashcards");
+              onClose?.();
+            }}
+          >
+            <span className="nav-icon">❏</span>
+            Flashcards
+          </button>
         </div>
 
         <hr className="divider" />

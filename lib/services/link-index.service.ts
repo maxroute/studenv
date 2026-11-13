@@ -76,10 +76,19 @@ async function describeSources(userId: string, keys: Array<{ type: string; id: s
       titles.set(`workspace:${workspace.id}`, workspace.title || "Untitled workspace");
     }
   }
+  const flashcardIds = idsOf("flashcard");
+  if (flashcardIds.length) {
+    for (const card of await linkRepository.flashcardFronts(userId, flashcardIds)) {
+      titles.set(`flashcard:${card.id}`, card.front.length > 80 ? `${card.front.slice(0, 79)}…` : card.front);
+    }
+  }
   return titles;
 }
 
-const SUPPORTED_SOURCE_TYPES = new Set(["note", "workspace"]);
+const SUPPORTED_SOURCE_TYPES = new Set(["note", "workspace", "flashcard"]);
+
+/** Sources that are not reference types of their own still open somewhere. */
+const SOURCE_PAGES: Record<string, string> = { flashcard: "/flashcards" };
 
 export async function appearsIn(userId: string, refString: string): Promise<AppearsInSource[]> {
   const ref = parseRef(refString);
@@ -110,7 +119,7 @@ export async function appearsIn(userId: string, refString: string): Promise<Appe
         sourceType: row.sourceType,
         sourceId: row.sourceId,
         title: "",
-        url: sourceRef ? refToUrl(sourceRef) : null,
+        url: (sourceRef ? refToUrl(sourceRef) : null) ?? SOURCE_PAGES[row.sourceType] ?? null,
         supported: SUPPORTED_SOURCE_TYPES.has(row.sourceType),
         links: [],
       };

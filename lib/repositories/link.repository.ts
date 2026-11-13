@@ -60,6 +60,10 @@ export function activeNoteTitles(ownerId: string, ids: string[], db: Db = prisma
   return db.note.findMany({ where: { id: { in: ids }, ownerId, deletedAt: null }, select: { id: true, title: true } });
 }
 
+export function flashcardFronts(ownerId: string, ids: string[], db: Db = prisma) {
+  return db.flashcard.findMany({ where: { id: { in: ids }, ownerId, deletedAt: null }, select: { id: true, front: true } });
+}
+
 export function workspaceTitles(ownerId: string, ids: string[], db: Db = prisma) {
   return db.workspace.findMany({ where: { id: { in: ids }, ownerId }, select: { id: true, title: true } });
 }

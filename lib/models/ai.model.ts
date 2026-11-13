@@ -16,7 +16,15 @@ const chatTurn = z
 /** Body of `POST /api/ai/generate`, one shape per action. */
 export const aiGenerateSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("summary"), text: sourceText, assetId: assetId.optional() }).strict(),
-  z.object({ action: z.literal("flashcards"), text: sourceText, assetId: assetId.optional() }).strict(),
+  z
+    .object({
+      action: z.literal("flashcards"),
+      text: sourceText,
+      assetId: assetId.optional(),
+      /** Replace earlier AI cards that were never reviewed or edited; reviewed and edited cards are kept. */
+      regenerate: z.boolean().optional(),
+    })
+    .strict(),
   z.object({ action: z.literal("quiz"), text: sourceText }).strict(),
   z
     .object({

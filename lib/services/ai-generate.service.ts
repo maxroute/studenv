@@ -10,10 +10,17 @@ export type AiGenerateDeps = {
   saveSummary: (assetId: string, summary: string, transcript: string) => Promise<void>;
   findSavedFlashcards: (assetId: string) => Promise<GeneratedFlashcard[]>;
   saveFlashcardsIfNone: (
+    ownerId: string,
     assetId: string,
     transcript: string,
     cards: GeneratedFlashcard[],
   ) => Promise<{ saved: boolean; flashcards: GeneratedFlashcard[] }>;
+  replaceRegenerableFlashcards: (
+    ownerId: string,
+    assetId: string,
+    transcript: string,
+    cards: GeneratedFlashcard[],
+  ) => Promise<{ replaced: number; flashcards: GeneratedFlashcard[] }>;
   generateSummary: (text: string) => Promise<string>;
   generateFlashcards: (text: string) => Promise<unknown>;
   generateQuiz: (text: string) => Promise<unknown[]>;
@@ -61,14 +68,21 @@ export function createAiGenerateService(deps: AiGenerateDeps) {
         }
         if (!(await deps.isAssetOwnedBy(input.assetId, userId))) throw notFound();
 
-        // Cards are saved once per asset. Generating again returns the saved
-        // set instead of appending another one; replacing unreviewed cards
-        // arrives with the flashcard review model.
+        // Regenerating replaces only cards with no review history that were
+        // never edited; reviewed and edited cards are kept (§9 Q4).
+        if (input.regenerate) {
+          const cards = normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text));
+          const result = await deps.replaceRegenerableFlashcards(userId, input.assetId, input.text, cards);
+          return { flashcards: result.flashcards };
+        }
+
+        // Otherwise cards are saved once per asset: generating again returns
+        // the saved set instead of appending another one.
         const saved = await deps.findSavedFlashcards(input.assetId);
         if (saved.length > 0) return { flashcards: saved };
 
         const cards = normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text));
-        const result = await deps.saveFlashcardsIfNone(input.assetId, input.text, cards);
+        const result = await deps.saveFlashcardsIfNone(userId, input.assetId, input.text, cards);
         return { flashcards: result.flashcards };
       }
 
