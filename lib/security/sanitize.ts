@@ -26,12 +26,17 @@ export function sanitizeText(input: string | null | undefined) {
     .trim();
 }
 
+/**
+ * Item notes are plain text that is only rendered as React text, which
+ * escapes it, so `<` and `>` are kept: stripping `<...>` deleted ordinary
+ * text such as "v < c and E > 0". Length is limited by the item schemas.
+ */
 export function sanitizeRichText(input: string | null | undefined) {
   if (!input) {
     return null;
   }
 
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.trim();
 }
 
 export function sanitizeTagName(input: string) {
