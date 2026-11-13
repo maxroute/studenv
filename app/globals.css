@@ -3683,6 +3683,23 @@ textarea {
   color: var(--text);
 }
 
+/* Note items: the content lives in Notes; the panel shows a preview and a way in. */
+.detail-note-preview {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail-open-note {
+  width: 100%;
+  justify-content: center;
+}
+
 .detail-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

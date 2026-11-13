@@ -21,6 +21,9 @@ export const noteDetailSelect = {
   deletedAt: true,
 } satisfies Prisma.NoteSelect;
 
+/** The shared client, for single statements outside a transaction. */
+export const db: Db = prisma;
+
 export function transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return prisma.$transaction(run);
 }
@@ -35,6 +38,10 @@ export function listActive(ownerId: string, db: Db = prisma) {
 
 export function findById(ownerId: string, id: string, db: Db = prisma) {
   return db.note.findFirst({ where: { id, ownerId }, select: noteDetailSelect });
+}
+
+export function findByItemId(ownerId: string, itemId: string, db: Db = prisma) {
+  return db.note.findFirst({ where: { itemId, ownerId }, select: noteDetailSelect });
 }
 
 export function findForUpdate(ownerId: string, id: string, db: Db) {

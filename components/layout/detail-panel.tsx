@@ -376,6 +376,19 @@ export function DetailPanel({
           </div>
         </div>
 
+        {item.type === "note" && item.noteId ? (
+          <div className="detail-notes">
+            <div className="notes-label">Note</div>
+            {item.excerpt ? <p className="detail-note-preview">{item.excerpt}</p> : null}
+            <button
+              className="btn-primary detail-open-note"
+              type="button"
+              onClick={() => router.push(`/notes/${item.noteId}`)}
+            >
+              Open note
+            </button>
+          </div>
+        ) : (
         <div className="detail-notes">
           <div className="notes-label">
             My Notes
@@ -393,6 +406,7 @@ export function DetailPanel({
             }}
           />
         </div>
+        )}
 
         <div className="detail-actions">
           <button

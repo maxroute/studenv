@@ -1,6 +1,7 @@
 import type { Plan, Prisma } from "@prisma/client";
 import { siteConfig } from "@/config/site";
 import type { CreateNoteInput, MoveNoteInput, NoteDetail, SaveNoteInput } from "@/lib/models/note.model";
+import { textToNoteDoc } from "@/lib/notes/legacy-text";
 import { createEmptyNoteDoc } from "@/lib/notes/note-format";
 import { NoteDocError, normalizeNoteTitle, noteExcerpt, prepareNoteDoc, type PreparedNoteDoc } from "@/lib/notes/note-save";
 import { revisionsToPrune, shouldCheckpoint } from "@/lib/notes/revision-policy";
@@ -273,8 +274,76 @@ export async function restoreNote(userId: string, id: string) {
     }
     const ids = [...ancestors, ...(await noteRepository.subtreeIds(userId, id, tx))];
     await noteRepository.setDeletedAt(userId, ids, null, tx);
+
+    // A top-level note whose Shelf entry was deleted gets a new one.
+    const topId = ancestors.at(-1) ?? id;
+    const top = await noteRepository.findForUpdate(userId, topId, tx);
+    if (top && !top.parentId && !top.itemId) {
+      const plainText = (await noteRepository.plainTextOf(userId, topId, tx)) ?? "";
+      const item = await noteRepository.createNoteItem(userId, top.title, noteExcerpt(plainText), tx);
+      await noteRepository.update(userId, topId, { itemId: item.id }, tx);
+    }
   });
   return getNote(userId, id);
+}
+
+// ── Shelf entries (Item.type = note) ───────────────────────────────────────
+
+/**
+ * Creates the Note behind a Shelf note item, with the item's plain-text notes
+ * converted to a document (design doc §1.6). Used when a note is added on the
+ * Shelf and by the migration script. Returns the existing note if there is one.
+ */
+export async function createNoteForItem(
+  userId: string,
+  item: { id: string; title: string; notes: string | null },
+  options: { reason?: "migration"; db?: Db } = {},
+) {
+  const run = async (db: Db) => {
+    const existing = await noteRepository.findByItemId(userId, item.id, db);
+    if (existing) return existing;
+    const prepared = prepareNoteDoc(textToNoteDoc(item.notes));
+    const title = normalizeNoteTitle(item.title);
+    const last = await noteRepository.lastSiblingKey(userId, null, db);
+    const note = await noteRepository.create(
+      {
+        ownerId: userId,
+        itemId: item.id,
+        parentId: null,
+        sortKey: sortKeyBetween(last?.sortKey ?? null, null),
+        title,
+        docJson: prepared.docJson,
+        docFormat: prepared.docFormat,
+        plainText: prepared.plainText,
+        lastRevisionAt: options.reason ? new Date() : null,
+      },
+      db,
+    );
+    if (options.reason) {
+      await noteRepository.createRevision(
+        { noteId: note.id, version: note.version, title, docJson: prepared.docJson, docFormat: prepared.docFormat, reason: options.reason, createdBy: userId },
+        db,
+      );
+    }
+    await runWriteHooks(userId, note.id, prepared, db);
+    return note;
+  };
+  return options.db ? run(options.db) : noteRepository.transaction(run);
+}
+
+/** A rename on the Shelf renames the note (as a new version, so open editors see a conflict). */
+export async function renameNoteFromShelf(userId: string, noteId: string, title: string) {
+  await noteRepository.update(userId, noteId, { title: normalizeNoteTitle(title), version: { increment: 1 } }, noteRepository.db);
+}
+
+/** Deleting a note's Shelf entry moves the note and its sub-pages to the trash. */
+export async function trashNoteOfItem(userId: string, itemId: string) {
+  await noteRepository.transaction(async (tx) => {
+    const note = await noteRepository.findByItemId(userId, itemId, tx);
+    if (!note || note.deletedAt) return;
+    const ids = await noteRepository.subtreeIds(userId, note.id, tx);
+    await noteRepository.setDeletedAt(userId, ids, new Date(), tx);
+  });
 }
 
 /**

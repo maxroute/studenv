@@ -45,6 +45,8 @@ export interface ItemRecord {
   url: string | null;
   excerpt: string | null;
   notes: string | null;
+  /** The Note behind a `note` item, when it has one (open it at /notes/[noteId]). */
+  noteId?: string | null;
   status: ItemStatus;
   starred: boolean;
   sourceHost: string | null;

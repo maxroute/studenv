@@ -13,6 +13,7 @@ import {
   sanitizeUrl,
 } from "@/lib/security/sanitize";
 import { inferItemTypeFromUrl } from "@/lib/utils/item-type";
+import * as noteService from "@/lib/services/note.service";
 import type { Plan } from "@/types";
 
 function getSourceHost(url?: string | null) {
@@ -89,6 +90,13 @@ export async function createItem(
     sourceHost: getSourceHost(sanitized.url),
   });
 
+  // A note added on the Shelf is a page in Notes; its text becomes the document.
+  let created = item;
+  if (item.type === "note") {
+    const note = await noteService.createNoteForItem(userId, { id: item.id, title: item.title, notes: item.notes });
+    created = { ...item, noteId: note.id };
+  }
+
   await auditLog({
     userId,
     action: "CREATE_ITEM",
@@ -99,7 +107,7 @@ export async function createItem(
     metadata: { title: item.title, type: item.type },
   });
 
-  return item;
+  return created;
 }
 
 export async function updateItem(
@@ -111,6 +119,17 @@ export async function updateItem(
   const sanitized = sanitizeItemInput(input);
   const shouldResolveType = hasOwn(sanitized, "type");
   const shouldUpdateSourceHost = hasOwn(sanitized, "url");
+
+  // For a note with a page in Notes, the page is the content: the legacy
+  // notes field is no longer written, and a rename renames the page too.
+  const current = await itemRepository.findById(id, userId);
+  if (current?.noteId) {
+    delete sanitized.notes;
+    if (typeof sanitized.title === "string" && sanitized.title.trim() && sanitized.title !== current.title) {
+      await noteService.renameNoteFromShelf(userId, current.noteId, sanitized.title);
+    }
+  }
+
   const item = await itemRepository.update(id, userId, {
     ...sanitized,
     type: shouldResolveType ? resolveItemType(sanitized.type, sanitized.url) : undefined,
@@ -134,6 +153,8 @@ export async function deleteItem(
   id: string,
   context?: { ip?: string | null; userAgent?: string | null },
 ) {
+  // The page in Notes goes to the trash (restorable) rather than being orphaned.
+  await noteService.trashNoteOfItem(userId, id);
   await itemRepository.remove(id, userId);
 
   await auditLog({
