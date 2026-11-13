@@ -47,6 +47,7 @@ export default function WorkspacePage() {
     isDirty, 
     lastSavedAt,
     saveNow,
+    saveBlocked,
     renameWorkspace
   } = useWorkspaceStore();
   
@@ -371,7 +372,16 @@ export default function WorkspacePage() {
           </div>
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2 text-sm">
-            {isSaving ? (
+            {saveBlocked ? (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="flex items-center gap-1.5 rounded bg-orange-50 px-2 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+              >
+                <RefreshCw size={12} />
+                Refresh to keep editing
+              </button>
+            ) : isSaving ? (
               <span className="text-slate-400 flex items-center gap-1.5 text-xs font-medium">
                 <Loader2 size={12} className="animate-spin" />
                 Saving...
@@ -390,9 +400,9 @@ export default function WorkspacePage() {
             
             <button
               onClick={() => saveNow()}
-              disabled={isSaving || !isDirty}
+              disabled={isSaving || !isDirty || saveBlocked}
               className={`ml-2 p-2 sm:px-3 sm:py-1.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors ${
-                isDirty 
+                isDirty && !saveBlocked
                   ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" 
                   : "bg-slate-50 text-slate-400 cursor-default"
               }`}

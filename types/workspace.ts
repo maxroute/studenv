@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
+import {
+  DrawingPointSchema,
+  StrokeDataProps,
+  coerceStartedAt,
+  coerceStrokePointerType,
+  coerceStrokePoints,
+} from "@/lib/ink/stroke-format";
+
+export { DrawingPointSchema };
 
 export const WORKSPACE_SCENE_FORMAT = "second-brain-workspace";
 export const WORKSPACE_SCENE_VERSION = 1;
@@ -152,12 +161,6 @@ export const GroupNodeSchema = WorkspaceNodeBaseSchema.extend({
   }),
 });
 
-const DrawingPointSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  pressure: z.number().finite().min(0).max(1).optional(),
-});
-
 export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
   type: z.literal("drawing"),
   props: z.object({
@@ -165,7 +168,7 @@ export const DrawingNodeSchema = WorkspaceNodeBaseSchema.extend({
     d: z.string(),
     color: z.string().default("#4f46e5"),
     strokeWidth: z.number().default(3),
-    points: z.array(DrawingPointSchema).optional(),
+    ...StrokeDataProps,
     outline: z.boolean().default(false),
   }),
 });
@@ -314,6 +317,21 @@ export type StudioItemType = WorkspaceNodeType;
 export type StudioItem = WorkspaceNode;
 export type StudioLayout = WorkspaceScene;
 
+/**
+ * A scene item whose `type` this build does not know, written by a newer
+ * build. It is not rendered or edited; it is kept verbatim with its position
+ * in the saved item list so that saving the scene never drops it.
+ */
+export type PreservedWorkspaceItem = {
+  index: number;
+  id: string;
+  raw: Record<string, unknown>;
+};
+
+export type ParsedWorkspaceScene = WorkspaceScene & {
+  preservedItems: PreservedWorkspaceItem[];
+};
+
 const DEFAULT_NODE_SIZE: Record<WorkspaceNodeType, { w: number; h: number }> = {
   text: { w: 280, h: 120 },
   "free-text": { w: 220, h: 64 },
@@ -422,32 +440,6 @@ function coerceString(value: unknown, fallback = "") {
 
 function coerceOptionalString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function coercePointArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const points = value
-    .map((point) => {
-      const record = asObject(point);
-      if (!record) return null;
-
-      const x = coerceNumber(record.x, Number.NaN);
-      const y = coerceNumber(record.y, Number.NaN);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) {
-        return null;
-      }
-
-      const pressure = typeof record.pressure === "number" && Number.isFinite(record.pressure)
-        ? Math.max(0, Math.min(1, record.pressure))
-        : undefined;
-      return { x, y, ...(pressure === undefined ? {} : { pressure }) };
-    })
-    .filter(Boolean) as Array<{ x: number; y: number }>;
-
-  return points.length > 0 ? points : undefined;
 }
 
 function coerceViewport(value: unknown): WorkspaceViewport {
@@ -666,7 +658,9 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           d: coerceString(props.d),
           color: coerceString(props.color, "#4f46e5"),
           strokeWidth: typeof props.strokeWidth === "number" ? props.strokeWidth : 3,
-          points: coercePointArray(props.points),
+          points: coerceStrokePoints(props.points),
+          startedAt: coerceStartedAt(props.startedAt),
+          pointerType: coerceStrokePointerType(props.pointerType),
           outline: props.outline === true,
         },
       });
@@ -718,41 +712,66 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
   }
 }
 
-export function parseWorkspaceScene(value: unknown): WorkspaceScene {
+/**
+ * An item whose type this build does not know, with an id, is kept aside
+ * instead of dropped. Items of a known type that cannot be repaired, and
+ * items without a type or id, are still dropped as malformed.
+ */
+function asPreservedItem(input: unknown, index: number): PreservedWorkspaceItem | null {
+  const record = asObject(input);
+  if (!record || typeof record.type !== "string" || Object.hasOwn(DEFAULT_NODE_SIZE, record.type)) {
+    return null;
+  }
+  const id = coerceOptionalString(record.id);
+  return id ? { index, id, raw: record } : null;
+}
+
+export function parseWorkspaceScene(value: unknown): ParsedWorkspaceScene {
   const parsed = WorkspaceSceneSchema.safeParse(value);
   if (parsed.success) {
     // Connectors attached to a missing element cannot render; older snapshots
     // may contain them because some deletions did not cascade.
-    return { ...parsed.data, items: withoutOrphanConnectors(parsed.data.items) };
+    return { ...parsed.data, items: withoutOrphanConnectors(parsed.data.items), preservedItems: [] };
   }
 
   const record = asObject(value);
-  const items = Array.isArray(record?.items)
-    ? withoutOrphanConnectors(record.items.map(parseWorkspaceNode).filter((node): node is WorkspaceNode => node !== null))
-    : [];
-  
+  const rawItems: unknown[] = Array.isArray(record?.items) ? record.items : [];
+  const knownItems: WorkspaceNode[] = [];
+  const preservedItems: PreservedWorkspaceItem[] = [];
+  rawItems.forEach((rawItem, index) => {
+    const preserved = asPreservedItem(rawItem, index);
+    if (preserved) {
+      preservedItems.push(preserved);
+      return;
+    }
+    const node = parseWorkspaceNode(rawItem);
+    if (node) knownItems.push(node);
+  });
+  const items = withoutOrphanConnectors(knownItems, preservedItems.map((item) => item.id));
+
   const workspaceAssetIds = Array.isArray(record?.workspaceAssetIds)
     ? record.workspaceAssetIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
 
-  return WorkspaceSceneSchema.parse({
+  const scene = WorkspaceSceneSchema.parse({
     format: WORKSPACE_SCENE_FORMAT,
     version: WORKSPACE_SCENE_VERSION,
     items,
     workspaceAssetIds,
     viewport: coerceViewport(record?.viewport),
   });
+  return { ...scene, preservedItems };
 }
 
-export function parseWorkspaceSceneJson(sceneJson?: string | null): WorkspaceScene {
+export function parseWorkspaceSceneJson(sceneJson?: string | null): ParsedWorkspaceScene {
   if (!sceneJson) {
-    return createWorkspaceScene();
+    return { ...createWorkspaceScene(), preservedItems: [] };
   }
 
   try {
     return parseWorkspaceScene(JSON.parse(sceneJson));
   } catch {
-    return createWorkspaceScene();
+    return { ...createWorkspaceScene(), preservedItems: [] };
   }
 }
 
@@ -769,9 +788,20 @@ export function createWorkspaceScene(
 }
 
 export function serializeWorkspaceScene(
-  input?: Partial<Pick<WorkspaceScene, "items" | "viewport" | "workspaceAssetIds">>,
+  input?: Partial<Pick<ParsedWorkspaceScene, "items" | "viewport" | "workspaceAssetIds" | "preservedItems">>,
 ) {
-  return JSON.stringify(createWorkspaceScene(input));
+  const scene = createWorkspaceScene(input);
+  const preserved = input?.preservedItems ?? [];
+  if (preserved.length === 0) {
+    return JSON.stringify(scene);
+  }
+
+  // Put items from a newer build back where they were, unchanged.
+  const items: unknown[] = [...scene.items];
+  for (const entry of [...preserved].sort((a, b) => a.index - b.index)) {
+    items.splice(Math.min(entry.index, items.length), 0, entry.raw);
+  }
+  return JSON.stringify({ ...scene, items });
 }
 
 export function createWorkspaceItem(

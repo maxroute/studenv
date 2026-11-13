@@ -1,70 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth.config";
-import { generateSummary, generateFlashcards, generateQuiz, chatWithDocument } from "@/lib/services/ai.service";
-import { prisma } from "@/lib/db/prisma";
+import { requireAuth } from "@/lib/auth/session";
+import { aiGenerateSchema } from "@/lib/models/ai.model";
+import * as aiRepository from "@/lib/repositories/ai.repository";
+import { apiError } from "@/lib/security/headers";
+import { apiRateLimiter, checkRateLimit } from "@/lib/security/rateLimit";
+import { getErrorResponse, getRateLimitIdentifier } from "@/lib/security/request";
+import { requireJsonContentType, validateBody } from "@/lib/security/validate";
+import { createAiGenerateService } from "@/lib/services/ai-generate.service";
+import {
+  chatWithDocument,
+  generateFlashcards,
+  generateQuiz,
+  generateSummary,
+} from "@/lib/services/ai.service";
 
-export async function POST(req: NextRequest) {
+const runAiGenerate = createAiGenerateService({
+  isAssetOwnedBy: aiRepository.isAssetOwnedBy,
+  saveSummary: aiRepository.saveSummary,
+  findSavedFlashcards: aiRepository.findSavedFlashcards,
+  saveFlashcardsIfNone: aiRepository.saveFlashcardsIfNone,
+  generateSummary,
+  generateFlashcards,
+  generateQuiz,
+  chatWithDocument,
+});
+
+export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const { action, text, userMessage, history, assetId } = body;
-
-    if (!action) {
-      return NextResponse.json({ error: "Action is required" }, { status: 400 });
-    }
-
-    if (action === "summary") {
-      const summary = await generateSummary(text);
-      if (assetId) {
-         await prisma.aiAnalysis.upsert({
-           where: { assetId },
-           update: { summary },
-           create: { assetId, summary, transcript: text }
-         });
-      }
-      return NextResponse.json({ summary });
-    }
-
-    if (action === "flashcards") {
-      const flashcards = await generateFlashcards(text);
-      if (assetId) {
-         const analysis = await prisma.aiAnalysis.upsert({
-           where: { assetId },
-           update: {},
-           create: { assetId, transcript: text }
-         });
-         // Save flashcards
-         for (const card of flashcards) {
-           await prisma.flashcard.create({
-             data: {
-               aiAnalysisId: analysis.id,
-               front: card.front,
-               back: card.back
-             }
-           });
-         }
-      }
-      return NextResponse.json({ flashcards });
-    }
-
-    if (action === "quiz") {
-      const quiz = await generateQuiz(text);
-      return NextResponse.json({ quiz });
-    }
-
-    if (action === "chat") {
-      const response = await chatWithDocument(text, userMessage, history);
-      return NextResponse.json({ response });
-    }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-
-  } catch (error: any) {
-    console.error("[AI Generate Error]", error);
-    return NextResponse.json({ error: "AI generation is temporarily unavailable. Please try again shortly." }, { status: 500 });
+    await requireJsonContentType(request);
+    const user = await requireAuth();
+    await checkRateLimit(apiRateLimiter, getRateLimitIdentifier(request, user.id));
+    const input = await validateBody(request, aiGenerateSchema);
+    // Success bodies keep their existing shapes ({ summary }, { flashcards }, …).
+    return NextResponse.json(await runAiGenerate(user.id, input));
+  } catch (error) {
+    const err = getErrorResponse(error);
+    return apiError(err.message, err.status, err.details);
   }
 }
