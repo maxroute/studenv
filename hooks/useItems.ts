@@ -27,6 +27,20 @@ function buildQuery(filters: ItemFilters) {
   return query ? `/api/items?${query}` : "/api/items";
 }
 
+/**
+ * The full item, including `notes` and the untruncated `excerpt`, which list
+ * rows from `useItems` leave out. Pass null (or an unsaved temp id) to skip.
+ */
+export function useItem(id: string | null) {
+  const key = id && !id.startsWith("temp-") ? `/api/items/${id}` : null;
+  const swr = useSWR<ItemRecord>(key, apiFetcher);
+
+  return {
+    ...swr,
+    item: swr.data ?? null,
+  };
+}
+
 export function useItems(filters: ItemFilters) {
   const key = buildQuery(filters);
   const swr = useSWR<ItemRecord[]>(key, apiFetcher);

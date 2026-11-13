@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   DEFAULT_WORKSPACE_VIEWPORT,
+  PreservedWorkspaceItem,
   StudioItem,
   StudioItemType,
   WorkspaceViewport,
@@ -11,6 +12,7 @@ import {
 import { connectorsForSelection, isConnectorAttachedToAny, remapConnector, withoutOrphanConnectors } from "@/lib/workspace/connector-lifecycle";
 import { WorkspaceHistory, sameItems } from "@/lib/workspace/workspace-history";
 import { unlockedIds, withFreshGroupIds } from "@/lib/workspace/element-lock";
+import { CLIENT_OUTDATED_CODE, WORKSPACE_SCENE_CLIENT_BUILD } from "@/lib/workspace/scene-compat";
 
 const newItemId = () => `item-${Math.random().toString(36).slice(2, 11)}`;
 const newGroupId = () => `group-${Math.random().toString(36).slice(2, 11)}`;
@@ -32,10 +34,14 @@ interface WorkspaceState {
   coverAssetId: string | null;
   workspaceAssetIds: string[];
   items: StudioItem[];
+  /** Items written by a newer build: never rendered, saved back unchanged. */
+  preservedItems: PreservedWorkspaceItem[];
   viewport: WorkspaceViewport;
   version: number;
   isLoading: boolean;
   error: string | null;
+  /** The server refused this build's saves; autosave stops until the page reloads. */
+  saveBlocked: boolean;
 
   // Save state tracking
   isDirty: boolean;
@@ -123,7 +129,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     options?: ItemChangeOptions,
     extra?: Partial<WorkspaceState>,
   ) => {
-    const items = withoutOrphanConnectors(nextItems);
+    const items = withoutOrphanConnectors(nextItems, get().preservedItems.map((item) => item.id));
     const previous = get().items;
     if (options?.recordHistory !== false && !sameItems(previous, items)) {
       history.record(previous);
@@ -137,10 +143,12 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     coverAssetId: null,
     workspaceAssetIds: [],
     items: [],
+    preservedItems: [],
     viewport: { ...DEFAULT_WORKSPACE_VIEWPORT },
     version: 0,
     isLoading: false,
     error: null,
+    saveBlocked: false,
     isDirty: false,
     isSaving: false,
     lastSavedAt: null,
@@ -149,7 +157,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     canRedo: false,
 
     loadWorkspace: async (id: string) => {
-      set({ isLoading: true, error: null, workspaceId: null, isSaving: false });
+      set({ isLoading: true, error: null, workspaceId: null, isSaving: false, saveBlocked: false });
       try {
         const response = await fetch(`/api/workspace/${id}`);
         if (!response.ok) {
@@ -173,6 +181,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           coverAssetId: typeof data.coverAssetId === "string" ? data.coverAssetId : null,
           workspaceAssetIds: parsedScene.workspaceAssetIds ?? [],
           items: parsedScene.items,
+          preservedItems: parsedScene.preservedItems,
           viewport: parsedScene.viewport,
           version: data.version,
           isLoading: false,
@@ -198,10 +207,12 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
           typeof payload.coverAssetId === "string" ? payload.coverAssetId : null,
         workspaceAssetIds: parsedScene.workspaceAssetIds ?? [],
         items: parsedScene.items,
+        preservedItems: parsedScene.preservedItems,
         viewport: parsedScene.viewport,
         version: payload.version ?? 0,
         isLoading: false,
         isSaving: false,
+        saveBlocked: false,
         error: null,
         isDirty: false,
         lastSavedAt: Date.now(),
@@ -479,7 +490,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     syncWithServer: async () => {
       const initial = get();
-      if (!initial.workspaceId || initial.isSaving) return;
+      if (!initial.workspaceId || initial.isSaving || initial.saveBlocked) return;
 
       const savingWorkspaceId = initial.workspaceId;
       set({ isSaving: true });
@@ -495,13 +506,22 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
             items: current.items,
             viewport: current.viewport,
             workspaceAssetIds: current.workspaceAssetIds,
+            preservedItems: current.preservedItems,
           });
 
           const response = await fetch(`/api/workspace/${savingWorkspaceId}/snapshot`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sceneJson, version: current.version }),
+            body: JSON.stringify({ sceneJson, version: current.version, clientBuild: WORKSPACE_SCENE_CLIENT_BUILD }),
           });
+          if (response.status === 409) {
+            const payload = await response.json().catch(() => null);
+            if (payload?.code === CLIENT_OUTDATED_CODE) {
+              // A newer build is live; saving from this one could lose its content.
+              set({ saveBlocked: true, isDirty: true });
+              return;
+            }
+          }
           if (!response.ok) {
             throw new Error(`Failed to sync workspace (${response.status})`);
           }
@@ -514,6 +534,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
             items: latest.items,
             viewport: latest.viewport,
             workspaceAssetIds: latest.workspaceAssetIds,
+            preservedItems: latest.preservedItems,
           });
 
           set({ version: data.version, lastSavedAt: Date.now() });

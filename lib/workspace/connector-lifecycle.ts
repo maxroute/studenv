@@ -18,9 +18,14 @@ export function isConnectorAttachedToAny(item: StudioItem, ids: ReadonlySet<stri
  * filter the item list directly (eraser, asset removal) would otherwise leave
  * connectors that cannot render but are saved and reloaded forever. Returns
  * the same array when nothing is dropped.
+ *
+ * `existingIds` names elements that exist but are not in `items` (nodes
+ * written by a newer build, kept aside unrendered); connectors attached to
+ * them are kept.
  */
-export function withoutOrphanConnectors<T extends StudioItem>(items: T[]): T[] {
-  const ids = new Set(items.map((item) => item.id));
+export function withoutOrphanConnectors<T extends StudioItem>(items: T[], existingIds: Iterable<string> = []): T[] {
+  const ids = new Set(existingIds);
+  for (const item of items) ids.add(item.id);
   const isOrphan = (item: StudioItem) =>
     item.type === "connector" && getConnectorBoundIds(item).some((id) => !ids.has(id));
   return items.some(isOrphan) ? items.filter((item) => !isOrphan(item)) : items;
