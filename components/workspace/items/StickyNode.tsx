@@ -4,12 +4,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StickyNode as StickyNodeItem } from "@/types/workspace";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
-import { Patrick_Hand } from "next/font/google";
+import { patrickHand } from "@/lib/fonts/app-fonts";
 
-const patrickHand = Patrick_Hand({
-  subsets: ["latin"],
-  weight: "400",
-});
 
 export const STICKY_NOTE_COLORS = [
   { label: "Warm yellow", value: "#F8E7A1" },

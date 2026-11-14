@@ -28,7 +28,6 @@ import { ConnectorCreationLayer } from "./connectors/ConnectorCreationLayer";
 import { ConnectorEditingLayer } from "./connectors/ConnectorEditingLayer";
 import { ConnectorLabelEditor } from "./connectors/ConnectorLabelEditor";
 import { ConnectorStyleToolbar } from "./connectors/ConnectorStyleToolbar";
-import { connectorIntersectsRect } from "@/lib/workspace/connector-selection";
 import { useConnectorUiStore } from "@/lib/workspace/connector-ui-store";
 import { getNextConnectorMode } from "@/lib/workspace/connector-autocomplete";
 import { PdfFragment } from "./items/PdfFragment";
@@ -52,14 +51,13 @@ import { ShapeCreationOverlay, type ShapePointerHandlers } from "./shapes/ShapeC
 import { ShapeToolButton, ShapeToolIcon } from "./shapes/ShapeToolButton";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
-import { useSelectionStore, isIntersecting } from "@/lib/workspace/selection-engine";
+import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
 import { WorkspaceContextMenu, type WorkspaceContextMenuState } from "./WorkspaceContextMenu";
 import { isElementLocked } from "@/lib/workspace/element-lock";
-import { resolveGroupSelection } from "@/lib/workspace/group-engine";
 import { resourceCardProps, type ResourceAsset } from "@/lib/workspace/resource-card";
 import { ResourceCard } from "./items/ResourceCard";
 import { NoteCard } from "./items/NoteCard";
@@ -76,6 +74,9 @@ import { SnapGuidesOverlay } from "./shapes/SnapGuidesOverlay";
 import { computeSnap, type SnapGuideLine } from "@/lib/workspace/snapping-engine";
 import { applyWorkspaceHistory, useKeyboardShortcuts } from "@/lib/workspace/keyboard-shortcuts";
 import { TouchHistoryGesture, shouldCancelForMultiTouch } from "@/lib/workspace/touch-history-gesture";
+import { PanVelocity, edgeScrollDelta, handClickZoom, type Point as NavPoint } from "@/lib/workspace/navigation";
+import { boxSelection, lassoSelection, rectFromPoints } from "@/lib/workspace/marquee";
+import { useCanvasNavigation } from "./use-canvas-navigation";
 import {
   beginPointerSession,
   clearPointerSession,
@@ -339,7 +340,20 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     pointerType: string;
     startTime: number;
     travel: number;
+    /** Selection: what was selected before (Esc restores it), what Shift keeps, the lasso path, the last pointer. */
+    previousSelection?: string[];
+    baseSelection?: string[];
+    lasso?: NavPoint[] | null;
+    lastClientX?: number;
+    lastClientY?: number;
+    containMode?: boolean;
+    /** Hand tool pans: pointer samples for the glide at release. */
+    velocity?: PanVelocity;
   } | null>(null);
+  const [lassoScreenPath, setLassoScreenPath] = useState<NavPoint[] | null>(null);
+  const edgeScrollFrameRef = useRef<number | null>(null);
+  const handClicksRef = useRef<{ count: number; time: number; x: number; y: number }>({ count: 0, time: 0, x: 0, y: 0 });
+  const handClickTimerRef = useRef<number | null>(null);
   const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState | null>(null);
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
@@ -1005,31 +1019,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, []);
 
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    const handleCtrlWheelZoom = (event: WheelEvent) => {
-      if (!event.ctrlKey || isDrawing) {
-        return;
-      }
-
-      event.preventDefault();
-
-      const instance = transformRef.current?.instance;
-      if (!instance) return;
-
-      const currentScale = instance.transformState.scale ?? 1;
-      const zoomFactor = Math.exp(-event.deltaY * 0.01);
-      zoomAtClientPoint(event.clientX, event.clientY, currentScale * zoomFactor, 40);
-    };
-
-    wrapper.addEventListener("wheel", handleCtrlWheelZoom, { passive: false });
-
-    return () => {
-      wrapper.removeEventListener("wheel", handleCtrlWheelZoom);
-    };
-  }, [isDrawing, zoomAtClientPoint]);
+  // Wheel, trackpad, Space / middle / right-button drags and two-finger
+  // pan and pinch are handled by useCanvasNavigation (every tool).
 
   useEffect(() => {
     if (selectedFreeTextId && !items.some((item) => item.id === selectedFreeTextId)) {
@@ -1062,6 +1053,21 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         return;
       }
 
+      const plainKey = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (plainKey && (e.key === "h" || e.key === "H")) {
+        e.preventDefault();
+        setActiveTool("pan");
+        setIsTextToolLocked(false);
+        setEditingFreeTextId(null);
+        return;
+      }
+      if (plainKey && (e.key === "v" || e.key === "V")) {
+        e.preventDefault();
+        setActiveTool("select");
+        setIsTextToolLocked(false);
+        setEditingFreeTextId(null);
+        return;
+      }
       if (e.key === "t" || e.key === "T") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -1402,8 +1408,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     } else if (gesture.mode === "text") {
       textPointerSessionRef.current = endPointerSession(textPointerSessionRef.current, owner);
     } else if (gesture.mode === "select") {
+      stopEdgeScroll();
       setSelectionBox(null);
       setSelectionScreenBox(null);
+      setLassoScreenPath(null);
     } else if (gesture.mode === "pan") {
       setIsPanDragging(false);
     } else {
@@ -1413,6 +1421,107 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     const wrapper = wrapperRef.current;
     if (wrapper?.hasPointerCapture(gesture.pointerId)) wrapper.releasePointerCapture(gesture.pointerId);
   }, []);
+
+  /** Two fingers landed: the one-finger gesture gives way, except a stroke already being drawn. */
+  const yieldToTwoFingers = useCallback((now: number) => {
+    const gesture = canvasGestureRef.current;
+    if (!gesture) return true;
+    if (gesture.mode === "draw" && !shouldCancelForMultiTouch(gesture, "touch", now)) return false;
+    cancelCanvasGestureForMultiTouch();
+    return true;
+  }, [cancelCanvasGestureForMultiTouch]);
+
+  const navigation = useCanvasNavigation({ wrapperRef, transformRef, openContextMenu, yieldToTwoFingers });
+
+  // Esc during a selection drag cancels it and brings back what was selected.
+  // Capture phase and stopImmediatePropagation: the general Esc handlers
+  // (deselect, back to the select tool) must not run for this press.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const gesture = canvasGestureRef.current;
+      if (gesture?.mode !== "select") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      canvasGestureRef.current = null;
+      stopEdgeScroll();
+      setSelectionBox(null);
+      setSelectionScreenBox(null);
+      setLassoScreenPath(null);
+      useSelectionStore.getState().clearAndSelectIds(gesture.previousSelection ?? []);
+      const wrapper = wrapperRef.current;
+      if (wrapper?.hasPointerCapture(gesture.pointerId)) wrapper.releasePointerCapture(gesture.pointerId);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  /**
+   * Recomputes the selection box or lasso for the pointer at (clientX, clientY).
+   * Also used while edge scrolling, when the camera moves under a still pointer.
+   */
+  const updateSelectionGesture = useCallback((clientX: number, clientY: number) => {
+    const gesture = canvasGestureRef.current;
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const state = transformRef.current?.instance?.transformState;
+    if (!gesture || gesture.mode !== "select" || !rect || !state) return;
+    gesture.lastClientX = clientX;
+    gesture.lastClientY = clientY;
+    const world = screenToWorld(clientX, clientY);
+    const toScreen = (point: NavPoint) => ({ x: point.x * state.scale + state.positionX, y: point.y * state.scale + state.positionY });
+    const currentItems = useWorkspaceStore.getState().items;
+    const base = gesture.baseSelection ?? [];
+    if (gesture.lasso) {
+      const last = gesture.lasso.at(-1);
+      if (!last || Math.hypot(last.x - world.x, last.y - world.y) * state.scale > 2) gesture.lasso.push(world);
+      setLassoScreenPath(gesture.lasso.map(toScreen));
+      useSelectionStore.getState().clearAndSelectIds(lassoSelection(currentItems, gesture.lasso, base));
+      return;
+    }
+    const start = { x: gesture.startWorldX, y: gesture.startWorldY };
+    setSelectionBox({ startX: start.x, startY: start.y, currentX: world.x, currentY: world.y });
+    // The box's start is a world point: it moves on screen when the view scrolls.
+    const startScreen = toScreen(start);
+    setSelectionScreenBox({ startX: startScreen.x, startY: startScreen.y, currentX: clientX - rect.left, currentY: clientY - rect.top });
+    useSelectionStore.getState().clearAndSelectIds(
+      boxSelection(currentItems, rectFromPoints(start, world), gesture.containMode ? "contain" : "touch", base),
+    );
+  }, [screenToWorld]);
+
+  function stopEdgeScroll() {
+    if (edgeScrollFrameRef.current !== null) cancelAnimationFrame(edgeScrollFrameRef.current);
+    edgeScrollFrameRef.current = null;
+  }
+
+  /** While selecting, a pointer near the canvas edge scrolls the view (tldraw). */
+  const startEdgeScroll = useCallback(() => {
+    stopEdgeScroll();
+    let last = performance.now();
+    const frame = (now: number) => {
+      const gesture = canvasGestureRef.current;
+      const wrapper = wrapperRef.current;
+      if (!gesture || gesture.mode !== "select" || !wrapper || gesture.lastClientX === undefined || gesture.lastClientY === undefined) {
+        edgeScrollFrameRef.current = null;
+        return;
+      }
+      const rect = wrapper.getBoundingClientRect();
+      const delta = edgeScrollDelta(
+        { x: gesture.lastClientX - rect.left, y: gesture.lastClientY - rect.top },
+        { width: rect.width, height: rect.height },
+        Math.min(32, now - last),
+      );
+      last = now;
+      if (delta.x || delta.y) {
+        const camera = navigation.getCamera();
+        if (camera) {
+          navigation.setCamera({ x: camera.x - delta.x, y: camera.y - delta.y, scale: camera.scale });
+          updateSelectionGesture(gesture.lastClientX, gesture.lastClientY);
+        }
+      }
+      edgeScrollFrameRef.current = requestAnimationFrame(frame);
+    };
+    edgeScrollFrameRef.current = requestAnimationFrame(frame);
+  }, [navigation, updateSelectionGesture]);
 
   // Context menu triggers other than the mouse (see lib/workspace/context-menu):
   // a 1 s finger or pen long-press in the select and hand tools, the pen
@@ -1682,7 +1791,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         // Keep the active tool cursor on the canvas interaction boundary as
         // well as the transformed world. This covers empty canvas space and
         // avoids depending on the zoom/pan wrapper's inherited cursor.
-        cursor: isPanning
+        cursor: navigation.dragPanning
+          ? "grabbing"
+          : isPanning || navigation.spaceHeld
           ? (isPanDragging ? "grabbing" : "grab")
           : activeTool === "eraser"
             ? "none"
@@ -1765,15 +1876,32 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           setSelectedFreeTextId(null);
           setSelectedDrawingId(null);
           setSelectedImageId(null);
-          useSelectionStore.getState().deselectAll();
-          setSelectionBox({ startX: world.x, startY: world.y, currentX: world.x, currentY: world.y });
-          setSelectionScreenBox({
-            startX: e.clientX - rect.left,
-            startY: e.clientY - rect.top,
-            currentX: e.clientX - rect.left,
-            currentY: e.clientY - rect.top,
-          });
+          // Shift keeps the selection and adds to it; Alt draws a lasso; Ctrl/⌘ selects only what is fully inside.
+          const previous = useSelectionStore.getState().selectedIds;
+          const gesture = canvasGestureRef.current;
+          gesture.previousSelection = previous;
+          gesture.baseSelection = e.shiftKey ? previous : [];
+          gesture.lasso = e.altKey ? [world] : null;
+          gesture.containMode = e.ctrlKey || e.metaKey;
+          gesture.lastClientX = e.clientX;
+          gesture.lastClientY = e.clientY;
+          if (!e.shiftKey) useSelectionStore.getState().deselectAll();
+          if (gesture.lasso) {
+            setLassoScreenPath([{ x: e.clientX - rect.left, y: e.clientY - rect.top }]);
+          } else {
+            setSelectionBox({ startX: world.x, startY: world.y, currentX: world.x, currentY: world.y });
+            setSelectionScreenBox({
+              startX: e.clientX - rect.left,
+              startY: e.clientY - rect.top,
+              currentX: e.clientX - rect.left,
+              currentY: e.clientY - rect.top,
+            });
+          }
+          startEdgeScroll();
         } else if (mode === "pan") {
+          navigation.stopGlide();
+          canvasGestureRef.current.velocity = new PanVelocity();
+          canvasGestureRef.current.velocity.add(e.timeStamp, e.clientX, e.clientY);
           setIsPanDragging(true);
         } else if (mode === "draw") {
           handleDrawPointerDown(e);
@@ -1844,6 +1972,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
         e.stopPropagation();
         if (gesture.mode === "dismiss-text" || gesture.mode === "text" || gesture.mode === "sticky") return;
         if (gesture.mode === "pan") {
+          gesture.velocity?.add(e.timeStamp, e.clientX, e.clientY);
           transformRef.current?.setTransform(
             gesture.startTransformX + (e.clientX - gesture.startClientX),
             gesture.startTransformY + (e.clientY - gesture.startClientY),
@@ -1852,28 +1981,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           );
           return;
         }
-
-        const world = screenToWorld(e.clientX, e.clientY);
-        const rect = wrapperRef.current?.getBoundingClientRect();
-        setSelectionBox((prev) => prev ? { ...prev, currentX: world.x, currentY: world.y } : null);
-        if (rect) {
-          const sx = e.clientX - rect.left;
-          const sy = e.clientY - rect.top;
-          setSelectionScreenBox((prev) => prev ? { ...prev, currentX: sx, currentY: sy } : null);
-        }
-        const x = Math.min(gesture.startWorldX, world.x);
-        const y = Math.min(gesture.startWorldY, world.y);
-        const w = Math.abs(gesture.startWorldX - world.x);
-        const h = Math.abs(gesture.startWorldY - world.y);
-        // Connectors are selected by their path (AFFiNE `containsBound`); their
-        // stored x/y/w/h is only a placeholder.
-        const collidingIds = items
-          .filter((item) => item.type === "connector"
-            ? connectorIntersectsRect(item, items, { x, y, w, h })
-            : isIntersecting({ x: item.x, y: item.y, w: item.w, h: item.h }, { x, y, w, h }))
-          .map((item) => item.id);
-        // Touching one member of a group selects the whole group.
-        useSelectionStore.getState().clearAndSelectIds(resolveGroupSelection(items, collidingIds));
+        gesture.containMode = e.ctrlKey || e.metaKey;
+        updateSelectionGesture(e.clientX, e.clientY);
       }}
       onPointerUpCapture={(e) => {
         const gesture = canvasGestureRef.current;
@@ -1891,10 +2000,31 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           const session = stickyPointerSessionRef.current;
           if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
         } else if (gesture.mode === "select") {
+          stopEdgeScroll();
           setSelectionBox(null);
           setSelectionScreenBox(null);
+          setLassoScreenPath(null);
         } else if (gesture.mode === "pan") {
           setIsPanDragging(false);
+          if (gesture.travel < 4) {
+            // Hand tool clicks: double zooms in, triple zooms out, four resets (tldraw).
+            // Acts once the clicks stop, on the final count (tldraw "settle").
+            const clicks = handClicksRef.current;
+            const again = e.timeStamp - clicks.time < 350 && Math.hypot(e.clientX - clicks.x, e.clientY - clicks.y) < 8;
+            const count = again ? clicks.count + 1 : 1;
+            handClicksRef.current = { count, time: e.timeStamp, x: e.clientX, y: e.clientY };
+            if (handClickTimerRef.current !== null) window.clearTimeout(handClickTimerRef.current);
+            const { clientX, clientY } = e;
+            handClickTimerRef.current = window.setTimeout(() => {
+              handClickTimerRef.current = null;
+              const scale = transformRef.current?.instance?.transformState.scale ?? 1;
+              const zoom = handClickZoom(handClicksRef.current.count, scale);
+              if (zoom) zoomAtClientPoint(clientX, clientY, zoom.type === "reset" ? 1 : zoom.scale, 220);
+            }, 300);
+          } else {
+            const velocity = gesture.velocity?.velocity(e.timeStamp);
+            if (velocity && Math.hypot(velocity.x, velocity.y) > 0.1) navigation.startGlide(velocity);
+          }
         } else {
           pendingFreeTextDismissPointerRef.current = null;
           e.preventDefault();
@@ -1929,8 +2059,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           const session = stickyPointerSessionRef.current;
           if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = endPointerSession(session, e);
         }
+        stopEdgeScroll();
         setSelectionBox(null);
         setSelectionScreenBox(null);
+        setLassoScreenPath(null);
         setIsPanDragging(false);
         if (pendingFreeTextDismissPointerRef.current === e.pointerId) pendingFreeTextDismissPointerRef.current = null;
         if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
@@ -1953,8 +2085,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           const session = stickyPointerSessionRef.current;
           if (ownsPointerSession(session, e)) stickyPointerSessionRef.current = clearPointerSession(session, e);
         }
+        stopEdgeScroll();
         setSelectionBox(null);
         setSelectionScreenBox(null);
+        setLassoScreenPath(null);
         setIsPanDragging(false);
       }}
     >
@@ -2004,9 +2138,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           allowLeftClickPan: false,
           excluded: [],
         }}
-        pinch={{ disabled: activeTool === "select" || isDrawing || isShapeToolActive || isTextToolActive || isStickyToolActive }}
+        // Pinch and wheel go through useCanvasNavigation, the same in every tool.
+        pinch={{ disabled: true }}
         wheel={{
-          disabled: isDrawing,
+          disabled: true,
           wheelDisabled: true,
           touchPadDisabled: true,
         }}
@@ -2024,7 +2159,9 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 data-workspace-interaction={isPanning ? "pan" : "select"}
                 data-pan-dragging={isPanDragging ? "true" : "false"}
                 style={{
-                  cursor: isPanning
+                  cursor: navigation.dragPanning
+                    ? "grabbing"
+                    : isPanning || navigation.spaceHeld
                     ? (isPanDragging ? "grabbing" : "grab")
                     : activeTool === "eraser"
                       ? "none"
@@ -2532,6 +2669,17 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
           </>
         )}
       </TransformWrapper>
+      {lassoScreenPath && lassoScreenPath.length > 1 && (
+        <svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-[2147483000] h-full w-full overflow-visible">
+          <path
+            d={`M ${lassoScreenPath.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`}
+            fill="rgb(99 102 241 / 0.10)"
+            stroke="rgb(79 70 229)"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+          />
+        </svg>
+      )}
       {selectionScreenBox && (
         <div
           aria-hidden="true"

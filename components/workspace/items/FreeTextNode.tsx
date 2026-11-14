@@ -3,7 +3,7 @@
 import { FreeTextNode as FreeTextNodeItem } from "@/types/workspace";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useEffect, useRef, useState } from "react";
-import { Patrick_Hand } from "next/font/google";
+import { patrickHand } from "@/lib/fonts/app-fonts";
 
 interface FreeTextNodeProps {
   item: FreeTextNodeItem;
@@ -14,10 +14,6 @@ interface FreeTextNodeProps {
   onFinishEditing?: (saved: boolean) => void;
 }
 
-const patrickHand = Patrick_Hand({
-  subsets: ["latin"],
-  weight: "400",
-});
 
 export function FreeTextNode({
   item,
