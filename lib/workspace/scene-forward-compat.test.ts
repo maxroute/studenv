@@ -18,7 +18,7 @@ import {
 // odd key order and nested values check that it is written back unchanged.
 const FUTURE_NODE = {
   zIndex: 2,
-  type: "note-card",
+  type: "timeline-card",
   id: "future-1",
   x: 400,
   y: 80,
@@ -115,10 +115,11 @@ test("editing the canvas keeps unknown nodes and their connectors", () => {
   assert.ok(useWorkspaceStore.getState().items.some((item) => item.id === "connector-1"));
 });
 
-test("saves without a clientBuild are from build 1 and accepted today", () => {
+test("since note-card, saves from builds before it are refused and this build is accepted", () => {
   assert.equal(WORKSPACE_SCENE_CLIENT_BUILD >= MIN_WORKSPACE_SCENE_CLIENT_BUILD, true, "this build must accept its own saves");
-  assert.equal(isClientBuildAccepted(undefined), true);
   assert.equal(isClientBuildAccepted(WORKSPACE_SCENE_CLIENT_BUILD), true);
+  assert.equal(isClientBuildAccepted(undefined), false, "builds without the check (build 1) must reload first");
+  assert.equal(isClientBuildAccepted(1), false, "build 1 does not know note-card");
 });
 
 test("saves from builds below the minimum, or with a malformed build, are refused", () => {

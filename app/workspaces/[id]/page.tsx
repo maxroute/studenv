@@ -6,6 +6,9 @@ import { useEffect, useState, useRef } from "react";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useViewerStore } from "@/hooks/use-viewer-store";
 import { centeredCardPosition, findResourceCard, resourceCardProps } from "@/lib/workspace/resource-card";
+import { findNoteCard, noteCardProps } from "@/lib/workspace/note-card";
+import { useNotePanelStore } from "@/hooks/use-note-panel-store";
+import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { Loader2, ArrowLeft, Save, CheckCircle2, Video, FileText, Maximize2, RefreshCw, AlertCircle, Music4, Globe } from "lucide-react";
 
 // Dynamically import tldraw to avoid SSR issues
@@ -16,6 +19,18 @@ const TldrawCanvas = dynamic(
     loading: () => <div className="w-full h-full bg-white" />,
   }
 );
+
+// The note side panel loads the editor only when a note card is opened.
+const NotePanel = dynamic(
+  () => import("@/components/notes/note-panel").then((mod) => mod.NotePanel),
+  { ssr: false },
+);
+
+function NotePanelHost() {
+  const noteId = useNotePanelStore((state) => state.noteId);
+  useEffect(() => () => useNotePanelStore.getState().close(), []);
+  return noteId ? <NotePanel /> : null;
+}
 
 // Dynamically import FloatingViewer since it loads heavy PDF/Video modules
 const FloatingViewer = dynamic(
@@ -203,6 +218,60 @@ export default function WorkspacePage() {
     return () => {
       active = false;
     };
+  }, [id, loading, router, searchParams, storeIsLoading, storeWorkspaceId]);
+
+  // "Add to workspace" from a note (`?addNote=`): make sure the canvas has a
+  // card for it, centred on screen. Like `?assetId=`, waits for the load.
+  const handledAddNoteRef = useRef<string | null>(null);
+  useEffect(() => {
+    const noteId = searchParams.get("addNote");
+    if (!noteId || loading || storeIsLoading || storeWorkspaceId !== id) return;
+    const handledKey = `${id}:${noteId}`;
+    if (handledAddNoteRef.current === handledKey) return;
+    handledAddNoteRef.current = handledKey;
+
+    const ensureNoteCard = async () => {
+      try {
+        const store = useWorkspaceStore.getState();
+        let card = findNoteCard(store.items, noteId);
+        if (!card) {
+          const response = await fetch(`/api/notes/${encodeURIComponent(noteId)}`);
+          const json = await response.json().catch(() => null);
+          if (!response.ok || !json?.ok) throw new Error("Note not found");
+          const position = centeredCardPosition(store.viewport, { w: window.innerWidth, h: window.innerHeight });
+          const props = noteCardProps({ id: json.data.id, title: json.data.title });
+          const added = useWorkspaceStore.getState().addItem("note-card", props, position);
+          card = added ? findNoteCard(useWorkspaceStore.getState().items, noteId) : null;
+        }
+        if (card) useSelectionStore.getState().clearAndSelectIds([card.id]);
+      } catch (error) {
+        console.warn("Failed to add the note card", error);
+      }
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.delete("addNote");
+      const query = nextSearchParams.toString();
+      router.replace(query ? `/workspaces/${id}?${query}` : `/workspaces/${id}`);
+    };
+    void ensureNoteCard();
+  }, [id, loading, router, searchParams, storeIsLoading, storeWorkspaceId]);
+
+  // Deep links to an element (`?focus=<nodeId>`, from "Appears in"): select it
+  // and centre the view on it once the workspace has loaded.
+  const handledFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const focusId = searchParams.get("focus");
+    if (!focusId || loading || storeIsLoading || storeWorkspaceId !== id) return;
+    const handledKey = `${id}:${focusId}`;
+    if (handledFocusRef.current === handledKey) return;
+    handledFocusRef.current = handledKey;
+    // After the canvas has applied its initial fit, so the focus is not overridden.
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("workspace-focus-item", { detail: { id: focusId } }));
+    }, 400);
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("focus");
+    const query = nextSearchParams.toString();
+    router.replace(query ? `/workspaces/${id}?${query}` : `/workspaces/${id}`);
   }, [id, loading, router, searchParams, storeIsLoading, storeWorkspaceId]);
 
   const handleTitleSubmit = () => {
@@ -418,6 +487,7 @@ export default function WorkspacePage() {
       <div className="flex-1 relative z-0 min-h-0">
         <TldrawCanvas workspaceId={id as string} />
       </div>
+      <NotePanelHost />
 
       {/* Floating Viewer Layer */}
       {viewers.map((viewer) => (

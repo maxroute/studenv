@@ -13,6 +13,7 @@ const OUTLINE_ONLY_TYPES: ReadonlySet<WorkspaceNodeType> = new Set<WorkspaceNode
   "pdf-fragment",
   "video-anchor",
   "resource-card",
+  "note-card",
 ]);
 
 export function usesOverlayOutlineOnly(type: string): boolean {

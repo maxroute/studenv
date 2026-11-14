@@ -12,7 +12,7 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
   Bold, ChevronDown, ChevronRight, Code, FileText, Heading1, Heading2, Heading3, Highlighter, History, Italic,
   Link2, List, ListChecks, ListOrdered, ListTree, Minus, MoreHorizontal, Plus, Quote, Sigma, SquareCode,
-  Strikethrough, Table, Trash2, Underline, X, Info, ChevronsDownUp,
+  Strikethrough, Table, Underline, X, Info, ChevronsDownUp, LayoutDashboard,
 } from "lucide-react";
 import { useNoteEditor, type LoadedNote } from "@/hooks/use-note-editor";
 import { toEditorContent, fromEditorJSON } from "@/lib/notes/editor-bridge";
@@ -248,7 +248,10 @@ function MoveDialog({ note, notes, onClose, onMoved }: { note: NoteListEntry; no
 
 // ── note view ──────────────────────────────────────────────────────────────
 
-function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListEntry[]; onSaved: () => void }) {
+export type { NoteListEntry };
+
+/** One note: title, editor, conflicts, history. Used on /notes/[id] and in the workspace side panel (`embedded`). */
+export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId: string; notes: NoteListEntry[]; onSaved: () => void; embedded?: boolean }) {
   const router = useRouter();
   const editorState = useNoteEditor(noteId);
   const { note, loadError, status, conflict, change, saveNow, loadLatest, keepMine, saveAsNew, markReadOnly, reload, setBaseline } = editorState;
@@ -257,6 +260,7 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
   const [title, setTitle] = useState("");
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [addToWorkspaceOpen, setAddToWorkspaceOpen] = useState(false);
   const titleRef = useRef("");
   const notesRef = useRef<NoteListEntry[]>(notes);
   notesRef.current = notes;
@@ -301,6 +305,30 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
       setReadOnlyReason(reason);
       // No update event: switching editing on is not an edit.
       current.setEditable(reason === null, false);
+      // Deep links to a section (/notes/[id]#b_…) scroll to the block and mark it.
+      const blockId = embedded ? null : decodeURIComponent(window.location.hash.slice(1));
+      if (blockId && /^b_[A-Za-z0-9_-]{10}$/.test(blockId)) {
+        // The editor's DOM is attached when EditorContent mounts, which can be
+        // after the content is set; look for the block for up to ~2 s. The mark
+        // is a temporary stylesheet rule: ProseMirror re-renders any node whose
+        // DOM is changed from outside, so a class on the block would vanish.
+        let attempts = 0;
+        const mark = () => {
+          const element = document.querySelector(`.note-prose [data-id="${blockId}"]`);
+          if (element instanceof HTMLElement) {
+            element.scrollIntoView({ block: "center" });
+            const style = document.createElement("style");
+            style.dataset.noteBlockTarget = blockId;
+            style.textContent = `.note-prose [data-id="${blockId}"] { border-radius: 4px; box-shadow: 0 0 0 3px #f5a62366; }`;
+            document.head.append(style);
+            window.setTimeout(() => style.remove(), 2400);
+          } else if ((attempts += 1) < 20) {
+            window.setTimeout(mark, 100);
+          }
+        };
+        // setTimeout, not requestAnimationFrame: frames do not run in a background tab.
+        window.setTimeout(mark, 0);
+      }
       if (reason) {
         markReadOnly();
       } else if (parsed.repaired) {
@@ -310,7 +338,7 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
         baselineRef.current(loaded.title, fromEditorJSON(current.getJSON()));
       }
     },
-    [change, markReadOnly],
+    [change, embedded, markReadOnly],
   );
 
   const appliedVersionRef = useRef<string | null>(null);
@@ -366,6 +394,11 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
           ))}
         </nav>
         <SaveIndicator status={status} />
+        {!embedded ? (
+          <button type="button" className="notes-icon-btn" onClick={() => setAddToWorkspaceOpen(true)} title="Add to workspace" aria-label="Add to workspace">
+            <LayoutDashboard size={16} />
+          </button>
+        ) : null}
         <button type="button" className="notes-icon-btn" onClick={() => setHistoryOpen(true)} title="Version history" aria-label="Version history">
           <History size={16} />
         </button>
@@ -423,6 +456,7 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
       <EditorContent editor={editor} className="note-editor" />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
 
+      {addToWorkspaceOpen ? <AddToWorkspaceDialog noteId={noteId} onClose={() => setAddToWorkspaceOpen(false)} /> : null}
       {historyOpen ? (
         <HistoryPanel
           noteId={noteId}
@@ -597,6 +631,38 @@ function HistoryPanel({
                   }}
                 >
                   Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddToWorkspaceDialog({ noteId, onClose }: { noteId: string; onClose: () => void }) {
+  const router = useRouter();
+  const { data: workspaces, error } = useSWR("/api/workspace", async (url: string) => {
+    const result = await api<Array<{ id: string; title: string }>>(url);
+    if (!result.ok || !result.data) throw new Error(result.error ?? "Workspaces could not be loaded.");
+    return result.data;
+  });
+  return (
+    <div className="notes-dialog-backdrop" role="presentation" onClick={onClose}>
+      <div className="notes-dialog" role="dialog" aria-modal="true" aria-label="Add to workspace" onClick={(event) => event.stopPropagation()}>
+        <div className="notes-history-head">
+          <h2>Add to a workspace</h2>
+          <button type="button" className="notes-icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button>
+        </div>
+        <p className="notes-muted">The note appears as a card; opening the card edits this same note.</p>
+        {error ? <p className="notes-muted">Workspaces could not be loaded.</p> : !workspaces ? <p className="notes-muted">Loading…</p> : workspaces.length === 0 ? <p className="notes-muted">You have no workspaces yet.</p> : (
+          <ul className="notes-history-list">
+            {workspaces.map((workspace) => (
+              <li key={workspace.id}>
+                <div className="notes-history-title">{workspace.title || "Untitled workspace"}</div>
+                <button type="button" className="notes-secondary-btn" onClick={() => router.push(`/workspaces/${workspace.id}?addNote=${encodeURIComponent(noteId)}`)}>
+                  Add here
                 </button>
               </li>
             ))}

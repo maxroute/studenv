@@ -30,7 +30,7 @@
     "test:workspace-history": "tsx --test lib/workspace/workspace-history.test.ts lib/workspace/touch-history-gesture.test.ts lib/workspace/workspace-viewport.test.ts",
     "test:workspace-context-menu": "tsx --test lib/workspace/context-menu.test.ts",
     "test:workspace-lock": "tsx --test lib/workspace/element-lock.test.ts",
-    "test:workspace-resource-card": "tsx --test lib/workspace/resource-card.test.ts",
+    "test:workspace-resource-card": "tsx --test lib/workspace/resource-card.test.ts lib/workspace/note-card.test.ts",
     "test:workspace-forward-compat": "tsx --test lib/workspace/scene-forward-compat.test.ts",
     "test:ink": "tsx --test lib/ink/ink.test.ts",
     "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image && npm run test:workspace-image-resize && npm run test:workspace-connectors && npm run test:workspace-history && npm run test:workspace-context-menu && npm run test:workspace-lock && npm run test:workspace-resource-card && npm run test:workspace-forward-compat && npm run test:ink"
