@@ -9,6 +9,7 @@ import { Lock, X } from "lucide-react";
 import { ROTATE_CORNERS, ROTATE_ZONE_COARSE_PX, ROTATE_ZONE_PX, getRotateCursor, getRotateZoneBox } from "@/lib/workspace/rotate-handles";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
+import { isMultiTouchNavigating } from "@/lib/workspace/navigation-state";
 
 interface StudioItemComponentProps {
   item: StudioItem;
@@ -70,6 +71,8 @@ export function StudioItemComponent({
   // Selected connectors that travel with this drag, moved by their free ends.
   const dragConnectorPropsRef = useRef<GroupMoveSnapshot["connectors"]>(new Map());
   const dragMovedRef = useRef(false);
+  // Set when a second finger turns the drag into a two-finger pan / pinch.
+  const dragCancelledRef = useRef(false);
   const pressPointerIdRef = useRef<number | null>(null);
   const finishPressRef = useRef<((event: PointerEvent) => void) | null>(null);
 
@@ -247,6 +250,7 @@ export function StudioItemComponent({
         // react-draggable fires onStart as soon as a mouse/touch gesture begins,
         // not only after the pointer has actually moved.
         dragMovedRef.current = false;
+        dragCancelledRef.current = isMultiTouchNavigating();
         const { selectedIds, setDraggingIds } = useSelectionStore.getState();
         const { items } = useWorkspaceStore.getState();
         setDraggingIds(selectedIds.includes(item.id) ? selectedIds : [item.id]);
@@ -267,6 +271,13 @@ export function StudioItemComponent({
 
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
+
+        // A second finger turned this into a two-finger pan / pinch: the item stays put.
+        if (isMultiTouchNavigating()) dragCancelledRef.current = true;
+        if (dragCancelledRef.current) {
+          dx = 0;
+          dy = 0;
+        }
 
         if (item.type === "free-text" && Math.hypot(dx, dy) > 2) {
           dragMovedRef.current = true;
@@ -310,11 +321,16 @@ export function StudioItemComponent({
         let dx = d.x - startPos.x;
         let dy = d.y - startPos.y;
 
-        if (onDrag) {
+        if (onDrag && !dragCancelledRef.current) {
           const snapped = onDrag(item.id, startPos.x + dx, startPos.y + dy);
           dx = snapped.x - startPos.x;
           dy = snapped.y - startPos.y;
         }
+        if (dragCancelledRef.current) {
+          dx = 0;
+          dy = 0;
+        }
+        dragCancelledRef.current = false;
 
         if (selectedIds.includes(item.id)) {
           useWorkspaceStore.getState().batchUpdateItems(groupMoveUpdates({
