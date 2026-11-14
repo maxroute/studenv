@@ -1,3 +1,5 @@
+const defaultColors = require("tailwindcss/colors");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -13,7 +15,9 @@ module.exports = {
         surface: "var(--surface)",
         surface2: "var(--surface2)",
         border: "var(--border)",
-        amber: "var(--amber)",
+        // Keep Tailwind's amber-50…900 scale (used across the app) and make the
+        // theme accent the default shade, so `text-amber` still means --amber.
+        amber: { ...defaultColors.amber, DEFAULT: "var(--amber)" },
         text: "var(--text)",
         muted: "var(--muted)",
       },

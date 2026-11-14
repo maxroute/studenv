@@ -54,7 +54,7 @@ export function DashboardClient() {
     setNav,
   } = useAppStore();
   const debouncedQuery = useSearch(filters.q ?? "", 180);
-  const { items, isLoading, mutate, updateItem } = useItems({});
+  const { data: loadedItems, items, isLoading, mutate, updateItem } = useItems({});
   const { collections } = useCollections();
   const activeCollectionId = filters.nav?.startsWith("collection:")
     ? filters.nav.slice("collection:".length)
@@ -249,6 +249,10 @@ export function DashboardClient() {
   }, [requestedCollectionId, setNav]);
 
   useEffect(() => {
+    // Until the first list arrives there are no visible items yet; resetting
+    // here would drop a selection made from the URL (/shelf/[id]).
+    if (!loadedItems) return;
+
     if (!visibleItems.length) {
       if (selectedId) {
         setSelectedId(null);
@@ -259,7 +263,7 @@ export function DashboardClient() {
     if (!selectedId || !visibleItems.some((item) => item.id === selectedId)) {
       setSelectedId(visibleItems[0].id);
     }
-  }, [selectedId, setSelectedId, visibleItems]);
+  }, [loadedItems, selectedId, setSelectedId, visibleItems]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
