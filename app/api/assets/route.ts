@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
     const assets = await prisma.mediaAsset.findMany({
       where: {
         ownerId: user.id,
+        // Notes are pages, not files. Older builds wrapped a note's Shelf entry
+        // in a "web page" asset when it was opened in a workspace; hide those.
+        NOT: { item: { is: { type: "note" } } },
       },
       orderBy: {
         updatedAt: "desc",

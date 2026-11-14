@@ -6,14 +6,12 @@ import type { ItemFilters } from "@/types";
 type AppState = {
   filters: ItemFilters;
   selectedId: string | null;
-  addOpen: boolean;
   confirmDeleteOpen: boolean;
   setFilter: <K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => void;
   setNav: (value: ItemFilters["nav"]) => void;
   toggleTag: (value: string) => void;
   resetFilters: () => void;
   setSelectedId: (value: string | null) => void;
-  setAddOpen: (value: boolean) => void;
   setConfirmDeleteOpen: (value: boolean) => void;
 };
 
@@ -26,7 +24,6 @@ const defaultFilters: ItemFilters = {
 export const useAppStore = create<AppState>((set) => ({
   filters: defaultFilters,
   selectedId: null,
-  addOpen: false,
   confirmDeleteOpen: false,
   setFilter: (key, value) =>
     set((state) => ({
@@ -54,6 +51,5 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   resetFilters: () => set({ filters: defaultFilters }),
   setSelectedId: (value) => set({ selectedId: value }),
-  setAddOpen: (value) => set({ addOpen: value }),
   setConfirmDeleteOpen: (value) => set({ confirmDeleteOpen: value }),
 }));

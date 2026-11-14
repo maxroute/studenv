@@ -4,12 +4,17 @@ import type { Editor, Range } from "@tiptap/core";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import type { SlashCommandItem } from "@/lib/notes/editor-extensions";
 import { popupRenderer } from "./suggestion-popup";
+import { insertEquation } from "./editor-actions";
 
 export type SlashContext = {
   /** Creates a sub-page of this note and returns its id and title, or null. */
   createSubPage: () => Promise<{ id: string; title: string } | null>;
   /** Makes a flashcard from the current block. */
   makeFlashcard: (editor: Editor) => void;
+  /** Bring resources in: pick from the Shelf, add a link, upload a file. */
+  embedFromShelf?: (editor: Editor) => void;
+  embedFromUrl?: (editor: Editor) => void;
+  uploadFile?: (editor: Editor) => void;
 };
 
 const chainAt = (editor: Editor, range: Range) => editor.chain().focus().deleteRange(range);
@@ -25,27 +30,19 @@ export function slashCommands(context: SlashContext): SlashCommandItem[] {
     { id: "todo", title: "To-do list", description: "Track tasks with checkboxes", keywords: ["todo", "task", "checkbox", "check", "checklist", "[]"], badge: "☑", group: "Basic blocks", run: (e, r) => chainAt(e, r).toggleTaskList().run() },
     { id: "toggle", title: "Toggle", description: "Hide content inside a collapsible section", keywords: ["details", "collapse", "fold", "dropdown", "accordion"], badge: "▸", group: "Basic blocks", run: (e, r) => chainAt(e, r).setDetails().run() },
     { id: "quote", title: "Quote", description: "Capture a quotation", keywords: ["blockquote", ">"], badge: "❝", group: "Basic blocks", run: (e, r) => chainAt(e, r).toggleBlockquote().run() },
-    { id: "callout", title: "Callout", description: "Make a note stand out", keywords: ["info", "note", "tip", "warning"], badge: "💡", group: "Basic blocks", run: (e, r) => chainAt(e, r).insertContent({ type: "callout", content: [{ type: "paragraph" }] }).run() },
+    { id: "callout", title: "Callout", description: "Make a page stand out", keywords: ["info", "note", "tip", "warning"], badge: "💡", group: "Basic blocks", run: (e, r) => chainAt(e, r).insertContent({ type: "callout", content: [{ type: "paragraph" }] }).run() },
     { id: "divider", title: "Divider", description: "Separate sections", keywords: ["hr", "line", "separator", "---"], badge: "—", group: "Basic blocks", run: (e, r) => chainAt(e, r).setHorizontalRule().run() },
     { id: "code", title: "Code", description: "Code block with monospace text", keywords: ["snippet", "```", "pre"], badge: "</>", group: "Advanced", run: (e, r) => chainAt(e, r).toggleCodeBlock().run() },
     { id: "table", title: "Table", description: "Rows and columns", keywords: ["grid", "columns"], badge: "▦", group: "Advanced", run: (e, r) => chainAt(e, r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
     {
       id: "equation", title: "Equation", description: "Block equation in LaTeX", keywords: ["math", "latex", "formula", "katex"], badge: "∑", group: "Advanced",
-      run: (e, r) => {
-        const latex = window.prompt("Equation (LaTeX)", "E = mc^2");
-        if (latex) chainAt(e, r).insertBlockMath({ latex }).run();
-        else chainAt(e, r).run();
-      },
+      run: (e, r) => void insertEquation(e, "block", r),
     },
     {
       id: "inline-equation", title: "Inline equation", description: "Math inside a sentence", keywords: ["math", "latex", "inline"], badge: "x²", group: "Advanced",
-      run: (e, r) => {
-        const latex = window.prompt("Inline equation (LaTeX)", "x^2");
-        if (latex) chainAt(e, r).insertInlineMath({ latex }).run();
-        else chainAt(e, r).run();
-      },
+      run: (e, r) => void insertEquation(e, "inline", r),
     },
-    { id: "link", title: "Link to page", description: "Mention a note, resource or workspace", keywords: ["mention", "@", "page", "resource"], badge: "@", group: "Linking", run: (e, r) => chainAt(e, r).insertContent("@").run() },
+    { id: "link", title: "Link to page", description: "Mention a page, resource or workspace", keywords: ["mention", "@", "page", "resource"], badge: "@", group: "Linking", run: (e, r) => chainAt(e, r).insertContent("@").run() },
     {
       id: "subpage", title: "Sub-page", description: "Create a page inside this one and link it here", keywords: ["page", "child", "nested", "new"], badge: "📄", group: "Linking",
       run: (e, r) => {
@@ -55,6 +52,33 @@ export function slashCommands(context: SlashContext): SlashCommandItem[] {
         });
       },
     },
+    ...(context.embedFromShelf
+      ? [{
+          id: "shelf", title: "Shelf resource", description: "Show a PDF, video or article from your Shelf", keywords: ["pdf", "resource", "embed", "library", "shelf", "video", "article"], badge: "📚", group: "Media",
+          run: (e: Editor, r: Range) => {
+            chainAt(e, r).run();
+            context.embedFromShelf?.(e);
+          },
+        }]
+      : []),
+    ...(context.embedFromUrl
+      ? [{
+          id: "url", title: "Link, video or PDF URL", description: "Paste an address; it shows here and on your Shelf", keywords: ["youtube", "video", "link", "url", "web", "bookmark", "embed", "image"], badge: "🔗", group: "Media",
+          run: (e: Editor, r: Range) => {
+            chainAt(e, r).run();
+            context.embedFromUrl?.(e);
+          },
+        }]
+      : []),
+    ...(context.uploadFile
+      ? [{
+          id: "upload", title: "Upload file", description: "PDF, image, video or audio from this device", keywords: ["file", "pdf", "image", "photo", "picture", "video", "audio", "attach"], badge: "⬆", group: "Media",
+          run: (e: Editor, r: Range) => {
+            chainAt(e, r).run();
+            context.uploadFile?.(e);
+          },
+        }]
+      : []),
     {
       id: "flashcard", title: "Flashcard", description: "Turn this line into a flashcard", keywords: ["card", "quiz", "study", "review"], badge: "❏", group: "Study",
       run: (e, r) => {

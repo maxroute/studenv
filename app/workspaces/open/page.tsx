@@ -112,9 +112,11 @@ export default function OpenWorkspacePage() {
 
         advanceProgress(setProgress, 100);
 
-        const nextUrl = data.assetId
-          ? `/workspaces/${data.workspaceId}?assetId=${data.assetId}`
-          : `/workspaces/${data.workspaceId}`;
+        const nextUrl = data.noteId
+          ? `/workspaces/${data.workspaceId}?addNote=${encodeURIComponent(data.noteId)}`
+          : data.assetId
+            ? `/workspaces/${data.workspaceId}?assetId=${data.assetId}`
+            : `/workspaces/${data.workspaceId}`;
 
         router.replace(nextUrl);
       } catch (err) {

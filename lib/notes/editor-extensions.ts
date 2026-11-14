@@ -7,7 +7,7 @@
 // keeps the first half's id, paste and duplicates get new ones). A test locks
 // the two together. No React here, so the schema can be built in tests.
 
-import { Extension, mergeAttributes, Node, type AnyExtension, type Editor, type Range } from "@tiptap/core";
+import { Extension, mergeAttributes, Node, type AnyExtension, type Editor, type NodeViewRenderer, type Range } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import Suggestion from "@tiptap/suggestion";
@@ -16,6 +16,7 @@ import { BulletList, ListItem, ListKeymap, OrderedList, TaskItem, TaskList } fro
 import { TableKit } from "@tiptap/extension-table";
 import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
 import Highlight from "@tiptap/extension-highlight";
+import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
 import { Mathematics } from "@tiptap/extension-mathematics";
 import { UniqueID } from "@tiptap/extension-unique-id";
 import Mention from "@tiptap/extension-mention";
@@ -26,6 +27,7 @@ import { parseRef } from "@/lib/refs/ref-grammar";
 import { refToUrl } from "@/lib/refs/ref-links";
 import { generateBlockId } from "./block-ids";
 import { NOTE_NODE_TYPES } from "./block-registry";
+import { BlockHandle } from "./block-handle";
 
 /** Node types that carry a permanent block id, straight from the registry. */
 export const ID_NODE_TYPES = Object.entries(NOTE_NODE_TYPES)
@@ -68,6 +70,28 @@ const Embed = Node.create({
     const href = hrefFor(node.attrs.ref);
     const label = String(node.attrs.ref ?? "Missing link");
     return ["div", { "data-embed": "", class: "note-embed" }, href ? ["a", { href }, label] : ["span", {}, label]];
+  },
+});
+
+/** One PDF page pinned into the note; `strokes` is the ink drawn on it (annotations.ts). */
+const PdfPage = Node.create({
+  name: "pdfPage",
+  group: "block",
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      assetId: { default: null },
+      page: { default: 1 },
+      title: { default: "" },
+      strokes: { default: [], rendered: false },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "div[data-pdf-page]" }];
+  },
+  renderHTML({ node }) {
+    return ["div", { "data-pdf-page": "", class: "note-pdf-page" }, `${String(node.attrs.title || "PDF")} · page ${Number(node.attrs.page) || 1}`];
   },
 });
 
@@ -188,6 +212,11 @@ export type NoteExtensionOptions = {
   placeholder?: string;
   mentionSuggestion?: Omit<SuggestionOptions<NoteMentionItem>, "editor">;
   slashSuggestion?: Omit<SuggestionOptions<SlashCommandItem>, "editor">;
+  /** The drag handle and block menu beside each block (UI only; off in tests). */
+  blockHandle?: boolean;
+  /** Rich views (React) for embedded resources and pinned PDF pages; plain HTML without them. */
+  embedView?: NodeViewRenderer;
+  pdfPageView?: NodeViewRenderer;
   /** Clicking an equation (to edit its LaTeX). */
   onMathClick?: (node: ProseMirrorNode, pos: number, kind: "block" | "inline") => void;
 };
@@ -216,6 +245,10 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     DetailsSummary,
     DetailsContent,
     Highlight,
+    // Colour and font live on the textStyle mark (values from text-styles.ts).
+    TextStyle,
+    Color,
+    FontFamily,
     Mathematics.configure({
       katexOptions: { throwOnError: false },
       ...(options.onMathClick
@@ -226,7 +259,8 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
         : {}),
     }),
     Callout,
-    Embed,
+    options.embedView ? Embed.extend({ addNodeView: () => options.embedView ?? null }) : Embed,
+    options.pdfPageView ? PdfPage.extend({ addNodeView: () => options.pdfPageView ?? null }) : PdfPage,
     Citation,
     Unsupported,
     UnsupportedInline,
@@ -240,6 +274,7 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
       generateID: options.generateId ?? generateBlockId,
     }),
     SlashCommand.configure({ suggestion: options.slashSuggestion ?? null }),
+    ...(options.blockHandle ? [BlockHandle] : []),
     Placeholder.configure({
       placeholder: ({ node }) =>
         node.type.name === "heading" ? "Heading" : options.placeholder ?? "Type / for blocks, @ to link a page, resource or workspace",

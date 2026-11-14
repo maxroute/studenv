@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="dashboard-shell animate-pulse">
+    <div className="dashboard-shell dashboard-shell-full animate-pulse">
       <main className="main">
         <div className="main-header">
           <div>
@@ -18,11 +18,6 @@ export default function Loading() {
           ))}
         </div>
       </main>
-      <aside className="detail-panel">
-        <div className="h-48 rounded-[14px] bg-white/[0.04]" />
-        <div className="mt-4 h-4 w-3/4 rounded bg-white/[0.05]" />
-        <div className="mt-2 h-4 w-1/2 rounded bg-white/[0.05]" />
-      </aside>
     </div>
   );
 }

@@ -175,8 +175,19 @@ export function createNoteItem(ownerId: string, title: string, excerpt: string, 
   return db.item.create({ data: { userId: ownerId, type: "note", title, excerpt }, select: { id: true } });
 }
 
-export function updateNoteItem(ownerId: string, itemId: string, data: { title: string; excerpt: string }, db: Db) {
-  return db.item.updateMany({ where: { id: itemId, userId: ownerId }, data });
+/**
+ * Keeps a page's Shelf entry in step with it. A note item shows the page's
+ * text as its excerpt; a resource (PDF, video, link) keeps its own excerpt
+ * and only follows the title.
+ */
+export async function updateNoteItem(ownerId: string, itemId: string, data: { title: string; excerpt: string }, db: Db) {
+  await db.item.updateMany({ where: { id: itemId, userId: ownerId, type: "note" }, data });
+  await db.item.updateMany({ where: { id: itemId, userId: ownerId, type: { not: "note" } }, data: { title: data.title } });
+}
+
+/** The Shelf item behind an id, if it is the user's. */
+export function ownedItem(ownerId: string, itemId: string, db: Db) {
+  return db.item.findFirst({ where: { id: itemId, userId: ownerId }, select: { id: true, type: true, title: true, notes: true } });
 }
 
 export function itemOrganisation(ownerId: string, itemId: string, db: Db) {

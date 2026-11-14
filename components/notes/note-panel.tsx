@@ -17,7 +17,7 @@ import { NoteView, type NoteListEntry } from "./notes-app";
 async function listNotes(url: string) {
   const response = await fetch(url);
   const json = await response.json().catch(() => null);
-  if (!response.ok || !json?.ok) throw new Error("Notes could not be loaded.");
+  if (!response.ok || !json?.ok) throw new Error("Pages could not be loaded.");
   return json.data as NoteListEntry[];
 }
 
@@ -69,7 +69,7 @@ export function NotePanel() {
       <div className="note-side-panel-head">
         <Link href={`/notes/${noteId}`}>Open full page</Link>
         <span style={{ flex: 1 }} />
-        <button type="button" className="notes-icon-btn" onClick={close} aria-label="Close note">
+        <button type="button" className="notes-icon-btn" onClick={close} aria-label="Close page">
           <X size={18} />
         </button>
       </div>

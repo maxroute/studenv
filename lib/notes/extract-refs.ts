@@ -36,6 +36,10 @@ export function extractNoteRefs(doc: NoteDoc): NoteRef[] {
       case "embed":
         add(node.attrs?.ref, "embed", blockId);
         break;
+      case "pdfPage":
+        // A pinned page belongs to its PDF: the note uses that file.
+        if (typeof node.attrs?.assetId === "string") add(`asset:${node.attrs.assetId}#page${Math.max(1, Math.floor(Number(node.attrs.page)) || 1)}`, "embed", blockId);
+        break;
       default:
         break;
     }

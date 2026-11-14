@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import * as assetService from "./asset.service";
 import * as workspaceService from "./workspace.service";
+import { openNoteBoard } from "./board.service";
 import { MediaAssetKind } from "@prisma/client";
 
 export async function getOrCreateAssetForItem(itemId: string, userId: string) {
@@ -35,6 +36,21 @@ export async function getOrCreateAssetForItem(itemId: string, userId: string) {
   return asset;
 }
 
+/**
+ * The media asset behind one of the user's Shelf items (created on first use),
+ * without opening a workspace. Used by notes to show and open the resource.
+ */
+export async function getAssetForOwnedItem(itemId: string, userId: string) {
+  const item = await prisma.item.findFirst({ where: { id: itemId, userId }, select: { id: true } });
+  if (!item) {
+    const error = new Error("Item not found.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
+  const asset = await getOrCreateAssetForItem(item.id, userId);
+  return { assetId: asset.id, kind: asset.kind };
+}
+
 export async function openItemInWorkspace(itemId: string, userId: string) {
   console.log(`[ItemAssetService] Opening item ${itemId} for user ${userId}`);
 
@@ -48,7 +64,16 @@ export async function openItemInWorkspace(itemId: string, userId: string) {
   if (!item) {
     throw new Error("Item not found");
   }
-  
+
+  // A note is not a web page: it opens on its own board as a note card.
+  if (item.type === "note") {
+    const note = await prisma.note.findFirst({ where: { itemId: item.id, ownerId: userId, deletedAt: null }, select: { id: true } });
+    if (note) {
+      const board = await openNoteBoard(userId, note.id);
+      return { workspaceId: board.workspaceId, assetId: null, noteId: note.id };
+    }
+  }
+
   const asset = await getOrCreateAssetForItem(itemId, userId);
   console.log(`[ItemAssetService] Asset ready: ${asset.id}`);
 
@@ -80,5 +105,5 @@ export async function openItemInWorkspace(itemId: string, userId: string) {
   }
 
   console.log(`[ItemAssetService] Workspace ready: ${workspace.id}`);
-  return { workspaceId: workspace.id, assetId: asset.id };
+  return { workspaceId: workspace.id, assetId: asset.id, noteId: null };
 }

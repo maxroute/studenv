@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Menu, Plus, Search } from "lucide-react";
+import toast from "react-hot-toast";
 import { BrandLockup } from "@/components/ui/brand-logo";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useUser } from "@/hooks/useUser";
@@ -26,7 +27,8 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
   const accountRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { filters, setFilter, setAddOpen } = useAppStore();
+  const { filters, setFilter } = useAppStore();
+  const [creatingNote, setCreatingNote] = useState(false);
   const { user: freshUser } = useUser();
   const user = (freshUser || initialUser) as typeof initialUser;
 
@@ -132,7 +134,7 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
           <input
             ref={inputRef}
             aria-label="Search items"
-            placeholder="Search titles, tags, notes..."
+            placeholder="Search titles, tags, pages..."
             value={filters.q ?? ""}
             onChange={(event) => {
               ensureLibraryContext();
@@ -176,17 +178,32 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
         ) : null}
 
         <button
-          aria-label="Add item"
+          aria-label="New page"
           className="btn-add"
-          title="Add item"
+          title="New page"
           type="button"
-          onClick={() => {
-            ensureLibraryContext();
-            setAddOpen(true);
+          disabled={creatingNote}
+          onClick={async () => {
+            // A note holds everything (text, PDFs, videos, links), so "+" starts one.
+            setCreatingNote(true);
+            try {
+              const response = await fetch("/api/notes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: "Untitled", parentId: null }),
+              });
+              const json = await response.json().catch(() => null);
+              if (!response.ok || typeof json?.data?.id !== "string") throw new Error(json?.error ?? "The page could not be created.");
+              router.push(`/notes/${json.data.id}`);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "The page could not be created.");
+            } finally {
+              setCreatingNote(false);
+            }
           }}
         >
           <Plus className="topbar-action-icon" size={16} />
-          <span className="topbar-action-label">Add Item</span>
+          <span className="topbar-action-label">New Page</span>
         </button>
 
         <div className={`topbar-account${menuOpen ? " open" : ""}`} ref={accountRef}>

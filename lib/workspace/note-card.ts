@@ -8,7 +8,10 @@
 
 import type { NoteCardNode, StudioItem } from "@/types/workspace";
 
-export const NOTE_CARD_SIZE = { w: 280, h: 160 } as const;
+/** Room for the page's first blocks (headings, to-dos, resources) as they read on the page. */
+export const NOTE_CARD_SIZE = { w: 300, h: 300 } as const;
+/** The size cards were made at before they showed the page itself; such cards grow once. */
+export const LEGACY_NOTE_CARD_SIZE = { w: 280, h: 160 } as const;
 export const NOTE_CARD_EXCERPT_LENGTH = 280;
 
 export function noteCardExcerpt(text: string | null | undefined): string {

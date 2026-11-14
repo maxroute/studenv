@@ -11,14 +11,24 @@ import { parseNoteDoc } from "./note-format";
 const dom = new JSDOM("<!doctype html><html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, getComputedStyle: dom.window.getComputedStyle });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
-for (const key of ["HTMLElement", "Node", "Element", "MutationObserver", "DOMParser", "Text"] as const) {
+for (const key of ["HTMLElement", "HTMLInputElement", "Node", "Element", "MutationObserver", "DOMParser", "Text"] as const) {
   Object.assign(globalThis, { [key]: dom.window[key] });
 }
-dom.window.prompt = () => "x^2";
 Object.assign(globalThis, {
   requestAnimationFrame: (callback: (time: number) => void) => setTimeout(() => callback(Date.now()), 0),
   cancelAnimationFrame: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
 });
+
+/** Types `value` into the open in-app dialog (equations ask for LaTeX) and submits it. */
+async function answerDialog(value: string) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const input = dom.window.document.querySelector<HTMLInputElement>(".note-dialog-input");
+  const form = dom.window.document.querySelector("form.note-dialog-form");
+  if (!input || !form) return;
+  input.value = value;
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function freshEditor() {
   return new Editor({
@@ -27,11 +37,12 @@ function freshEditor() {
   });
 }
 
-test("each / command removes the typed /query and produces a valid note block", () => {
+test("each / command removes the typed /query and produces a valid note block", async () => {
   for (const item of slashCommands({ createSubPage: async () => null, makeFlashcard: () => {} })) {
     if (item.id === "subpage" || item.id === "flashcard") continue; // need the server
     const editor = freshEditor();
     item.run(editor, { from: 1, to: 5 });
+    await answerDialog("x^2");
     const json = editor.getJSON();
     const text = JSON.stringify(json);
     assert.ok(!text.includes("/cmd"), `${item.id}: the /query is removed`);
@@ -42,21 +53,22 @@ test("each / command removes the typed /query and produces a valid note block", 
   }
 });
 
-test("headings, lists, to-dos, toggles and tables become the right nodes", () => {
-  const typeOf = (id: string) => {
+test("headings, lists, to-dos, toggles and tables become the right nodes", async () => {
+  const typeOf = async (id: string) => {
     const item = slashCommands({ createSubPage: async () => null, makeFlashcard: () => {} }).find((entry) => entry.id === id);
     assert.ok(item);
     const editor = freshEditor();
     item.run(editor, { from: 1, to: 5 });
+    await answerDialog("x^2");
     const type = editor.getJSON().content?.[0]?.type;
     editor.destroy();
     return type;
   };
-  assert.equal(typeOf("h1"), "heading");
-  assert.equal(typeOf("bullet"), "bulletList");
-  assert.equal(typeOf("todo"), "taskList");
-  assert.equal(typeOf("toggle"), "details");
-  assert.equal(typeOf("table"), "table");
-  assert.equal(typeOf("callout"), "callout");
-  assert.equal(typeOf("equation"), "blockMath");
+  assert.equal(await typeOf("h1"), "heading");
+  assert.equal(await typeOf("bullet"), "bulletList");
+  assert.equal(await typeOf("todo"), "taskList");
+  assert.equal(await typeOf("toggle"), "details");
+  assert.equal(await typeOf("table"), "table");
+  assert.equal(await typeOf("callout"), "callout");
+  assert.equal(await typeOf("equation"), "blockMath");
 });

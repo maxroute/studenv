@@ -1,6 +1,7 @@
 "use client";
 
 import type { SuggestionKeyDownProps, SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import { placeFloating } from "@/lib/notes/floating";
 
 export type PopupEntry = {
   /** Shown in bold. */
@@ -87,31 +88,9 @@ export function popupRenderer<T>(toEntry: (item: T) => PopupEntry, emptyText: st
       place();
     };
 
-    // On phones the on-screen keyboard shrinks the visible area (the visual
-    // viewport). Browsers disagree on what the caret rect is relative to
-    // (iOS Safari: the visual viewport; Chrome: the layout viewport), while
-    // `position: fixed` is always laid out against the layout viewport. So
-    // measure where the popup's fixed origin lands in rect coordinates and do
-    // the maths there, keeping the popup inside what the user can see.
     const place = () => {
       const rect = current?.clientRect?.();
-      if (!popup || !rect) return;
-      popup.style.top = "0px";
-      popup.style.left = "0px";
-      const origin = popup.getBoundingClientRect();
-      const viewport = window.visualViewport;
-      const visibleTop = (viewport?.offsetTop ?? 0) + origin.top + 8;
-      const visibleBottom = (viewport ? viewport.offsetTop + viewport.height : window.innerHeight) + origin.top - 8;
-      const visibleLeft = (viewport?.offsetLeft ?? 0) + origin.left + 8;
-      const visibleRight = (viewport ? viewport.offsetLeft + viewport.width : window.innerWidth) + origin.left - 8;
-      const roomBelow = visibleBottom - (rect.bottom + 6);
-      const roomAbove = rect.top - 6 - visibleTop;
-      const height = Math.min(popup.scrollHeight, 320, Math.max(roomBelow, roomAbove, 120));
-      popup.style.maxHeight = `${height}px`;
-      const top = roomBelow >= height || roomBelow >= roomAbove ? rect.bottom + 6 : rect.top - 6 - height;
-      const left = Math.max(visibleLeft, Math.min(rect.left, visibleRight - origin.width));
-      popup.style.top = `${Math.max(visibleTop, top) - origin.top}px`;
-      popup.style.left = `${left - origin.left}px`;
+      if (popup && rect) placeFloating(popup, rect, { maxHeight: 320 });
     };
 
     const move = (delta: number) => {

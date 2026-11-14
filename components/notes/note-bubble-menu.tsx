@@ -4,6 +4,8 @@ import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { Bold, Code, Heading2, Highlighter, Italic, Layers, Link2, Strikethrough, Underline } from "lucide-react";
 import type { ReactNode } from "react";
+import { editLink } from "./editor-actions";
+import { FontMenu, TextColorMenu } from "./style-menus";
 
 type Action = { label: string; icon: ReactNode; active?: boolean; run: () => void };
 
@@ -24,16 +26,7 @@ export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlas
       label: "Link",
       icon: <Link2 size={15} />,
       active: editor.isActive("link"),
-      run: () => {
-        if (editor.isActive("link")) {
-          chain().unsetLink().run();
-          return;
-        }
-        const href = window.prompt("Link address (https://…)");
-        if (!href?.trim()) return;
-        const safe = /^(https?:|mailto:)/i.test(href.trim()) ? href.trim() : `https://${href.trim()}`;
-        chain().extendMarkRange("link").setLink({ href: safe }).run();
-      },
+      run: () => void editLink(editor),
     },
     { label: "Turn into heading", icon: <Heading2 size={15} />, active: editor.isActive("heading", { level: 2 }), run: () => chain().toggleHeading({ level: 2 }).run() },
     { label: "Make flashcard", icon: <Layers size={15} />, run: onFlashcard },
@@ -48,7 +41,23 @@ export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlas
       options={{ placement: "top", offset: 8 }}
     >
       <div className="note-bubble" role="toolbar" aria-label="Format selection">
-        {actions.map((action) => (
+        {actions.slice(0, 6).map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            title={action.label}
+            aria-label={action.label}
+            aria-pressed={action.active ?? undefined}
+            className={action.active ? "active" : undefined}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={action.run}
+          >
+            {action.icon}
+          </button>
+        ))}
+        <TextColorMenu editor={editor} />
+        <FontMenu editor={editor} />
+        {actions.slice(6).map((action) => (
           <button
             key={action.label}
             type="button"

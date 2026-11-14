@@ -2,28 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { ChevronDown } from "lucide-react";
-import dynamic from "next/dynamic";
 import { ItemGrid } from "@/components/items/item-grid";
+import { openItemPage } from "@/lib/client/open-item-page";
 
-import { Modal } from "@/components/ui/modal";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useCollections } from "@/hooks/useCollections";
 import { useItem, useItems } from "@/hooks/useItems";
-import { usePlaybackStore } from "@/hooks/usePlaybackStore";
 import { useSearch } from "@/hooks/useSearch";
 import { buildItemUpdatePayload } from "@/lib/utils/item-patch";
-import { isYouTubeUrl } from "@/lib/utils/youtube";
 import type { ItemFilters, ItemRecord, ItemStatus } from "@/types";
 
-const AddItemModal = dynamic(() =>
-  import("@/components/items/add-item-modal").then((mod) => mod.AddItemModal),
-);
-const DetailPanel = dynamic(() =>
-  import("@/components/layout/detail-panel").then((mod) => mod.DetailPanel),
-);
 
 const filterChips: Array<{ key?: ItemStatus; label: string }> = [
   { key: undefined, label: "All" },
@@ -50,31 +41,21 @@ const statusOrder: Record<ItemStatus, number> = {
 
 export function DashboardClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sortRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const [sortOpen, setSortOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
-  const openPlayer = usePlaybackStore((state) => state.openPlayer);
   const {
     filters,
     selectedId,
-    addOpen,
-    confirmDeleteOpen,
     setSelectedId,
-    setAddOpen,
-    setConfirmDeleteOpen,
     setFilter,
     setNav,
   } = useAppStore();
   const debouncedQuery = useSearch(filters.q ?? "", 180);
-  const { items, isLoading, mutate, createItem, updateItem, deleteItem } =
-    useItems({});
-  const {
-    collections,
-    mutate: mutateCollections,
-    updateCollection,
-  } = useCollections();
+  const { items, isLoading, mutate, updateItem } = useItems({});
+  const { collections } = useCollections();
   const activeCollectionId = filters.nav?.startsWith("collection:")
     ? filters.nav.slice("collection:".length)
     : null;
@@ -183,23 +164,9 @@ export function DashboardClient() {
     () => visibleItems.find((item) => item.id === selectedId) ?? null,
     [selectedId, visibleItems],
   );
-  // List rows leave out `notes` and shorten `excerpt`; the detail panel needs
-  // the full record before it can show or save notes.
+  // The full record of the selected item (list rows shorten `excerpt`), kept in step by patchItem.
   const { item: selectedDetail, mutate: mutateSelectedDetail } = useItem(
     selectedItem?.id ?? null,
-  );
-  const selectedDetailItem = useMemo<ItemRecord | null>(
-    () =>
-      selectedItem && selectedDetail?.id === selectedItem.id
-        ? { ...selectedItem, notes: selectedDetail.notes, excerpt: selectedDetail.excerpt }
-        : selectedItem,
-    [selectedDetail, selectedItem],
-  );
-  const selectedNotesLoaded = Boolean(
-    selectedItem && selectedDetail?.id === selectedItem.id,
-  );
-  const canPlaySelectedInApp = Boolean(
-    selectedItem?.type === "video" && isYouTubeUrl(selectedItem.url),
   );
   const activeStatusLabel =
     filterChips.find((chip) => chip.key === filters.status)?.label ?? "All";
@@ -237,11 +204,11 @@ export function DashboardClient() {
       case "type:pdf":
         return <em>PDFs</em>;
       case "type:article":
-        return <em>Articles</em>;
+        return <em>Links</em>;
       case "type:video":
         return <em>Videos</em>;
       case "type:note":
-        return <em>Notes</em>;
+        return <em>Pages</em>;
       case "status:unread":
         return (
           <>
@@ -362,43 +329,9 @@ export function DashboardClient() {
     }
   }
 
-  async function toggleCollectionMembership(
-    item: ItemRecord,
-    collectionId: string,
-  ) {
-    const collection = collections.find((entry) => entry.id === collectionId);
-
-    if (!collection) {
-      return;
-    }
-
-    const nextItemIds = collection.itemIds.includes(item.id)
-      ? collection.itemIds.filter((entry) => entry !== item.id)
-      : [...collection.itemIds, item.id];
-
-    try {
-      await updateCollection(collectionId, { itemIds: nextItemIds });
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  }
-
-  function handleOpenSource(item: ItemRecord) {
-    if (item.type === "video" && isYouTubeUrl(item.url)) {
-      openPlayer(item.id);
-      return;
-    }
-
-    if (item.url) {
-      window.open(item.url, "_blank", "noopener,noreferrer");
-    }
-  }
-
   return (
     <>
-      <div
-        className={`dashboard-shell${selectedItem && detailDrawerOpen ? " detail-drawer-open" : ""}`}
-      >
+      <div className="dashboard-shell dashboard-shell-full">
         <main className="main">
           <div className="main-header">
             <div className="main-title-row">
@@ -516,119 +449,15 @@ export function DashboardClient() {
             view={filters.view ?? "grid"}
             isLoading={isLoading}
             onSelect={(id) => {
-              setSelectedId(id);
-              setDetailDrawerOpen(true);
+              // Every item opens as a page; its details (status, tags, collections) live there.
+              const picked = items.find((entry) => entry.id === id);
+              if (picked) void openItemPage(picked, router.push);
             }}
             onToggleStar={(item) => patchItem(item, { starred: !item.starred })}
           />
         </main>
-
-        <button
-          aria-label="Close details"
-          className="detail-drawer-backdrop"
-          type="button"
-          onClick={() => setDetailDrawerOpen(false)}
-        />
-
-        <DetailPanel
-          item={selectedDetailItem}
-          notesLoaded={selectedNotesLoaded}
-          collections={collections}
-          onClose={() => setDetailDrawerOpen(false)}
-          onDelete={() => setConfirmDeleteOpen(true)}
-          onOpenSource={() => {
-            if (!selectedItem) {
-              return;
-            }
-
-            handleOpenSource(selectedItem);
-          }}
-          openSourceLabel={canPlaySelectedInApp ? "Play in App" : "Open Source"}
-          onToggleCollection={(collection) => {
-            if (!selectedItem) {
-              return;
-            }
-
-            void toggleCollectionMembership(selectedItem, collection.id);
-          }}
-          onUpdate={(payload) => {
-            if (!selectedDetailItem) return Promise.resolve(false);
-            return patchItem(selectedDetailItem, payload);
-          }}
-        />
       </div>
 
-      <AddItemModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSave={async (payload) => {
-          const createdItems = await createItem(payload);
-          const created = createdItems?.[0] ?? null;
-          if (!created) {
-            return;
-          }
-
-          if (selectedCollection) {
-            try {
-              await updateCollection(selectedCollection.id, {
-                itemIds: [...selectedCollection.itemIds, created.id],
-              });
-              setNav(`collection:${selectedCollection.id}`);
-            } catch (error) {
-              toast.error((error as Error).message);
-              setNav("all");
-            }
-          } else {
-            setNav("all");
-          }
-
-          setSelectedId(created.id);
-        }}
-      />
-
-      <Modal
-        open={confirmDeleteOpen}
-        onClose={() => setConfirmDeleteOpen(false)}
-        title="Delete Item"
-        width="sm"
-        footer={
-          <>
-            <button
-              className="btn-cancel"
-              type="button"
-              onClick={() => setConfirmDeleteOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-del-confirm"
-              type="button"
-              onClick={async () => {
-                if (!selectedItem) return;
-                await deleteItem(selectedItem.id);
-                await mutateCollections();
-                setConfirmDeleteOpen(false);
-                setSelectedId(null);
-                toast.success("Item deleted.");
-              }}
-            >
-              Delete
-            </button>
-          </>
-        }
-      >
-        <p className="confirm-text">
-          Are you sure you want to delete{" "}
-          <strong>
-            "
-            {selectedItem?.title
-              ? `${selectedItem.title.slice(0, 40)}${selectedItem.title.length > 40 ? "…" : ""}`
-              : "this item"}
-            "
-          </strong>
-          ? This cannot be undone.
-        </p>
-      </Modal>
     </>
   );
 }
