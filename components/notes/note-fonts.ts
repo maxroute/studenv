@@ -25,7 +25,7 @@ const playfair = localFont({ src: "./fonts/playfair.woff2", weight: "400 900", d
 const slab = localFont({ src: "./fonts/slab.woff2", weight: "100 900", display: "swap", preload: false, variable: "--note-font-slab" });
 const mono = localFont({ src: "./fonts/mono.woff2", weight: "100 800", display: "swap", preload: false, variable: "--note-font-mono" });
 const caveat = localFont({ src: "./fonts/caveat.woff2", weight: "400 700", display: "swap", preload: false, variable: "--note-font-caveat" });
-const patrick = localFont({ src: "./fonts/patrick.woff2", weight: "400", display: "swap", preload: false, variable: "--note-font-patrick" });
+const patrick = localFont({ src: "../../lib/fonts/files/patrick-hand.woff2", weight: "400", display: "swap", preload: false, variable: "--note-font-patrick" });
 
 /** Class names that define every `--note-font-*` variable. */
 export const noteFontVariables = [inter, grotesk, nunito, lora, merriweather, playfair, slab, mono, caveat, patrick]

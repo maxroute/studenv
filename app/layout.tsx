@@ -1,27 +1,11 @@
 
 import { Analytics } from "@vercel/analytics/next"; import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { DM_Mono, DM_Sans, Fraunces } from "next/font/google";
+import { dmMono, dmSans, fraunces } from "@/lib/fonts/app-fonts";
 import "@/app/globals.css";
 import { BootLoaderGate } from "@/components/ui/boot-loader-gate";
 import { Providers } from "@/components/ui/providers";
 import { getPublicSiteUrl } from "@/lib/seo/site-url";
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  variable: "--font-dm-sans",
-});
-
-const dmMono = DM_Mono({
-  subsets: ["latin"],
-  variable: "--font-dm-mono",
-  weight: ["300", "400", "500"],
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-});
 
 export const metadata: Metadata = {
   metadataBase: getPublicSiteUrl(),
