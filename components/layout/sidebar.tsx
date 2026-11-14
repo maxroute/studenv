@@ -226,6 +226,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <hr className="divider" />
 
         <div className="sidebar-section">
+          <div className="sidebar-label">Notes</div>
+          <button
+            className={`nav-item ${pathname.startsWith("/notes") ? "active" : ""}`}
+            type="button"
+            onClick={() => {
+              router.push("/notes");
+              onClose?.();
+            }}
+          >
+            <span className="nav-icon">✎</span>
+            Pages
+          </button>
+        </div>
+
+        <hr className="divider" />
+
+        <div className="sidebar-section">
           <div className="sidebar-label">Workspaces</div>
           {renderNavItem("workspace", "Spatial Studio", undefined, <span className="nav-icon">⬚</span>)}
         </div>
