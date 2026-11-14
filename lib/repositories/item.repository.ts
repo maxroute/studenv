@@ -24,6 +24,8 @@ const itemInclude = {
       tag: true,
     },
   },
+  // Notes items open their Note (Stage 5); trashed notes hide their item.
+  note: { select: { id: true } },
 } satisfies Prisma.ItemInclude;
 
 type ItemWithRelations = Prisma.ItemGetPayload<{
@@ -46,6 +48,7 @@ const itemListSelect = {
   sourceHost: true,
   createdAt: true,
   updatedAt: true,
+  note: { select: { id: true } },
   itemTags: {
     select: {
       tag: {
@@ -174,6 +177,7 @@ export function toPublicItem(item: ItemWithRelations) {
     url: item.url,
     excerpt: item.excerpt,
     notes: item.notes,
+    noteId: item.note?.id ?? null,
     status: item.status,
     starred: item.starred,
     sourceHost: item.sourceHost,
@@ -206,6 +210,7 @@ function toPublicItemSummary(item: ItemListRow) {
     url: item.url,
     excerpt,
     notes: null as string | null,  // never shipped in list view
+    noteId: item.note?.id ?? null,
     status: item.status,
     starred: item.starred,
     sourceHost: item.sourceHost,
@@ -255,6 +260,8 @@ export async function findAll(userId: string, query: ItemQueryInput = {}) {
             },
           }
         : undefined,
+      // A note in the trash keeps its Shelf entry for restoring, but hidden.
+      NOT: { note: { is: { deletedAt: { not: null } } } },
     },
     select: itemListSelect,
     orderBy: mapSort(query.sort),
