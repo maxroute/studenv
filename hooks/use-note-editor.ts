@@ -46,6 +46,9 @@ export function useNoteEditor(noteId: string) {
   const savingRef = useRef(false);
   const blockedRef = useRef(false);
   const timerRef = useRef<number | null>(null);
+  /** Consecutive failed saves; retries back off 3 s, 6 s, 12 s, then every 30 s. */
+  const failuresRef = useRef(0);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
   const noteIdRef = useRef(noteId);
   /** Title and content as last loaded or saved; identical changes are not sent. */
   const baselineRef = useRef<string | null>(null);
@@ -100,6 +103,12 @@ export function useNoteEditor(noteId: string) {
           // Keep the content for the next attempt; never report it as saved.
           pendingRef.current = pendingRef.current ?? sending;
           setStatus("error");
+          // Retry on its own: a database hiccup must not leave content unsaved
+          // until the user happens to type again.
+          failuresRef.current += 1;
+          const delay = Math.min(30_000, 3_000 * 2 ** (failuresRef.current - 1));
+          if (timerRef.current) window.clearTimeout(timerRef.current);
+          timerRef.current = window.setTimeout(() => void flushRef.current(), delay);
           return;
         }
         const saved = result.data;
@@ -107,12 +116,14 @@ export function useNoteEditor(noteId: string) {
         versionRef.current = saved.version;
         setNote((current) => (current ? { ...current, title: saved.title, version: saved.version, updatedAt: saved.updatedAt } : current));
         setLastSavedAt(Date.now());
+        failuresRef.current = 0;
         setStatus(pendingRef.current ? "dirty" : "saved");
       }
     } finally {
       savingRef.current = false;
     }
   }, [noteId]);
+  flushRef.current = flush;
 
   /** Records the latest content and saves it after a short pause. */
   const change = useCallback(

@@ -21,6 +21,8 @@ import { parseNoteDoc } from "@/lib/notes/note-format";
 import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
 import { AppearsIn } from "@/components/refs/appears-in";
 import { createMentionSuggestion } from "./mention-suggestion";
+import { createSlashSuggestion, slashCommands } from "./slash-commands";
+import { NoteBubbleMenu } from "./note-bubble-menu";
 
 type NoteListEntry = { id: string; title: string; parentId: string | null; sortKey: string; itemId: string | null; version: number; updatedAt: string };
 type Revision = { id: string; version: number; title: string; reason: string; createdAt: string };
@@ -265,15 +267,47 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
   const notesRef = useRef<NoteListEntry[]>(notes);
   notesRef.current = notes;
 
-  const extensions = useMemo(
-    () =>
-      createNoteExtensions({
-        mentionSuggestion: createMentionSuggestion((): NoteMentionItem[] =>
-          notesRef.current.filter((n) => n.id !== noteId).map((n) => ({ ref: `note:${n.id}`, label: n.title || "Untitled" })),
-        ),
-      }),
-    [noteId],
-  );
+  // "@" links to pages, Shelf resources and workspaces. The lists are read
+  // through refs so the editor is not rebuilt when they load or change.
+  const { data: shelfItems } = useSWR("/api/items", (url: string) => api<Array<{ id: string; title: string; type: string; noteId?: string | null }>>(url).then((r) => r.data ?? []));
+  const { data: workspaceList } = useSWR("/api/workspace", (url: string) => api<Array<{ id: string; title: string }>>(url).then((r) => r.data ?? []));
+  const linkTargetsRef = useRef<NoteMentionItem[]>([]);
+  linkTargetsRef.current = [
+    ...notes.filter((n) => n.id !== noteId).map((n) => ({ ref: `note:${n.id}`, label: n.title || "Untitled", kind: "note" as const })),
+    // Note items are already listed as pages.
+    ...(shelfItems ?? []).filter((item) => !(item.type === "note" && item.noteId)).map((item) => ({ ref: `item:${item.id}`, label: item.title || "Untitled", kind: "resource" as const })),
+    ...(workspaceList ?? []).map((workspace) => ({ ref: `workspace:${workspace.id}`, label: workspace.title || "Untitled workspace", kind: "workspace" as const })),
+  ];
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+
+  const extensions = useMemo(() => {
+    const slashItems = slashCommands({
+      createSubPage: async () => {
+        const result = await api<LoadedNote>("/api/notes", { method: "POST", body: JSON.stringify({ title: "Untitled", parentId: noteId }) });
+        if (!result.ok || !result.data) {
+          toast.error(result.error ?? "The page could not be created.");
+          return null;
+        }
+        onSavedRef.current();
+        return { id: result.data.id, title: result.data.title };
+      },
+      makeFlashcard: (current) => void makeFlashcard(current, noteId),
+    });
+    return createNoteExtensions({
+      mentionSuggestion: createMentionSuggestion(() => linkTargetsRef.current),
+      slashSuggestion: createSlashSuggestion(() => slashItems),
+      onMathClick: (node, pos, kind) => {
+        const current = editorRef.current;
+        if (!current?.isEditable) return;
+        const latex = window.prompt("Edit equation (LaTeX)", String(node.attrs.latex ?? ""));
+        if (latex === null) return;
+        if (kind === "block") current.chain().focus().updateBlockMath({ latex, pos }).run();
+        else current.chain().focus().updateInlineMath({ latex, pos }).run();
+      },
+    });
+  }, [noteId]);
+  const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor(
     {
@@ -288,6 +322,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     },
     [extensions],
   );
+  editorRef.current = editor;
 
   // Load (and reload after "Load latest" or a restore) the stored content into the editor.
   const applyNote = useCallback(
@@ -429,7 +464,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           if (restored.ok) { appliedVersionRef.current = null; await reload(); onSaved(); }
         }}>Restore</button>
       ) : null}</div> : null}
-      {status === "error" ? <div className="note-banner warning" role="alert">Saving failed. Your changes are kept and will be retried when you keep typing. <button type="button" className="note-inline-btn" onClick={() => void saveNow()}>Retry now</button></div> : null}
+      {status === "error" ? <div className="note-banner warning" role="alert">Saving failed. Your changes are kept here and saving is retried automatically. <button type="button" className="note-inline-btn" onClick={() => void saveNow()}>Retry now</button></div> : null}
 
       <input
         className="note-title-input"
@@ -452,6 +487,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
       />
 
       {editor && !readOnlyReason ? <Toolbar editor={editor} noteId={noteId} /> : null}
+      {editor && !readOnlyReason ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} /> : null}
       {!note ? <p className="notes-muted">Loading…</p> : null}
       <EditorContent editor={editor} className="note-editor" />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}

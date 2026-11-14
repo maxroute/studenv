@@ -7,7 +7,10 @@
 // keeps the first half's id, paste and duplicates get new ones). A test locks
 // the two together. No React here, so the schema can be built in tests.
 
-import { mergeAttributes, Node, type AnyExtension } from "@tiptap/core";
+import { Extension, mergeAttributes, Node, type AnyExtension, type Editor, type Range } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import Suggestion from "@tiptap/suggestion";
 import StarterKit from "@tiptap/starter-kit";
 import { BulletList, ListItem, ListKeymap, OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
@@ -142,12 +145,51 @@ const NoteLink = Link.extend({
   },
 });
 
-export type NoteMentionItem = { ref: string; label: string };
+/** What "@" can link to: any reference, with a label and the kind shown in the picker. */
+export type NoteMentionItem = { ref: string; label: string; kind?: "note" | "resource" | "workspace" };
+
+/** One "/" command: inserts or turns the current line into a block. */
+export type SlashCommandItem = {
+  id: string;
+  title: string;
+  description: string;
+  keywords: readonly string[];
+  badge: string;
+  group: string;
+  run: (editor: Editor, range: Range) => void;
+};
+
+const slashPluginKey = new PluginKey("slashCommand");
+
+/** "/" anywhere in a line opens the block menu (its own plugin key, so it never clashes with "@"). */
+const SlashCommand = Extension.create<{ suggestion: Omit<SuggestionOptions<SlashCommandItem>, "editor"> | null }>({
+  name: "slashCommand",
+  addOptions() {
+    return { suggestion: null };
+  },
+  addProseMirrorPlugins() {
+    if (!this.options.suggestion) return [];
+    return [
+      Suggestion<SlashCommandItem>({
+        editor: this.editor,
+        pluginKey: slashPluginKey,
+        char: "/",
+        allowSpaces: false,
+        startOfLine: false,
+        command: ({ editor, range, props }) => props.run(editor, range),
+        ...this.options.suggestion,
+      }),
+    ];
+  },
+});
 
 export type NoteExtensionOptions = {
   generateId?: () => string;
   placeholder?: string;
   mentionSuggestion?: Omit<SuggestionOptions<NoteMentionItem>, "editor">;
+  slashSuggestion?: Omit<SuggestionOptions<SlashCommandItem>, "editor">;
+  /** Clicking an equation (to edit its LaTeX). */
+  onMathClick?: (node: ProseMirrorNode, pos: number, kind: "block" | "inline") => void;
 };
 
 export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExtension[] {
@@ -174,7 +216,15 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     DetailsSummary,
     DetailsContent,
     Highlight,
-    Mathematics.configure({ katexOptions: { throwOnError: false } }),
+    Mathematics.configure({
+      katexOptions: { throwOnError: false },
+      ...(options.onMathClick
+        ? {
+            blockOptions: { onClick: (node: ProseMirrorNode, pos: number) => options.onMathClick?.(node, pos, "block") },
+            inlineOptions: { onClick: (node: ProseMirrorNode, pos: number) => options.onMathClick?.(node, pos, "inline") },
+          }
+        : {}),
+    }),
     Callout,
     Embed,
     Citation,
@@ -189,6 +239,10 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
       attributeName: "id",
       generateID: options.generateId ?? generateBlockId,
     }),
-    Placeholder.configure({ placeholder: options.placeholder ?? "Write, or type @ to link a note…" }),
+    SlashCommand.configure({ suggestion: options.slashSuggestion ?? null }),
+    Placeholder.configure({
+      placeholder: ({ node }) =>
+        node.type.name === "heading" ? "Heading" : options.placeholder ?? "Type / for blocks, @ to link a page, resource or workspace",
+    }),
   ];
 }

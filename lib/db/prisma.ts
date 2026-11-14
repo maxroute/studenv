@@ -16,3 +16,9 @@ export function getPrismaClient() {
   return prisma;
 }
 
+/**
+ * Limits for interactive transactions that run several queries. Prisma's
+ * default (5 s) is too short when each round trip to the database region takes
+ * a few hundred milliseconds; this keeps them bounded but realistic.
+ */
+export const INTERACTIVE_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 20_000 } as const;

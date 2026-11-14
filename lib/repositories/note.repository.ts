@@ -1,5 +1,5 @@
 import { Prisma, type NoteRevisionReason, type PrismaClient } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
 
 /** The shared client or a transaction; every query below is scoped to an owner. */
 export type Db = PrismaClient | Prisma.TransactionClient;
@@ -25,7 +25,7 @@ export const noteDetailSelect = {
 export const db: Db = prisma;
 
 export function transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-  return prisma.$transaction(run);
+  return prisma.$transaction(run, INTERACTIVE_TRANSACTION_OPTIONS);
 }
 
 export function listActive(ownerId: string, db: Db = prisma) {

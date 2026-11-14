@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
 import type { LinkRow } from "@/lib/refs/extract/link-rows";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -88,5 +88,5 @@ export function ownerLatestScenes(ownerId: string, db: Db = prisma) {
 }
 
 export function transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>) {
-  return prisma.$transaction(run);
+  return prisma.$transaction(run, INTERACTIVE_TRANSACTION_OPTIONS);
 }

@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
 import type { GeneratedFlashcard } from "@/lib/models/ai.model";
 import { toLinkRows } from "@/lib/refs/extract/link-rows";
 import { encodeRefPart, parseRef } from "@/lib/refs/ref-grammar";
@@ -90,7 +90,7 @@ export async function saveFlashcardsIfNone(
 
     await createAiCards(tx, ownerId, analysis.id, assetId, cards);
     return { saved: true, flashcards: cards };
-  });
+  }, INTERACTIVE_TRANSACTION_OPTIONS);
 }
 
 /**
@@ -129,5 +129,5 @@ export async function replaceRegenerableFlashcards(
     }
     if (cards.length > 0) await createAiCards(tx, ownerId, analysis.id, assetId, cards);
     return { replaced: ids.length, flashcards: await activeCards(tx, analysis.id) };
-  });
+  }, INTERACTIVE_TRANSACTION_OPTIONS);
 }

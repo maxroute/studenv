@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -17,7 +17,7 @@ export const cardSelect = {
 } satisfies Prisma.FlashcardSelect;
 
 export function transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>) {
-  return prisma.$transaction(run);
+  return prisma.$transaction(run, INTERACTIVE_TRANSACTION_OPTIONS);
 }
 
 export function list(ownerId: string, filter: { sourceType?: string; sourceId?: string } = {}, db: Db = prisma) {

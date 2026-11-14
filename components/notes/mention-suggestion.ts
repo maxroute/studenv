@@ -1,102 +1,41 @@
 "use client";
 
-import type { SuggestionKeyDownProps, SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import type { SuggestionOptions } from "@tiptap/suggestion";
 import type { NoteMentionItem } from "@/lib/notes/editor-extensions";
+import { popupRenderer } from "./suggestion-popup";
 
-/**
- * The "@" picker: lists notes by title. A plain DOM popup (no extra
- * dependency) positioned under the caret; works with keyboard, mouse and touch.
- */
-export function createMentionSuggestion(
-  getItems: () => NoteMentionItem[],
-): Omit<SuggestionOptions<NoteMentionItem>, "editor"> {
+const GROUPS: Record<NonNullable<NoteMentionItem["kind"]>, { label: string; badge: string }> = {
+  note: { label: "Pages", badge: "📄" },
+  resource: { label: "Resources", badge: "📚" },
+  workspace: { label: "Workspaces", badge: "⬚" },
+};
+
+/** Up to `perGroup` matches of each kind, pages first, title-prefix matches first. */
+export function filterMentions(items: readonly NoteMentionItem[], query: string, perGroup = 6): NoteMentionItem[] {
+  const q = query.trim().toLowerCase();
+  const rank = (item: NoteMentionItem) => (!q ? 1 : item.label.toLowerCase().startsWith(q) ? 0 : item.label.toLowerCase().includes(q) ? 1 : 2);
+  const result: NoteMentionItem[] = [];
+  for (const kind of ["note", "resource", "workspace"] as const) {
+    result.push(
+      ...items
+        .filter((item) => (item.kind ?? "note") === kind && rank(item) < 2)
+        .sort((a, b) => rank(a) - rank(b))
+        .slice(0, perGroup),
+    );
+  }
+  return result;
+}
+
+/** The "@" picker: pages, Shelf resources and workspaces, grouped. */
+export function createMentionSuggestion(getItems: () => NoteMentionItem[]): Omit<SuggestionOptions<NoteMentionItem>, "editor"> {
   return {
     char: "@",
-    items: ({ query }) => {
-      const q = query.trim().toLowerCase();
-      return getItems()
-        .filter((item) => !q || item.label.toLowerCase().includes(q))
-        .slice(0, 8);
-    },
-    render: () => {
-      let popup: HTMLDivElement | null = null;
-      let selected = 0;
-      let current: SuggestionProps<NoteMentionItem> | null = null;
-
-      const choose = (index: number) => {
-        const item = current?.items[index];
-        if (item && current) current.command({ ref: item.ref, label: item.label });
-      };
-
-      const draw = () => {
-        if (!popup || !current) return;
-        popup.replaceChildren();
-        if (current.items.length === 0) {
-          const empty = document.createElement("div");
-          empty.className = "note-mention-empty";
-          empty.textContent = "No matching notes";
-          popup.append(empty);
-        }
-        current.items.forEach((item, index) => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = `note-mention-option${index === selected ? " active" : ""}`;
-          button.textContent = item.label || "Untitled";
-          // pointerdown keeps the editor focused, so the caret stays where @ was typed.
-          button.addEventListener("pointerdown", (event) => {
-            event.preventDefault();
-            choose(index);
-          });
-          popup?.append(button);
-        });
-        const rect = current.clientRect?.();
-        if (rect) {
-          const top = Math.min(rect.bottom + 6, window.innerHeight - 240);
-          const left = Math.max(8, Math.min(rect.left, window.innerWidth - 268));
-          popup.style.top = `${top}px`;
-          popup.style.left = `${left}px`;
-        }
-      };
-
-      return {
-        onStart: (props) => {
-          current = props;
-          selected = 0;
-          popup = document.createElement("div");
-          popup.className = "note-mention-popup";
-          popup.setAttribute("role", "listbox");
-          document.body.append(popup);
-          draw();
-        },
-        onUpdate: (props) => {
-          current = props;
-          selected = Math.min(selected, Math.max(0, props.items.length - 1));
-          draw();
-        },
-        onKeyDown: ({ event }: SuggestionKeyDownProps) => {
-          if (!current) return false;
-          if (event.key === "ArrowDown") {
-            selected = (selected + 1) % Math.max(1, current.items.length);
-            draw();
-            return true;
-          }
-          if (event.key === "ArrowUp") {
-            selected = (selected - 1 + Math.max(1, current.items.length)) % Math.max(1, current.items.length);
-            draw();
-            return true;
-          }
-          if (event.key === "Enter") {
-            choose(selected);
-            return true;
-          }
-          return event.key === "Escape";
-        },
-        onExit: () => {
-          popup?.remove();
-          popup = null;
-          current = null;
-        },
-      };
-    },
+    // Titles have spaces ("Cell biology"); the popup hides once nothing matches.
+    allowSpaces: true,
+    items: ({ query }) => filterMentions(getItems(), query),
+    render: popupRenderer<NoteMentionItem>((item) => {
+      const group = GROUPS[item.kind ?? "note"];
+      return { title: item.label || "Untitled", badge: group.badge, group: group.label };
+    }, "Nothing matches"),
   };
 }
