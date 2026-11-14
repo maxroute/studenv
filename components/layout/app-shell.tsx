@@ -18,23 +18,28 @@ type AppShellProps = PropsWithChildren<{
 
 export function AppShell({ user, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const isShelfRoute = usePathname() === "/shelf";
+  const pathname = usePathname();
+  const isShelfRoute = pathname === "/shelf";
+  // Pages that own their scroll area: the document and the main area must not
+  // scroll too, or on phones the first swipe moves the whole shell (top bar
+  // included) before the page itself scrolls.
+  const ownsScroll = isShelfRoute || pathname === "/notes" || pathname.startsWith("/notes/");
 
   useEffect(() => {
-    document.documentElement.classList.toggle("shelf-scroll-locked", isShelfRoute);
-    document.body.classList.toggle("shelf-scroll-locked", isShelfRoute);
+    document.documentElement.classList.toggle("shelf-scroll-locked", ownsScroll);
+    document.body.classList.toggle("shelf-scroll-locked", ownsScroll);
 
     return () => {
       document.documentElement.classList.remove("shelf-scroll-locked");
       document.body.classList.remove("shelf-scroll-locked");
     };
-  }, [isShelfRoute]);
+  }, [ownsScroll]);
 
   return (
-    <div className={`app-shell${isShelfRoute ? " shelf-shell" : ""}`}>
+    <div className={`app-shell${ownsScroll ? " shelf-shell" : ""}`}>
       <Topbar user={user} onOpenSidebar={() => setSidebarOpen(true)} />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className={`app-main${isShelfRoute ? " shelf-scroll-layout" : ""}`}>
+      <div className={`app-main${ownsScroll ? " shelf-scroll-layout" : ""}`}>
         {children}
       </div>
       <VideoPlayerOverlay />

@@ -18,6 +18,7 @@
 // Pure: no React, no Prisma.
 
 import { generateBlockId, isBlockId } from "./block-ids";
+import { coerceTextStyleAttrs } from "./text-styles";
 import {
   NOTE_NODE_TYPES,
   coerceLinkMarkAttrs,
@@ -155,6 +156,22 @@ function normalizeMarks(ctx: Context, raw: unknown, allowMarks: boolean): NoteMa
         attrs[key] = value;
       }
       marks.push({ type: "link", attrs });
+      continue;
+    }
+    if (entry.type === "textStyle") {
+      // Colour and font are written into a style attribute: only safe values survive.
+      const original = isRecord(entry.attrs) ? entry.attrs : {};
+      const attrs: NoteAttrs = { ...original };
+      for (const [key, value] of Object.entries(coerceTextStyleAttrs(original))) {
+        if (original[key] === undefined && value === null) continue;
+        if (!sameValue(original[key], value)) repair(ctx, "text style coerced");
+        attrs[key] = value;
+      }
+      if (Object.values(attrs).every((value) => value === null || value === undefined)) {
+        repair(ctx, "empty text style removed");
+        continue;
+      }
+      marks.push({ type: "textStyle", attrs });
       continue;
     }
     // Unknown and attribute-free marks are kept as they are.

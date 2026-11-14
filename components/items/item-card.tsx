@@ -52,7 +52,7 @@ export function ItemCard({
       }}
     >
       <div className="card-type">
-        <span className={`type-badge ${item.type}`}>{item.type}</span>
+        <span className={`type-badge ${item.type}`}>{item.type === "note" ? "page" : item.type === "article" ? "link" : item.type}</span>
         {playlistReport ? <span className="playlist-mini-badge">playlist</span> : null}
         <button
           className={`star-btn ${item.starred ? "starred" : ""}`}

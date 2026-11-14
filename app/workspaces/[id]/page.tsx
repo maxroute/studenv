@@ -6,9 +6,8 @@ import { useEffect, useState, useRef } from "react";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useViewerStore } from "@/hooks/use-viewer-store";
 import { centeredCardPosition, findResourceCard, resourceCardProps } from "@/lib/workspace/resource-card";
-import { findNoteCard, noteCardProps } from "@/lib/workspace/note-card";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
-import { useSelectionStore } from "@/lib/workspace/selection-engine";
+import { addNoteCardToBoard } from "@/components/workspace/note-card-actions";
 import { Loader2, ArrowLeft, Save, CheckCircle2, Video, FileText, Maximize2, RefreshCw, AlertCircle, Music4, Globe } from "lucide-react";
 
 // Dynamically import tldraw to avoid SSR issues
@@ -232,18 +231,7 @@ export default function WorkspacePage() {
 
     const ensureNoteCard = async () => {
       try {
-        const store = useWorkspaceStore.getState();
-        let card = findNoteCard(store.items, noteId);
-        if (!card) {
-          const response = await fetch(`/api/notes/${encodeURIComponent(noteId)}`);
-          const json = await response.json().catch(() => null);
-          if (!response.ok || !json?.ok) throw new Error("Note not found");
-          const position = centeredCardPosition(store.viewport, { w: window.innerWidth, h: window.innerHeight });
-          const props = noteCardProps({ id: json.data.id, title: json.data.title });
-          const added = useWorkspaceStore.getState().addItem("note-card", props, position);
-          card = added ? findNoteCard(useWorkspaceStore.getState().items, noteId) : null;
-        }
-        if (card) useSelectionStore.getState().clearAndSelectIds([card.id]);
+        if (!(await addNoteCardToBoard(noteId))) throw new Error("Note not found");
       } catch (error) {
         console.warn("Failed to add the note card", error);
       }

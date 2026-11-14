@@ -12,12 +12,12 @@ export async function POST(
   }
 
   try {
-    const { workspaceId, assetId } = await itemAssetService.openItemInWorkspace(
+    const { workspaceId, assetId, noteId } = await itemAssetService.openItemInWorkspace(
       params.id,
       session.user.id
     );
 
-    return NextResponse.json({ workspaceId, assetId });
+    return NextResponse.json({ workspaceId, assetId, noteId });
   } catch (error: any) {
     console.error("[items.workspace] Failed to open item:", error);
     return NextResponse.json(

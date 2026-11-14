@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { createWorkspaceItem, parseWorkspaceSceneJson, serializeWorkspaceScene, type StudioItem } from "@/types/workspace";
 import { extractSceneRefs, toLinkRows } from "@/lib/refs/extract/link-rows";
-import { findNoteCard, noteCardExcerpt, noteCardIsStale, noteCardProps, replaceStickyWithNoteCard, stickyNoteText } from "./note-card";
+import { NOTE_CARD_SIZE, findNoteCard, noteCardExcerpt, noteCardIsStale, noteCardProps, replaceStickyWithNoteCard, stickyNoteText } from "./note-card";
 
 const make = (type: Parameters<typeof createWorkspaceItem>[0], props: Record<string, unknown>, id: string, x = 0): StudioItem => {
   const item = createWorkspaceItem(type, props, { id, x, y: 0, zIndex: 1 });
@@ -16,7 +16,7 @@ test("a note card saves and loads, and old snapshots without one are unaffected"
   const scene = parseWorkspaceSceneJson(serializeWorkspaceScene({ items: [card] }));
   assert.equal(scene.preservedItems.length, 0, "known now, not kept aside");
   assert.deepEqual(scene.items[0], card);
-  assert.equal(card.w, 280);
+  assert.equal(card.w, NOTE_CARD_SIZE.w);
 });
 
 test("a damaged note card is repaired; one without a note id is dropped", () => {

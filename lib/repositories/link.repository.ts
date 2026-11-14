@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
 import type { LinkRow } from "@/lib/refs/extract/link-rows";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -88,5 +88,23 @@ export function ownerLatestScenes(ownerId: string, db: Db = prisma) {
 }
 
 export function transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>) {
-  return prisma.$transaction(run);
+  return prisma.$transaction(run, INTERACTIVE_TRANSACTION_OPTIONS);
+}
+
+/** Notes shown as cards on a workspace (from its "card" links). */
+export async function cardNoteIdsOfWorkspace(ownerId: string, workspaceId: string, db: Db = prisma) {
+  const rows = await db.contentLink.findMany({
+    where: { ownerId, sourceType: "workspace", sourceId: workspaceId, targetType: "note", kind: "card" },
+    select: { targetId: true },
+    distinct: ["targetId"],
+  });
+  return rows.map((row) => row.targetId);
+}
+
+/** Shelf items and files the given notes mention or embed. */
+export function resourceLinksOfNotes(ownerId: string, noteIds: string[], db: Db = prisma) {
+  return db.contentLink.findMany({
+    where: { ownerId, sourceType: "note", sourceId: { in: noteIds }, targetType: { in: ["item", "asset"] } },
+    select: { sourceId: true, targetType: true, targetId: true },
+  });
 }

@@ -2,6 +2,7 @@ import type { Plan, Prisma } from "@prisma/client";
 import { siteConfig } from "@/config/site";
 import type { CreateNoteInput, MoveNoteInput, NoteDetail, SaveNoteInput } from "@/lib/models/note.model";
 import { textToNoteDoc } from "@/lib/notes/legacy-text";
+import { generateBlockId } from "@/lib/notes/block-ids";
 import { createEmptyNoteDoc } from "@/lib/notes/note-format";
 import { NoteDocError, normalizeNoteTitle, noteExcerpt, prepareNoteDoc, type PreparedNoteDoc } from "@/lib/notes/note-save";
 import { revisionsToPrune, shouldCheckpoint } from "@/lib/notes/revision-policy";
@@ -334,6 +335,51 @@ export async function createNoteForItem(
   return options.db ? run(options.db) : noteRepository.transaction(run);
 }
 
+/**
+ * The page of any Shelf item, created the first time it is opened. A note
+ * item's page is the note itself; a resource (PDF, video, link) gets a page
+ * that starts with the resource and keeps the item's old plain-text notes
+ * under it. A page that was moved to the trash comes back.
+ */
+export async function openPageForItem(userId: string, itemId: string) {
+  const existing = await noteRepository.findByItemId(userId, itemId, noteRepository.db);
+  if (existing) {
+    if (existing.deletedAt) await restoreNote(userId, existing.id);
+    return { noteId: existing.id };
+  }
+  const item = await noteRepository.ownedItem(userId, itemId, noteRepository.db);
+  if (!item) throw httpError("Item not found.", 404);
+  if (item.type === "note") {
+    const note = await createNoteForItem(userId, item);
+    return { noteId: note.id };
+  }
+  const note = await noteRepository.transaction(async (db) => {
+    const again = await noteRepository.findByItemId(userId, item.id, db);
+    if (again) return again;
+    const envelope = textToNoteDoc(item.notes);
+    envelope.doc.content.unshift({ type: "embed", attrs: { id: generateBlockId(), ref: `item:${item.id}` } });
+    const prepared = prepareNoteDoc(envelope);
+    const title = normalizeNoteTitle(item.title);
+    const last = await noteRepository.lastSiblingKey(userId, null, db);
+    const created = await noteRepository.create(
+      {
+        ownerId: userId,
+        itemId: item.id,
+        parentId: null,
+        sortKey: sortKeyBetween(last?.sortKey ?? null, null),
+        title,
+        docJson: prepared.docJson,
+        docFormat: prepared.docFormat,
+        plainText: prepared.plainText,
+      },
+      db,
+    );
+    await runWriteHooks(userId, created.id, prepared, db);
+    return created;
+  });
+  return { noteId: note.id };
+}
+
 /** A rename on the Shelf renames the note (as a new version, so open editors see a conflict). */
 export async function renameNoteFromShelf(userId: string, noteId: string, title: string) {
   await noteRepository.update(userId, noteId, { title: normalizeNoteTitle(title), version: { increment: 1 } }, noteRepository.db);
@@ -380,6 +426,11 @@ export async function moveNote(userId: string, plan: Plan, id: string, input: Mo
 
     let itemId = current.itemId;
     if (parentId && itemId) {
+      // A resource's page is the resource on the Shelf: nesting would delete the PDF, video or link.
+      const item = await noteRepository.ownedItem(userId, itemId, tx);
+      if (item && item.type !== "note") {
+        throw httpError("This page belongs to a Shelf resource and stays at the top level.", 409);
+      }
       const organisation = await noteRepository.itemOrganisation(userId, itemId, tx);
       if (organisation && (organisation._count.itemTags > 0 || organisation._count.collectionItems > 0)) {
         throw httpError("This note has tags or collections on the Shelf. Remove them before nesting it.", 409);

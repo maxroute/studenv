@@ -21,7 +21,7 @@ const KIND_LABELS: Record<string, string> = {
   source: "source",
 };
 
-const SOURCE_LABELS: Record<string, string> = { note: "Note", workspace: "Workspace", flashcard: "Flashcard" };
+const SOURCE_LABELS: Record<string, string> = { note: "Page", workspace: "Board", flashcard: "Flashcard" };
 
 function anchorLabel(anchor: string) {
   const page = /^page(\d+)$/.exec(anchor);

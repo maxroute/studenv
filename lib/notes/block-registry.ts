@@ -11,6 +11,7 @@
 // here load as `unsupported` / `unsupportedInline` and round-trip unchanged.
 
 import { RefStringSchema, formatRef } from "@/lib/refs/ref-grammar";
+import { coerceStrokes } from "./annotations";
 
 export type NoteAttrs = Record<string, unknown>;
 
@@ -139,6 +140,18 @@ export const NOTE_NODE_TYPES: Readonly<Record<string, NoteNodeDef>> = {
     content: "none",
     coerceAttrs: (attrs) => ({ latex: stringOr(attrs.latex, "") }),
   },
+  /** One PDF page pinned into the note, with ink drawn on it. */
+  pdfPage: {
+    kind: "block",
+    hasId: true,
+    content: "none",
+    coerceAttrs: (attrs) => ({
+      assetId: typeof attrs.assetId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(attrs.assetId) ? attrs.assetId : null,
+      page: intAtLeast(attrs.page, 1, 1),
+      title: stringOr(attrs.title, "", 500),
+      strokes: coerceStrokes(attrs.strokes),
+    }),
+  },
   citation: {
     kind: "block",
     hasId: true,
@@ -170,7 +183,7 @@ export function getNoteNodeDef(type: string): NoteNodeDef | undefined {
 }
 
 /** Marks v1 understands. Unknown marks are kept verbatim. */
-export const NOTE_MARK_TYPES = ["bold", "italic", "underline", "strike", "code", "highlight", "link"] as const;
+export const NOTE_MARK_TYPES = ["bold", "italic", "underline", "strike", "code", "highlight", "link", "textStyle"] as const;
 
 /**
  * A link mark points at a URL (`href`) or at something in Studenv (`ref`).

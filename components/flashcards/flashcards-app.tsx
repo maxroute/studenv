@@ -40,7 +40,7 @@ const RATINGS = [
 function sourceLink(sourceRef: string | null) {
   if (!sourceRef) return null;
   const note = /^note:([^#]+)(#(.+))?$/.exec(sourceRef);
-  if (note) return { href: `/notes/${note[1]}${note[3] ? `#${note[3]}` : ""}`, label: "From a note" };
+  if (note) return { href: `/notes/${note[1]}${note[3] ? `#${note[3]}` : ""}`, label: "From a page" };
   if (sourceRef.startsWith("asset:")) return { href: null, label: "From a resource" };
   return null;
 }
@@ -79,7 +79,7 @@ function ReviewQueue() {
     return (
       <div className="notes-empty">
         <h2>All caught up</h2>
-        <p className="notes-muted">No cards are due. Add cards from the All cards tab or from a note (select text, then the flashcard button).</p>
+        <p className="notes-muted">No cards are due. Add cards from the All cards tab or from a page (select text, then the flashcard button).</p>
       </div>
     );
   }

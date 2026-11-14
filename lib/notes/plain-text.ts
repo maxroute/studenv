@@ -15,7 +15,7 @@ function rawText(value: unknown, depth = 0): string {
   return [own, ...children].filter(Boolean).join(" ");
 }
 
-function inlineText(nodes: readonly NoteNode[]): string {
+export function inlineText(nodes: readonly NoteNode[]): string {
   let text = "";
   for (const node of nodes) {
     switch (node.type) {

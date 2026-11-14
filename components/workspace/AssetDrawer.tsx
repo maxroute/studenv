@@ -15,7 +15,10 @@ import {
   Link2,
   Upload,
   Loader2,
-  Trash2
+  Trash2,
+  StickyNote,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
@@ -26,6 +29,9 @@ import {
   inferUploadAssetKind,
 } from "@/lib/utils/media-assets";
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
+import { useNotePanelStore } from "@/hooks/use-note-panel-store";
+import type { NoteCardNode } from "@/types/workspace";
+import { addNoteCardToBoard } from "./note-card-actions";
 
 interface Asset {
   id: string;
@@ -35,7 +41,7 @@ interface Asset {
   mimeType: string | null;
 }
 
-type DrawerScope = "workspace" | "all";
+type BoardResource = { assetId: string; kind: Asset["kind"]; title: string; revisionId: string | null; noteIds: string[] };
 
 
 export function AssetDrawer() {
@@ -49,7 +55,11 @@ export function AssetDrawer() {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
-  const [scope, setScope] = useState<DrawerScope>("workspace");
+  const [boardResources, setBoardResources] = useState<BoardResource[]>([]);
+  const [tab, setTab] = useState<"board" | "library">("board");
+  const [kindFilter, setKindFilter] = useState<"all" | "pages" | "resources">("all");
+  const [collapsedPages, setCollapsedPages] = useState<Set<string>>(new Set());
+  const [allNotes, setAllNotes] = useState<Array<{ id: string; title: string }>>([]);
   const [touchDragPreview, setTouchDragPreview] = useState<{ assetId: string; x: number; y: number; width: number; height: number } | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -64,8 +74,31 @@ export function AssetDrawer() {
   useEffect(() => {
     if (isOpen) {
       void fetchAssets();
+      void fetch("/api/notes")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((json) => {
+          if (Array.isArray(json?.data)) setAllNotes(json.data.map((note: { id: string; title: string }) => ({ id: note.id, title: note.title })));
+        })
+        .catch(() => undefined);
     }
   }, [isOpen]);
+
+  // The resources of the pages on the board, refreshed when pages come and go.
+  const workspaceId = useWorkspaceStore((state) => state.workspaceId);
+  const cardNoteKey = [...new Set(workspaceItems.flatMap((item) => (item.type === "note-card" ? [item.props.noteId] : [])))].sort().join(",");
+  useEffect(() => {
+    if (!isOpen || !workspaceId) return;
+    let active = true;
+    void fetch(`/api/workspace/${encodeURIComponent(workspaceId)}/resources?notes=${encodeURIComponent(cardNoteKey)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json) => {
+        if (active && Array.isArray(json?.data?.resources)) setBoardResources(json.data.resources);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [cardNoteKey, isOpen, workspaceId]);
 
   useEffect(() => {
     if (!showAddMenu) {
@@ -211,8 +244,134 @@ export function AssetDrawer() {
       }),
     ].filter(Boolean) as string[],
   );
-  const scopedAssets = filteredAssets.filter((asset) =>
-    scope === "all" ? true : workspaceAssetIds.has(asset.id),
+
+  // Two tabs: "This board" (its pages, each with the resources it uses, and
+  // files placed on the board directly) and "Library" (everything else).
+  const query = searchQuery.trim().toLowerCase();
+  const matches = (title: string) => !query || title.toLowerCase().includes(query);
+  const boardPages = workspaceItems
+    .filter((item): item is NoteCardNode => item.type === "note-card")
+    .map((item) => ({ noteId: item.props.noteId, title: item.props.title || "Untitled" }))
+    .filter((page, index, all) => all.findIndex((other) => other.noteId === page.noteId) === index);
+  const resourceAsset = (resource: BoardResource): Asset => ({
+    id: resource.assetId, title: resource.title, kind: resource.kind, currentRevisionId: resource.revisionId, mimeType: null,
+  });
+  const resourcesOfPage = (noteId: string) => boardResources.filter((resource) => resource.noteIds.includes(noteId)).map(resourceAsset);
+  const fromPages = new Set(boardResources.map((resource) => resource.assetId));
+  const boardOnlyAssets = assets.filter((asset) => workspaceAssetIds.has(asset.id) && !fromPages.has(asset.id));
+  const onBoardAssetIds = new Set([...fromPages, ...boardOnlyAssets.map((asset) => asset.id)]);
+  const boardAllResources = [...boardResources.map(resourceAsset), ...boardOnlyAssets].filter((asset) => matches(asset.title));
+  const onBoardNoteIds = new Set(boardPages.map((page) => page.noteId));
+  const libraryPages = allNotes.filter((note) => !onBoardNoteIds.has(note.id) && matches(note.title || "Untitled"));
+  const libraryAssets = filteredAssets.filter((asset) => !onBoardAssetIds.has(asset.id));
+  const showPages = kindFilter !== "resources";
+  const showResources = kindFilter !== "pages";
+
+  const addPage = async (noteId: string) => {
+    const added = await addNoteCardToBoard(noteId);
+    if (!added) toast.error("That page could not be added.");
+  };
+
+  const renderAssetRow = (asset: Asset, detail: string | undefined, deletable: boolean) => (
+                  <Fragment key={asset.id}>
+                  {touchDragPreview?.assetId === asset.id ? (
+                    <div
+                      aria-hidden="true"
+                      className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50"
+                      style={{ height: touchDragPreview.height }}
+                    />
+                  ) : null}
+                  <div
+                    draggable
+                    style={{
+                      touchAction: "none",
+                      ...(touchDragPreview?.assetId === asset.id ? {
+                        position: "fixed" as const,
+                        left: touchDragPreview.x,
+                        top: touchDragPreview.y,
+                        width: touchDragPreview.width,
+                        height: touchDragPreview.height,
+                        zIndex: 10002,
+                        pointerEvents: "none" as const,
+                        boxShadow: "0 16px 40px rgba(15,23,42,.22)",
+                        transform: "scale(1.02)",
+                      } : {}),
+                    }}
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "touch") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      touchDragRef.current = {
+                        asset,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        offsetX: event.clientX - rect.left,
+                        offsetY: event.clientY - rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                        moved: false,
+                      };
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = touchDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+                        drag.moved = true;
+                        setTouchDragPreview({
+                          assetId: asset.id,
+                          x: event.clientX - drag.offsetX,
+                          y: event.clientY - drag.offsetY,
+                          width: drag.width,
+                          height: drag.height,
+                        });
+                      }
+                    }}
+                    onPointerCancel={(event) => {
+                      if (touchDragRef.current?.pointerId === event.pointerId) {
+                        touchDragRef.current = null;
+                        setTouchDragPreview(null);
+                      }
+                    }}
+                    onDragStart={(e) => {
+                      const dragData = {
+                        type: asset.kind,
+                        kind: asset.kind,
+                        assetId: asset.id,
+                        title: asset.title,
+                        revisionId: asset.currentRevisionId
+                      };
+                      e.dataTransfer.setData("application/vnd.second-brain.asset", JSON.stringify(dragData));
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    className="flex min-h-[36px] items-center gap-2.5 rounded-lg border border-transparent bg-white px-2 py-1 transition-colors hover:border-indigo-200 hover:bg-indigo-50/40 cursor-grab active:cursor-grabbing group"
+                  >
+                    <div className={`p-1.5 rounded-md shrink-0 ${getAssetIconClassName(asset)}`}>
+                      {renderAssetIcon(asset)}
+                    </div>
+                    <p className="min-w-0 flex-1 truncate text-[13px] text-slate-700 group-hover:text-slate-900" title={detail ? `${asset.title} · ${detail}` : asset.title}>
+                      {asset.title}
+                    </p>
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-tight text-slate-400">{getAssetKindLabel(asset.kind)}</span>
+                    {deletable ? (
+                    <button
+                        className="rounded-md p-1.5 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                        title="Delete resource"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          event.preventDefault();
+                          void handleDeleteAsset(asset);
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : null}
+                    <GripVertical className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
+                  </div>
+                  </Fragment>
   );
 
   const handleDeleteAsset = async (asset: Asset) => {
@@ -352,7 +511,7 @@ export function AssetDrawer() {
             <div className="shrink-0 p-4 border-b flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2 min-w-0">
                 <Library className="w-4 h-4 text-indigo-500 shrink-0" />
-                <h3 className="font-bold text-slate-800 truncate">Vault Library</h3>
+                <h3 className="font-bold text-slate-800 truncate">Vault</h3>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <div className="relative" ref={addMenuRef}>
@@ -447,178 +606,143 @@ export function AssetDrawer() {
             ) : null}
 
             {/* Search */}
-            <div className="shrink-0 p-3 border-b">
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                <button
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "workspace"
-                      ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                    }`}
-                  type="button"
-                  onClick={() => setScope("workspace")}
-                >
-                  This Workspace
-                </button>
-                <button
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${scope === "all"
-                      ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                    }`}
-                  type="button"
-                  onClick={() => setScope("all")}
-                >
-                  All Assets
-                </button>
+            <div className="shrink-0 px-3 pt-3 pb-2 border-b">
+              <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Vault">
+                {(["board", "library"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === value}
+                    onClick={() => setTab(value)}
+                    className={`rounded-md py-1.5 text-xs font-medium transition-colors ${tab === value ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {value === "board" ? "This board" : "Library"}
+                  </button>
+                ))}
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search your assets..."
+                  placeholder="Find any page or file"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 transition-shadow"
                 />
               </div>
+              <div className="mt-2 flex gap-1.5" role="group" aria-label="Show">
+                {(["all", "pages", "resources"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={kindFilter === value}
+                    onClick={() => setKindFilter(value)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === value ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {value === "all" ? "All" : value === "pages" ? "Pages" : "Resources"}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Asset List */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-0.5">
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   <p className="text-xs text-slate-400 font-medium tracking-wide">FETCHING ASSETS...</p>
                 </div>
-              ) : scopedAssets.length > 0 ? (
-                scopedAssets.map((asset) => (
-                  <Fragment key={asset.id}>
-                  {touchDragPreview?.assetId === asset.id ? (
-                    <div
-                      aria-hidden="true"
-                      className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50"
-                      style={{ height: touchDragPreview.height }}
-                    />
-                  ) : null}
-                  <div
-                    draggable
-                    style={{
-                      touchAction: "none",
-                      ...(touchDragPreview?.assetId === asset.id ? {
-                        position: "fixed" as const,
-                        left: touchDragPreview.x,
-                        top: touchDragPreview.y,
-                        width: touchDragPreview.width,
-                        height: touchDragPreview.height,
-                        zIndex: 10002,
-                        pointerEvents: "none" as const,
-                        boxShadow: "0 16px 40px rgba(15,23,42,.22)",
-                        transform: "scale(1.02)",
-                      } : {}),
-                    }}
-                    onPointerDown={(event) => {
-                      if (event.pointerType !== "touch") return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      touchDragRef.current = {
-                        asset,
-                        pointerId: event.pointerId,
-                        startX: event.clientX,
-                        startY: event.clientY,
-                        offsetX: event.clientX - rect.left,
-                        offsetY: event.clientY - rect.top,
-                        width: rect.width,
-                        height: rect.height,
-                        moved: false,
-                      };
-                    }}
-                    onPointerMove={(event) => {
-                      const drag = touchDragRef.current;
-                      if (!drag || drag.pointerId !== event.pointerId) return;
-                      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
-                        drag.moved = true;
-                        setTouchDragPreview({
-                          assetId: asset.id,
-                          x: event.clientX - drag.offsetX,
-                          y: event.clientY - drag.offsetY,
-                          width: drag.width,
-                          height: drag.height,
-                        });
-                      }
-                    }}
-                    onPointerCancel={(event) => {
-                      if (touchDragRef.current?.pointerId === event.pointerId) {
-                        touchDragRef.current = null;
-                        setTouchDragPreview(null);
-                      }
-                    }}
-                    onDragStart={(e) => {
-                      const dragData = {
-                        type: asset.kind,
-                        kind: asset.kind,
-                        assetId: asset.id,
-                        title: asset.title,
-                        revisionId: asset.currentRevisionId
-                      };
-                      e.dataTransfer.setData("application/vnd.second-brain.asset", JSON.stringify(dragData));
-                      e.dataTransfer.effectAllowed = "copy";
-                    }}
-                    className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5 transition-all cursor-grab active:cursor-grabbing group"
-                  >
-                    <div className={`p-2 rounded-lg shrink-0 ${getAssetIconClassName(asset)}`}>
-                      {renderAssetIcon(asset)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-700 truncate group-hover:text-slate-900">
-                        {asset.title}
-                      </p>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight flex items-center gap-1.5">
-                        {asset.kind === "webpage" ? <Globe className="w-3 h-3" /> : null}
-                        {getAssetKindLabel(asset.kind)}
-                      </p>
-                    </div>
-                    <button
-                      className="rounded-md p-1.5 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                      title="Delete resource"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        void handleDeleteAsset(asset);
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <GripVertical className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
-                  </div>
-                  </Fragment>
-                ))
               ) : (
-                <div className="flex flex-col items-center justify-center h-60 text-center px-6">
-                  <Library className="w-10 h-10 text-slate-200 mb-4" />
-                  <p className="text-sm text-slate-500 font-medium">No assets found</p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {scope === "workspace"
-                      ? "This workspace has not uploaded or used any vault resources yet."
-                      : "Upload files or save links to see them here."}
-                  </p>
-                </div>
+                <>
+                  {tab === "board" ? (
+                    <>
+                      {kindFilter === "resources" ? (
+                        boardAllResources.length ? boardAllResources.map((asset) => renderAssetRow(asset, undefined, false)) : (
+                          <p className="px-2 py-3 text-xs text-slate-400">Resources of the pages on this board show up here.</p>
+                        )
+                      ) : (
+                        <>
+                          {boardPages.filter((page) => matches(page.title) || resourcesOfPage(page.noteId).some((asset) => matches(asset.title))).map((page) => {
+                            const resources = showResources ? resourcesOfPage(page.noteId).filter((asset) => matches(asset.title) || matches(page.title)) : [];
+                            const collapsed = collapsedPages.has(page.noteId);
+                            return (
+                              <div key={page.noteId}>
+                                <div className="flex min-h-[36px] items-center gap-1 rounded-lg px-1 hover:bg-slate-50">
+                                  <button
+                                    type="button"
+                                    aria-label={collapsed ? `Show resources of ${page.title}` : `Hide resources of ${page.title}`}
+                                    aria-expanded={!collapsed}
+                                    disabled={resources.length === 0}
+                                    onClick={() => setCollapsedPages((current) => {
+                                      const next = new Set(current);
+                                      if (next.has(page.noteId)) next.delete(page.noteId);
+                                      else next.add(page.noteId);
+                                      return next;
+                                    })}
+                                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                                  >
+                                    {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => useNotePanelStore.getState().open(page.noteId)}
+                                    className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+                                    title="Open the page"
+                                  >
+                                    <StickyNote className="h-4 w-4 shrink-0 text-violet-500" />
+                                    <span className="truncate text-[13px] font-medium text-slate-800">{page.title}</span>
+                                  </button>
+                                  {resources.length ? <span className="shrink-0 px-1 text-[11px] text-slate-400">{resources.length}</span> : null}
+                                </div>
+                                {!collapsed && resources.length ? (
+                                  <div className="ml-4 border-l border-slate-100 pl-2">{resources.map((asset) => renderAssetRow(asset, page.title, false))}</div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                          {boardPages.length === 0 ? (
+                            <p className="px-2 py-3 text-xs text-slate-400">No pages on this board yet. Add one from the Library tab.</p>
+                          ) : null}
+                          {showResources && boardOnlyAssets.filter((asset) => matches(asset.title)).length ? (
+                            <>
+                              <p className="px-2 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Only on this board</p>
+                              {boardOnlyAssets.filter((asset) => matches(asset.title)).map((asset) => renderAssetRow(asset, undefined, false))}
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {showPages ? libraryPages.map((page) => (
+                        <div key={page.id} className="flex min-h-[36px] items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-50">
+                          <StickyNote className="h-4 w-4 shrink-0 text-slate-400" />
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-slate-700">{page.title || "Untitled"}</span>
+                          <button
+                            type="button"
+                            title="Add this page to the board"
+                            aria-label={`Add ${page.title || "Untitled"} to the board`}
+                            onClick={() => void addPage(page.id)}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )) : null}
+                      {showResources ? libraryAssets.map((asset) => renderAssetRow(asset, undefined, true)) : null}
+                      {(showPages ? libraryPages.length : 0) + (showResources ? libraryAssets.length : 0) === 0 ? (
+                        <p className="px-2 py-3 text-xs text-slate-400">{searchQuery ? "Nothing matches." : "Everything you have is already on this board."}</p>
+                      ) : null}
+                    </>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Footer / Tip */}
-            <div className="shrink-0 p-4 bg-slate-50 border-t">
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-indigo-50 rounded text-indigo-600">
-                  <Plus className="w-3 h-3" />
-                </div>
-                <div className="text-[11px] text-slate-500 leading-normal">
-                  <p><b>Pro Tip:</b> Upload PDFs, images, videos, or audio here, then drag them into the workspace.</p>
-                  <p className="mt-1 text-slate-400">The vault now uses one shared library flow for multiple resource types.</p>
-                </div>
-              </div>
-            </div>
+            <p className="shrink-0 border-t bg-slate-50 px-4 py-2 text-[11px] leading-snug text-slate-500">
+              Drag a resource onto the board. Add a page with <b>+</b> in the Library tab; its PDFs, videos and links come with it.
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

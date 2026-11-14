@@ -8,12 +8,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import {
-  Bold, ChevronDown, ChevronRight, Code, FileText, Heading1, Heading2, Heading3, Highlighter, History, Italic,
-  Link2, List, ListChecks, ListOrdered, ListTree, Minus, MoreHorizontal, Plus, Quote, Sigma, SquareCode,
-  Strikethrough, Table, Underline, X, Info, ChevronsDownUp, LayoutDashboard, Layers,
-} from "lucide-react";
+import { EditorContent, ReactNodeViewRenderer, useEditor, type Editor } from "@tiptap/react";
+import { ChevronDown, ChevronRight, FileText, MoreHorizontal, Plus, X } from "lucide-react";
 import { useNoteEditor, type LoadedNote } from "@/hooks/use-note-editor";
 import { toEditorContent, fromEditorJSON } from "@/lib/notes/editor-bridge";
 import { createNoteExtensions, type NoteMentionItem } from "@/lib/notes/editor-extensions";
@@ -21,6 +17,17 @@ import { parseNoteDoc } from "@/lib/notes/note-format";
 import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
 import { AppearsIn } from "@/components/refs/appears-in";
 import { createMentionSuggestion } from "./mention-suggestion";
+import { createSlashSuggestion, slashCommands } from "./slash-commands";
+import { NoteBubbleMenu } from "./note-bubble-menu";
+import { editEquation } from "./editor-actions";
+import { askConfirm, askText } from "./note-dialogs";
+import { FontMenu, TextColorMenu } from "./style-menus";
+import { noteFontVariables } from "./note-fonts";
+import { ResourceEmbedView } from "./resource-embed";
+import { PdfPageBlockView } from "./pdf-page-block";
+import { CollectionsDialog, NoteChips, NoteTopline } from "./note-header";
+import { KeyboardToolbar } from "./keyboard-toolbar";
+import { embedFromShelf, embedFromUrl, pickAndUpload, uploadIntoNote, type ShelfEntry } from "./resource-actions";
 
 type NoteListEntry = { id: string; title: string; parentId: string | null; sortKey: string; itemId: string | null; version: number; updatedAt: string };
 type Revision = { id: string; version: number; title: string; reason: string; createdAt: string };
@@ -31,9 +38,10 @@ async function api<T>(url: string, init?: RequestInit): Promise<{ ok: boolean; s
   return { ok: response.ok && Boolean(json?.ok), status: response.status, data: json?.data, error: json?.error };
 }
 
-const listFetcher = async (url: string) => {
+/** The `/api/notes` list (shared SWR key: every user of the key must use this fetcher). */
+export const notesListFetcher = async (url: string) => {
   const result = await api<NoteListEntry[]>(url);
-  if (!result.ok || !result.data) throw new Error(result.error ?? "Notes could not be loaded.");
+  if (!result.ok || !result.data) throw new Error(result.error ?? "Pages could not be loaded.");
   return result.data;
 };
 
@@ -45,68 +53,44 @@ const REASON_LABELS: Record<string, string> = {
   migration: "Imported from the Shelf",
 };
 
+/**
+ * The Notes area. The page tree lives in the app sidebar (NotesSidebarSection),
+ * so this is one column: the page, or an invitation to start one.
+ */
 export function NotesApp({ noteId }: { noteId?: string }) {
   const router = useRouter();
-  const { data: notes, mutate: refreshNotes, error: listError } = useSWR("/api/notes", listFetcher);
-  const [treeOpen, setTreeOpen] = useState(false);
-
-  const createNote = useCallback(
-    async (parentId: string | null) => {
-      const result = await api<LoadedNote>("/api/notes", { method: "POST", body: JSON.stringify({ title: "Untitled", parentId }) });
-      if (!result.ok || !result.data) {
-        toast.error(result.error ?? "The note could not be created.");
-        return;
-      }
-      await refreshNotes();
-      setTreeOpen(false);
-      router.push(`/notes/${result.data.id}`);
-    },
-    [refreshNotes, router],
-  );
+  const { data: notes, mutate: refreshNotes } = useSWR("/api/notes", notesListFetcher);
+  const createNote = useCreateNote(router.push);
 
   return (
     <div className="notes-app">
-      <aside className={`notes-tree-panel${treeOpen ? " open" : ""}`} aria-label="Notes">
-        <div className="notes-tree-head">
-          <span className="notes-tree-title">Notes</span>
-          <button type="button" className="notes-icon-btn" onClick={() => void createNote(null)} title="New note" aria-label="New note">
-            <Plus size={16} />
-          </button>
-          <button type="button" className="notes-icon-btn notes-tree-close" onClick={() => setTreeOpen(false)} aria-label="Close page list">
-            <X size={16} />
-          </button>
-        </div>
-        {listError ? <p className="notes-muted">Notes could not be loaded.</p> : null}
-        {notes ? (
-          <NotesTree
-            notes={notes}
-            activeId={noteId}
-            onCreateChild={(parentId) => void createNote(parentId)}
-            onChanged={() => void refreshNotes()}
-            onNavigate={() => setTreeOpen(false)}
-          />
-        ) : !listError ? (
-          <p className="notes-muted">Loading…</p>
-        ) : null}
-      </aside>
-      <button type="button" className={`notes-tree-backdrop${treeOpen ? " open" : ""}`} aria-label="Close page list" onClick={() => setTreeOpen(false)} />
-
       <main className="notes-main">
-        <div className="notes-mobile-bar">
-          <button type="button" className="notes-icon-btn" onClick={() => setTreeOpen(true)} aria-label="Show pages">
-            <ListTree size={18} />
-          </button>
-        </div>
         {noteId ? (
           <NoteView key={noteId} noteId={noteId} notes={notes ?? []} onSaved={() => void refreshNotes()} />
         ) : (
-          <div className="notes-empty">
-            <FileText size={32} />
-            <h1>Your notes</h1>
-            <p className="notes-muted">Pages can hold sub-pages, link to each other with @, and keep their version history.</p>
-            <button type="button" className="notes-primary-btn" onClick={() => void createNote(null)}>
-              <Plus size={16} /> New note
-            </button>
+          <div className="notes-index">
+            {/* New pages come from the top bar's + button. */}
+            <div className="notes-index-head">
+              <h1>Pages</h1>
+            </div>
+            <p className="notes-muted">Pages hold anything: text, PDFs, videos and links. They can have sub-pages, link to each other with @, and go on boards.</p>
+            {notes ? (
+              notes.length ? (
+                <NotesTree
+                  notes={notes}
+                  onCreateChild={(parentId) => void createNote(parentId)}
+                  onChanged={() => void refreshNotes()}
+                  onNavigate={() => undefined}
+                />
+              ) : (
+                <div className="notes-empty">
+                  <FileText size={32} />
+                  <p className="notes-muted">No pages yet.</p>
+                </div>
+              )
+            ) : (
+              <p className="notes-muted">Loading…</p>
+            )}
           </div>
         )}
       </main>
@@ -114,9 +98,26 @@ export function NotesApp({ noteId }: { noteId?: string }) {
   );
 }
 
+/** Creates a page (top level or under `parentId`) and opens it. */
+export function useCreateNote(navigate: (url: string) => void) {
+  const { mutate: refreshNotes } = useSWR("/api/notes", notesListFetcher);
+  return useCallback(
+    async (parentId: string | null) => {
+      const result = await api<LoadedNote>("/api/notes", { method: "POST", body: JSON.stringify({ title: "Untitled", parentId }) });
+      if (!result.ok || !result.data) {
+        toast.error(result.error ?? "The page could not be created.");
+        return;
+      }
+      await refreshNotes();
+      navigate(`/notes/${result.data.id}`);
+    },
+    [navigate, refreshNotes],
+  );
+}
+
 // ── tree ───────────────────────────────────────────────────────────────────
 
-function NotesTree({
+export function NotesTree({
   notes, activeId, onCreateChild, onChanged, onNavigate,
 }: { notes: NoteListEntry[]; activeId?: string; onCreateChild: (parentId: string) => void; onChanged: () => void; onNavigate: () => void }) {
   const tree = useMemo(() => buildNoteTree(notes), [notes]);
@@ -129,7 +130,7 @@ function NotesTree({
   const remove = async (note: NoteListEntry) => {
     const result = await api(`/api/notes/${note.id}`, { method: "DELETE" });
     if (!result.ok) {
-      toast.error(result.error ?? "The note could not be deleted.");
+      toast.error(result.error ?? "The page could not be deleted.");
       return;
     }
     onChanged();
@@ -143,7 +144,7 @@ function NotesTree({
             toast.dismiss(t.id);
             const restored = await api(`/api/notes/${note.id}/restore`, { method: "POST" });
             if (restored.ok) onChanged();
-            else toast.error("The note could not be restored.");
+            else toast.error("The page could not be restored.");
           }}
         >
           Undo
@@ -194,7 +195,7 @@ function NotesTree({
 
   return (
     <>
-      {tree.length === 0 ? <p className="notes-muted">No notes yet.</p> : <ul className="notes-tree">{tree.map((node) => renderNode(node, 0))}</ul>}
+      {tree.length === 0 ? <p className="notes-muted">No pages yet.</p> : <ul className="notes-tree">{tree.map((node) => renderNode(node, 0))}</ul>}
       {moving ? <MoveDialog note={moving} notes={notes} onClose={() => setMoving(null)} onMoved={onChanged} /> : null}
     </>
   );
@@ -216,7 +217,7 @@ function MoveDialog({ note, notes, onClose, onMoved }: { note: NoteListEntry; no
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error ?? "The note could not be moved.");
+      toast.error(result.error ?? "The page could not be moved.");
       return;
     }
     onMoved();
@@ -225,7 +226,7 @@ function MoveDialog({ note, notes, onClose, onMoved }: { note: NoteListEntry; no
 
   return (
     <div className="notes-dialog-backdrop" role="presentation" onClick={onClose}>
-      <div className="notes-dialog" role="dialog" aria-modal="true" aria-label="Move note" onClick={(event) => event.stopPropagation()}>
+      <div className="notes-dialog" role="dialog" aria-modal="true" aria-label="Move page" onClick={(event) => event.stopPropagation()}>
         <h2>Move “{note.title}”</h2>
         <label className="notes-field">
           <span>Put it under</span>
@@ -236,7 +237,7 @@ function MoveDialog({ note, notes, onClose, onMoved }: { note: NoteListEntry; no
             ))}
           </select>
         </label>
-        <p className="notes-muted">Sub-pages are not listed on the Shelf; top-level notes are.</p>
+        <p className="notes-muted">Sub-pages are not listed on the Shelf; top-level pages are.</p>
         <div className="notes-dialog-actions">
           <button type="button" className="notes-secondary-btn" onClick={onClose}>Cancel</button>
           <button type="button" className="notes-primary-btn" disabled={busy} onClick={() => void move()}>Move</button>
@@ -261,26 +262,91 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addToWorkspaceOpen, setAddToWorkspaceOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const coarsePointer = useCoarsePointer();
   const titleRef = useRef("");
   const notesRef = useRef<NoteListEntry[]>(notes);
   notesRef.current = notes;
 
-  const extensions = useMemo(
-    () =>
-      createNoteExtensions({
-        mentionSuggestion: createMentionSuggestion((): NoteMentionItem[] =>
-          notesRef.current.filter((n) => n.id !== noteId).map((n) => ({ ref: `note:${n.id}`, label: n.title || "Untitled" })),
-        ),
-      }),
-    [noteId],
-  );
+  // "@" links to pages, Shelf resources and workspaces. The lists are read
+  // through refs so the editor is not rebuilt when they load or change.
+  const { data: shelfItems, mutate: refreshShelf } = useSWR("/api/items", (url: string) => api<ShelfEntry[]>(url).then((r) => r.data ?? []));
+  const shelfRef = useRef<ShelfEntry[]>([]);
+  shelfRef.current = (shelfItems ?? []).filter((item) => item.type !== "note");
+  const refreshShelfRef = useRef(refreshShelf);
+  refreshShelfRef.current = refreshShelf;
+  const { data: workspaceList } = useSWR("/api/workspace", (url: string) => api<Array<{ id: string; title: string }>>(url).then((r) => r.data ?? []));
+  const linkTargetsRef = useRef<NoteMentionItem[]>([]);
+  linkTargetsRef.current = [
+    ...notes.filter((n) => n.id !== noteId).map((n) => ({ ref: `note:${n.id}`, label: n.title || "Untitled", kind: "note" as const })),
+    // Note items are already listed as pages.
+    ...(shelfItems ?? []).filter((item) => !(item.type === "note" && item.noteId)).map((item) => ({ ref: `item:${item.id}`, label: item.title || "Untitled", kind: "resource" as const })),
+    ...(workspaceList ?? []).map((workspace) => ({ ref: `workspace:${workspace.id}`, label: workspace.title || "Untitled workspace", kind: "workspace" as const })),
+  ];
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+
+  const extensions = useMemo(() => {
+    const slashItems = slashCommands({
+      createSubPage: async () => {
+        const result = await api<LoadedNote>("/api/notes", { method: "POST", body: JSON.stringify({ title: "Untitled", parentId: noteId }) });
+        if (!result.ok || !result.data) {
+          toast.error(result.error ?? "The page could not be created.");
+          return null;
+        }
+        onSavedRef.current();
+        return { id: result.data.id, title: result.data.title };
+      },
+      makeFlashcard: (current) => void makeFlashcard(current, noteId),
+      embedFromShelf: (current) => void embedFromShelf(current, shelfRef.current),
+      embedFromUrl: (current) => void embedFromUrl(current, () => void refreshShelfRef.current()),
+      uploadFile: (current) => pickAndUpload(current),
+    });
+    return createNoteExtensions({
+      blockHandle: true,
+      // Buttons, players and the ink layer inside these blocks handle their own
+      // events; letting the editor see them would select and focus the note
+      // (opening the phone keyboard over the page being drawn on).
+      embedView: ReactNodeViewRenderer(ResourceEmbedView, { stopEvent: stopInteractiveEvent }),
+      pdfPageView: ReactNodeViewRenderer(PdfPageBlockView, { stopEvent: stopInteractiveEvent }),
+      mentionSuggestion: createMentionSuggestion(() => linkTargetsRef.current),
+      slashSuggestion: createSlashSuggestion(() => slashItems),
+      onMathClick: (node, pos, kind) => {
+        const current = editorRef.current;
+        if (!current?.isEditable) return;
+        void editEquation(current, pos, String(node.attrs.latex ?? ""), kind);
+      },
+    });
+  }, [noteId]);
+  const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor(
     {
       extensions,
       immediatelyRender: false,
       editable: false,
-      editorProps: { attributes: { class: "note-prose", "aria-label": "Note content" } },
+      editorProps: {
+        attributes: { class: "note-prose", "aria-label": "Page content" },
+        // Files dropped or pasted into the note are uploaded and shown in place.
+        handleDrop: (view, event, _slice, moved) => {
+          const files = Array.from(event.dataTransfer?.files ?? []);
+          const current = editorRef.current;
+          if (moved || files.length === 0 || !current?.isEditable) return false;
+          event.preventDefault();
+          const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          void uploadIntoNote(current, files, at);
+          return true;
+        },
+        handlePaste: (_view, event) => {
+          const files = Array.from(event.clipboardData?.files ?? []);
+          const current = editorRef.current;
+          if (files.length === 0 || !current?.isEditable) return false;
+          event.preventDefault();
+          void uploadIntoNote(current, files);
+          return true;
+        },
+      },
       onUpdate: ({ editor: current }) => {
         if (!current.isEditable) return;
         change(titleRef.current, fromEditorJSON(current.getJSON()));
@@ -288,6 +354,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     },
     [extensions],
   );
+  editorRef.current = editor;
 
   // Load (and reload after "Load latest" or a restore) the stored content into the editor.
   const applyNote = useCallback(
@@ -298,9 +365,9 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
       titleRef.current = loaded.title;
       setTitle(loaded.title);
       const reason = loaded.deletedAt
-        ? "This note is in the trash. Restore it to edit."
+        ? "This page is in the trash. Restore it to edit."
         : !parsed.canSave || !lossless
-          ? "This note uses features from a newer version of Studenv. Refresh the page to edit it."
+          ? "This page uses features from a newer version of Studenv. Refresh the page to edit it."
           : null;
       setReadOnlyReason(reason);
       // No update event: switching editing on is not an edit.
@@ -374,39 +441,44 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     return (
       <div className="notes-empty">
         <p>{loadError}</p>
-        <Link className="notes-secondary-btn" href="/notes">Back to notes</Link>
+        <Link className="notes-secondary-btn" href="/notes">Back to pages</Link>
       </div>
     );
   }
 
   const ancestors = noteAncestors(notes, noteId);
+  const currentEntry = notes.find((entry) => entry.id === noteId) ?? null;
 
   return (
-    <div className="note-view">
-      <div className="note-topline">
-        <nav className="note-breadcrumbs" aria-label="Breadcrumbs">
-          <Link href="/notes">Notes</Link>
-          {ancestors.map((ancestor) => (
-            <span key={ancestor.id}>
-              <span className="note-crumb-sep">/</span>
-              <Link href={`/notes/${ancestor.id}`}>{ancestor.title || "Untitled"}</Link>
-            </span>
-          ))}
-        </nav>
-        <SaveIndicator status={status} />
-        {!embedded ? (
-          <button type="button" className="notes-icon-btn" onClick={() => setAddToWorkspaceOpen(true)} title="Add to workspace" aria-label="Add to workspace">
-            <LayoutDashboard size={16} />
-          </button>
-        ) : null}
-        <button type="button" className="notes-icon-btn" onClick={() => setHistoryOpen(true)} title="Version history" aria-label="Version history">
-          <History size={16} />
-        </button>
-      </div>
+    <div className={`note-view ${noteFontVariables}`}>
+      <NoteTopline
+        noteId={noteId}
+        itemId={note?.itemId ?? null}
+        embedded={embedded}
+        crumbs={
+          <nav className="note-breadcrumbs" aria-label="Breadcrumbs">
+            <Link href="/notes">Pages</Link>
+            {ancestors.map((ancestor) => (
+              <span key={ancestor.id}>
+                <span className="note-crumb-sep">/</span>
+                <Link href={`/notes/${ancestor.id}`}>{ancestor.title || "Untitled"}</Link>
+              </span>
+            ))}
+          </nav>
+        }
+        status={<SaveIndicator status={status} />}
+        actions={{
+          onAddToBoard: () => setAddToWorkspaceOpen(true),
+          onHistory: () => setHistoryOpen(true),
+          onMove: () => setMoveOpen(true),
+          onCollections: () => setCollectionsOpen(true),
+          onDeleted: onSaved,
+        }}
+      />
 
       {conflict ? (
         <div className="note-banner warning" role="alert">
-          <strong>This note was changed somewhere else.</strong> Your changes are kept here and not saved.
+          <strong>This page was changed somewhere else.</strong> Your changes are kept here and not saved.
           <div className="note-banner-actions">
             <button type="button" onClick={async () => { appliedVersionRef.current = null; await loadLatest(); }}>Load latest</button>
             <button type="button" onClick={() => void keepMine()}>Keep mine</button>
@@ -429,13 +501,13 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           if (restored.ok) { appliedVersionRef.current = null; await reload(); onSaved(); }
         }}>Restore</button>
       ) : null}</div> : null}
-      {status === "error" ? <div className="note-banner warning" role="alert">Saving failed. Your changes are kept and will be retried when you keep typing. <button type="button" className="note-inline-btn" onClick={() => void saveNow()}>Retry now</button></div> : null}
+      {status === "error" ? <div className="note-banner warning" role="alert">Saving failed. Your changes are kept here and saving is retried automatically. <button type="button" className="note-inline-btn" onClick={() => void saveNow()}>Retry now</button></div> : null}
 
       <input
         className="note-title-input"
         value={title}
         placeholder="Untitled"
-        aria-label="Note title"
+        aria-label="Page title"
         readOnly={Boolean(readOnlyReason) || !note}
         maxLength={500}
         onChange={(event) => {
@@ -451,12 +523,28 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
         }}
       />
 
-      {editor && !readOnlyReason ? <Toolbar editor={editor} noteId={noteId} /> : null}
+      {note && !readOnlyReason ? <NoteChips noteId={noteId} itemId={note.itemId} /> : null}
+      {/* Mouse: a bubble on selection. Touch: one toolbar above the keyboard (the system's own
+          selection bar takes the space a bubble would use). */}
+      {editor && !readOnlyReason && !coarsePointer ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} /> : null}
+      {editor && !readOnlyReason && coarsePointer ? (
+        <KeyboardToolbar
+          editor={editor}
+          onFlashcard={() => void makeFlashcard(editor, noteId)}
+          onAttach={[
+            { label: "Upload a file", run: (current) => pickAndUpload(current) },
+            { label: "From your Shelf", run: (current) => void embedFromShelf(current, shelfRef.current) },
+            { label: "Link, video or PDF address", run: (current) => void embedFromUrl(current, () => void refreshShelfRef.current()) },
+          ]}
+        />
+      ) : null}
       {!note ? <p className="notes-muted">Loading…</p> : null}
       <EditorContent editor={editor} className="note-editor" />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
 
       {addToWorkspaceOpen ? <AddToWorkspaceDialog noteId={noteId} onClose={() => setAddToWorkspaceOpen(false)} /> : null}
+      {moveOpen && currentEntry ? <MoveDialog note={currentEntry} notes={notes} onClose={() => setMoveOpen(false)} onMoved={onSaved} /> : null}
+      {collectionsOpen && note?.itemId ? <CollectionsDialog itemId={note.itemId} onClose={() => setCollectionsOpen(false)} /> : null}
       {historyOpen ? (
         <HistoryPanel
           noteId={noteId}
@@ -485,6 +573,24 @@ function SaveIndicator({ status }: { status: string }) {
   return <span className={`note-save-status ${status}`} aria-live="polite">{label}</span>;
 }
 
+/** True on touch-first devices (phones, tablets): they get the keyboard toolbar instead of the bubble. */
+function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarse(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return coarse;
+}
+
+/** Events from a block's own controls (marked `data-note-interactive`) are not editor input. */
+function stopInteractiveEvent({ event }: { event: Event }) {
+  return event.target instanceof Element && event.target.closest("[data-note-interactive]") !== null;
+}
+
 /** "Make flashcard": the selected text (or the current block) becomes the question; the card points at the block. */
 async function makeFlashcard(editor: Editor, noteId: string) {
   const { state } = editor;
@@ -503,7 +609,13 @@ async function makeFlashcard(editor: Editor, noteId: string) {
     toast.error("Select some text for the question first.");
     return;
   }
-  const back = window.prompt(`Answer for: “${front.slice(0, 80)}”`);
+  const back = await askText({
+    title: "New flashcard",
+    label: `Answer for: “${front.slice(0, 80)}${front.length > 80 ? "…" : ""}”`,
+    confirmText: "Add flashcard",
+    multiline: true,
+    validate: (value) => (value.trim() ? null : "Type the answer."),
+  });
   if (back === null) return;
   const result = await api("/api/flashcards", {
     method: "POST",
@@ -511,92 +623,6 @@ async function makeFlashcard(editor: Editor, noteId: string) {
   });
   if (result.ok) toast.success("Flashcard added");
   else toast.error(result.error ?? "The flashcard could not be added.");
-}
-
-function Toolbar({ editor, noteId }: { editor: Editor; noteId: string }) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const rerender = () => setTick((tick) => tick + 1);
-    editor.on("selectionUpdate", rerender);
-    editor.on("transaction", rerender);
-    return () => {
-      editor.off("selectionUpdate", rerender);
-      editor.off("transaction", rerender);
-    };
-  }, [editor]);
-
-  const chain = () => editor.chain().focus();
-  const items: Array<{ label: string; icon: React.ReactNode; active?: boolean; run: () => void } | "sep"> = [
-    { label: "Bold", icon: <Bold size={15} />, active: editor.isActive("bold"), run: () => chain().toggleBold().run() },
-    { label: "Italic", icon: <Italic size={15} />, active: editor.isActive("italic"), run: () => chain().toggleItalic().run() },
-    { label: "Underline", icon: <Underline size={15} />, active: editor.isActive("underline"), run: () => chain().toggleUnderline().run() },
-    { label: "Strikethrough", icon: <Strikethrough size={15} />, active: editor.isActive("strike"), run: () => chain().toggleStrike().run() },
-    { label: "Inline code", icon: <Code size={15} />, active: editor.isActive("code"), run: () => chain().toggleCode().run() },
-    { label: "Highlight", icon: <Highlighter size={15} />, active: editor.isActive("highlight"), run: () => chain().toggleHighlight().run() },
-    {
-      label: "Link",
-      icon: <Link2 size={15} />,
-      active: editor.isActive("link"),
-      run: () => {
-        if (editor.isActive("link")) {
-          chain().unsetLink().run();
-          return;
-        }
-        const href = window.prompt("Link address (https://…)");
-        if (!href) return;
-        const safe = /^(https?:|mailto:)/i.test(href.trim()) ? href.trim() : `https://${href.trim()}`;
-        chain().extendMarkRange("link").setLink({ href: safe }).run();
-      },
-    },
-    "sep",
-    { label: "Heading 1", icon: <Heading1 size={15} />, active: editor.isActive("heading", { level: 1 }), run: () => chain().toggleHeading({ level: 1 }).run() },
-    { label: "Heading 2", icon: <Heading2 size={15} />, active: editor.isActive("heading", { level: 2 }), run: () => chain().toggleHeading({ level: 2 }).run() },
-    { label: "Heading 3", icon: <Heading3 size={15} />, active: editor.isActive("heading", { level: 3 }), run: () => chain().toggleHeading({ level: 3 }).run() },
-    { label: "Bullet list", icon: <List size={15} />, active: editor.isActive("bulletList"), run: () => chain().toggleBulletList().run() },
-    { label: "Numbered list", icon: <ListOrdered size={15} />, active: editor.isActive("orderedList"), run: () => chain().toggleOrderedList().run() },
-    { label: "Checklist", icon: <ListChecks size={15} />, active: editor.isActive("taskList"), run: () => chain().toggleTaskList().run() },
-    { label: "Quote", icon: <Quote size={15} />, active: editor.isActive("blockquote"), run: () => chain().toggleBlockquote().run() },
-    { label: "Code block", icon: <SquareCode size={15} />, active: editor.isActive("codeBlock"), run: () => chain().toggleCodeBlock().run() },
-    "sep",
-    { label: "Callout", icon: <Info size={15} />, run: () => chain().insertContent({ type: "callout", content: [{ type: "paragraph" }] }).run() },
-    { label: "Toggle section", icon: <ChevronsDownUp size={15} />, run: () => chain().setDetails().run() },
-    { label: "Table", icon: <Table size={15} />, run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-    {
-      label: "Equation",
-      icon: <Sigma size={15} />,
-      run: () => {
-        const latex = window.prompt("Equation (LaTeX)", "E = mc^2");
-        if (latex) chain().insertBlockMath({ latex }).run();
-      },
-    },
-    { label: "Divider", icon: <Minus size={15} />, run: () => chain().setHorizontalRule().run() },
-    "sep",
-    { label: "Make flashcard from selection", icon: <Layers size={15} />, run: () => void makeFlashcard(editor, noteId) },
-  ];
-
-  return (
-    <div className="note-toolbar" role="toolbar" aria-label="Formatting">
-      {items.map((item, index) =>
-        item === "sep" ? (
-          <span key={`sep-${index}`} className="note-toolbar-sep" />
-        ) : (
-          <button
-            key={item.label}
-            type="button"
-            title={item.label}
-            aria-label={item.label}
-            aria-pressed={item.active ?? undefined}
-            className={item.active ? "active" : undefined}
-            // Keep the editor's selection: act on click, never move focus on press.
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={item.run}
-          >
-            {item.icon}
-          </button>
-        ),
-      )}
-    </div>
-  );
 }
 
 function HistoryPanel({
@@ -646,7 +672,8 @@ function HistoryPanel({
                   className="notes-secondary-btn"
                   disabled={busy}
                   onClick={async () => {
-                    if (!window.confirm("Restore this version? Your current text is kept in the history first.")) return;
+                    const ok = await askConfirm({ title: "Restore this version?", message: "Your current text is kept in the history first.", confirmText: "Restore" });
+                    if (!ok) return;
                     setBusy(true);
                     await beforeAction();
                     const result = await api(`/api/notes/${noteId}/revisions/${revision.id}/restore`, { method: "POST" });
@@ -680,13 +707,13 @@ function AddToWorkspaceDialog({ noteId, onClose }: { noteId: string; onClose: ()
   });
   return (
     <div className="notes-dialog-backdrop" role="presentation" onClick={onClose}>
-      <div className="notes-dialog" role="dialog" aria-modal="true" aria-label="Add to workspace" onClick={(event) => event.stopPropagation()}>
+      <div className="notes-dialog" role="dialog" aria-modal="true" aria-label="Add to a board" onClick={(event) => event.stopPropagation()}>
         <div className="notes-history-head">
-          <h2>Add to a workspace</h2>
+          <h2>Add to a board</h2>
           <button type="button" className="notes-icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </div>
-        <p className="notes-muted">The note appears as a card; opening the card edits this same note.</p>
-        {error ? <p className="notes-muted">Workspaces could not be loaded.</p> : !workspaces ? <p className="notes-muted">Loading…</p> : workspaces.length === 0 ? <p className="notes-muted">You have no workspaces yet.</p> : (
+        <p className="notes-muted">The page appears as a card on the board, and its PDFs, videos and links appear in the board’s vault. Opening the card edits this same page.</p>
+        {error ? <p className="notes-muted">Workspaces could not be loaded.</p> : !workspaces ? <p className="notes-muted">Loading…</p> : workspaces.length === 0 ? <p className="notes-muted">You have no boards yet. Open this page’s board from the page menu to create one.</p> : (
           <ul className="notes-history-list">
             {workspaces.map((workspace) => (
               <li key={workspace.id}>

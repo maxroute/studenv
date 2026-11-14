@@ -4,6 +4,8 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   freeTierItemLimit: Number(process.env.FREE_TIER_ITEM_LIMIT ?? 200),
   freeTierTagLimit: 50,
+  /** Uploaded files per free account (shown, not yet enforced). Links and page text do not count. */
+  freeTierStorageBytes: Number(process.env.FREE_TIER_STORAGE_BYTES ?? 5 * 1024 ** 3),
   plans: {
     free: "Free",
     pro: "Pro",

@@ -201,7 +201,7 @@ test("the registered node types are fixed", () => {
   assert.deepEqual(noteNodeTypes(), [
     "blockMath", "blockquote", "bulletList", "callout", "citation", "codeBlock", "details", "detailsContent",
     "detailsSummary", "embed", "hardBreak", "heading", "horizontalRule", "inlineMath", "listItem", "mention",
-    "orderedList", "paragraph", "table", "tableCell", "tableHeader", "tableRow", "taskItem", "taskList",
+    "orderedList", "paragraph", "pdfPage", "table", "tableCell", "tableHeader", "tableRow", "taskItem", "taskList",
     "unsupported", "unsupportedInline",
   ]);
 });
