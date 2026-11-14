@@ -306,6 +306,8 @@ model Workspace {
   baseCollectionId  String?
   lastSnapshotId    String?  @unique
   latestVersion     Int      @default(1)
+  /// Hash of the links extracted from the latest snapshot; saves skip the link rewrite when it is unchanged.
+  linkHash          String?  @db.VarChar(64)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -659,4 +661,29 @@ model NoteRevision {
 
   @@unique([noteId, version, reason])
   @@index([noteId, createdAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Link index (docs/notes-v1-foundations-design.md §3): what points at what.
+// Derived data, rebuildable at any time. Plain string columns (no enums, no
+// foreign keys) so new reference types and link kinds need no migration.
+// ---------------------------------------------------------------------------
+
+model ContentLink {
+  id           String   @id @default(cuid())
+  /// Owner of the source.
+  ownerId      String
+  sourceType   String   @db.VarChar(32)
+  sourceId     String   @db.VarChar(128)
+  /// Block or node id inside the source; "" for the whole source.
+  sourceAnchor String   @default("") @db.VarChar(256)
+  targetType   String   @db.VarChar(32)
+  targetId     String   @db.VarChar(128)
+  targetAnchor String   @default("") @db.VarChar(256)
+  kind         String   @db.VarChar(32)
+  createdAt    DateTime @default(now())
+
+  @@unique([sourceType, sourceId, sourceAnchor, targetType, targetId, targetAnchor, kind])
+  @@index([ownerId, targetType, targetId, targetAnchor])
+  @@index([sourceType, sourceId])
 }

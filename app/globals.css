@@ -3700,6 +3700,46 @@ textarea {
   justify-content: center;
 }
 
+/* "Appears in" inside the Shelf detail panel (base styles live with the component). */
+.detail-appears-in {
+  margin: 0 20px 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.detail-appears-in .appears-in-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.detail-appears-in .appears-in-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.detail-appears-in .appears-in-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+
+.detail-appears-in .appears-in-list a {
+  color: var(--text);
+}
+
+.detail-appears-in .appears-in-type,
+.detail-appears-in .appears-in-details {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .detail-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

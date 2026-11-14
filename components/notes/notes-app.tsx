@@ -19,6 +19,7 @@ import { toEditorContent, fromEditorJSON } from "@/lib/notes/editor-bridge";
 import { createNoteExtensions, type NoteMentionItem } from "@/lib/notes/editor-extensions";
 import { parseNoteDoc } from "@/lib/notes/note-format";
 import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
+import { AppearsIn } from "@/components/refs/appears-in";
 import { createMentionSuggestion } from "./mention-suggestion";
 
 type NoteListEntry = { id: string; title: string; parentId: string | null; sortKey: string; itemId: string | null; version: number; updatedAt: string };
@@ -420,6 +421,7 @@ function NoteView({ noteId, notes, onSaved }: { noteId: string; notes: NoteListE
       {editor && !readOnlyReason ? <Toolbar editor={editor} /> : null}
       {!note ? <p className="notes-muted">Loading…</p> : null}
       <EditorContent editor={editor} className="note-editor" />
+      {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
 
       {historyOpen ? (
         <HistoryPanel

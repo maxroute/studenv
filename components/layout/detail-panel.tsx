@@ -6,6 +6,7 @@ import { usePlaybackStore } from "@/hooks/usePlaybackStore";
 import { ExternalLink, Layout, Star, Trash2, X } from "lucide-react";
 import { getYouTubePlaylistProgressReport } from "@/lib/utils/youtube";
 import type { CollectionRecord, ItemRecord, ItemStatus } from "@/types";
+import { AppearsIn } from "@/components/refs/appears-in";
 
 type DetailPanelProps = {
   item: ItemRecord | null;
@@ -407,6 +408,8 @@ export function DetailPanel({
           />
         </div>
         )}
+
+        <AppearsIn refString={item.type === "note" && item.noteId ? `note:${item.noteId}` : `item:${item.id}`} className="detail-appears-in" />
 
         <div className="detail-actions">
           <button

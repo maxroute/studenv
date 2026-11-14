@@ -795,3 +795,54 @@
     flex-shrink: 0;
   }
 }
+
+/* "Appears in" (backlinks) */
+
+.appears-in {
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.appears-in-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.appears-in-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.appears-in-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.appears-in-list a {
+  color: var(--text);
+}
+
+.appears-in-type {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.appears-in-details {
+  color: var(--muted);
+  font-size: 12px;
+}
