@@ -1,35 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
+import { apiError } from "@/lib/security/headers";
+import { getErrorResponse } from "@/lib/security/request";
+import { validateId } from "@/lib/security/validate";
 import { openItemInWorkspace } from "@/lib/services/item-asset.service";
 
+/**
+ * Opens (creating if needed) the workspace for a Shelf item and redirects to it.
+ * The Location is relative: under the custom server `req.url` carries the bind
+ * address (0.0.0.0), which a browser cannot open.
+ */
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const itemId = searchParams.get("itemId");
-
-  if (!itemId) {
-    return NextResponse.json({ error: "Missing itemId" }, { status: 400 });
-  }
-
   try {
+    const itemId = req.nextUrl.searchParams.get("itemId");
+    if (!itemId) {
+      return apiError("Missing itemId", 400);
+    }
     const user = await requireAuth();
-
-    console.log(`[Workspace API] Creating workspace for itemId: ${itemId}`);
-    console.log(`[Workspace API] Running for user: ${user.id}`);
-
-    // 1. Ensure Asset exists and Workspace is ready
-    const result = await openItemInWorkspace(itemId, user.id);
-    console.log(`[Workspace API] result: `, result);
-    
-    // 2. Redirect to the workspace
-    const redirectUrl = new URL(`/workspace/${result.workspaceId}`, req.url);
-    console.log(`[Workspace API] Redirecting to: ${redirectUrl.toString()}`);
-    return NextResponse.redirect(redirectUrl);
-  } catch (e: any) {
-    console.error("[Workspace API] Workspace creation failed:", e);
-    return NextResponse.json({ 
-      error: "Failed to open workspace", 
-      details: e.message || String(e),
-      stack: e.stack
-    }, { status: 500 });
+    const result = await openItemInWorkspace(validateId(itemId), user.id);
+    return new NextResponse(null, {
+      status: 307,
+      headers: { Location: `/workspaces/${encodeURIComponent(result.workspaceId)}` },
+    });
+  } catch (error) {
+    const err = getErrorResponse(error);
+    return apiError(err.message, err.status, err.details);
   }
 }

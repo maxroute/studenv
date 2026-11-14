@@ -252,6 +252,10 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
     },
 
     updateViewport: (viewport: WorkspaceViewport) => {
+      // The canvas reports its transform on mount too; an unchanged viewport
+      // is not an edit and must not mark the workspace unsaved.
+      const current = get().viewport;
+      if (current.x === viewport.x && current.y === viewport.y && current.zoom === viewport.zoom) return;
       set({ viewport, isDirty: true });
     },
 
@@ -490,7 +494,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => {
 
     syncWithServer: async () => {
       const initial = get();
-      if (!initial.workspaceId || initial.isSaving || initial.saveBlocked) return;
+      // The canvas schedules a sync after every scene change, including the
+      // initial load; with nothing unsaved there is nothing to send.
+      if (!initial.workspaceId || initial.isSaving || initial.saveBlocked || !initial.isDirty) return;
 
       const savingWorkspaceId = initial.workspaceId;
       set({ isSaving: true });
