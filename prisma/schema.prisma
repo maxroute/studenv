@@ -77,6 +77,9 @@ model User {
   updatedAt           DateTime     @updatedAt
   tasks               Task[]
   notes               Note[]
+  flashcards          Flashcard[]
+  flashcardReviews    FlashcardReview[]
+  flashcardReviewLogs FlashcardReviewLog[]
 }
 
 model Session {
@@ -436,14 +439,74 @@ model AiAnalysis {
   quizzes         QuizAttempt[]
 }
 
+enum FlashcardOrigin {
+  ai_generated
+  manual
+  note_block
+}
+
 model Flashcard {
   id              String      @id @default(cuid())
-  aiAnalysisId    String
+  ownerId         String
   front           String      @db.Text
   back            String      @db.Text
+  origin          FlashcardOrigin @default(ai_generated)
+  /// Canonical reference to what the card was made from ("asset:…", "note:…#b_…").
+  sourceRef       String?     @db.VarChar(420)
+  /// Parsed copies for querying; plain strings so any reference type fits.
+  sourceType      String?     @db.VarChar(32)
+  sourceId        String?     @db.VarChar(128)
+  /// Provenance only; deleting the analysis keeps the card.
+  aiAnalysisId    String?
+  /// Set when the user edits the card; edited cards are never replaced by regeneration.
+  editedAt        DateTime?
+  deletedAt       DateTime?
   createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @default(now()) @updatedAt
 
-  analysis        AiAnalysis  @relation(fields: [aiAnalysisId], references: [id], onDelete: Cascade)
+  owner           User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  analysis        AiAnalysis? @relation(fields: [aiAnalysisId], references: [id], onDelete: SetNull)
+  reviews         FlashcardReview[]
+  reviewLogs      FlashcardReviewLog[]
+
+  @@index([ownerId, sourceType, sourceId])
+  @@index([aiAnalysisId])
+}
+
+/// Scheduling state, one row per user per card (cards may be shared later).
+model FlashcardReview {
+  id             String    @id @default(cuid())
+  flashcardId    String
+  userId         String
+  algorithm      String    @default("fsrs") @db.VarChar(16)
+  state          String    @default("new") @db.VarChar(16)
+  due            DateTime  @default(now())
+  stability      Float?
+  difficulty     Float?
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  lastReviewedAt DateTime?
+
+  flashcard      Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flashcardId, userId])
+  @@index([userId, due])
+}
+
+/// Every answer, kept to tune scheduling later.
+model FlashcardReviewLog {
+  id          String    @id @default(cuid())
+  flashcardId String
+  userId      String
+  rating      Int
+  reviewedAt  DateTime  @default(now())
+  elapsedMs   Int?
+
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, reviewedAt])
 }
 
 model QuizAttempt {

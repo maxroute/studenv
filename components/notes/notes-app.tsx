@@ -12,7 +12,7 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
   Bold, ChevronDown, ChevronRight, Code, FileText, Heading1, Heading2, Heading3, Highlighter, History, Italic,
   Link2, List, ListChecks, ListOrdered, ListTree, Minus, MoreHorizontal, Plus, Quote, Sigma, SquareCode,
-  Strikethrough, Table, Underline, X, Info, ChevronsDownUp, LayoutDashboard,
+  Strikethrough, Table, Underline, X, Info, ChevronsDownUp, LayoutDashboard, Layers,
 } from "lucide-react";
 import { useNoteEditor, type LoadedNote } from "@/hooks/use-note-editor";
 import { toEditorContent, fromEditorJSON } from "@/lib/notes/editor-bridge";
@@ -451,7 +451,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
         }}
       />
 
-      {editor && !readOnlyReason ? <Toolbar editor={editor} /> : null}
+      {editor && !readOnlyReason ? <Toolbar editor={editor} noteId={noteId} /> : null}
       {!note ? <p className="notes-muted">Loading…</p> : null}
       <EditorContent editor={editor} className="note-editor" />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
@@ -485,7 +485,35 @@ function SaveIndicator({ status }: { status: string }) {
   return <span className={`note-save-status ${status}`} aria-live="polite">{label}</span>;
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+/** "Make flashcard": the selected text (or the current block) becomes the question; the card points at the block. */
+async function makeFlashcard(editor: Editor, noteId: string) {
+  const { state } = editor;
+  const { from, to, $from } = state.selection;
+  let blockId: string | null = null;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const id = $from.node(depth).attrs.id;
+    if (typeof id === "string" && /^b_[A-Za-z0-9_-]{10}$/.test(id)) {
+      blockId = id;
+      break;
+    }
+  }
+  const selected = state.doc.textBetween(from, to, " ").trim();
+  const front = (selected || $from.parent.textContent).trim().slice(0, 2000);
+  if (!front) {
+    toast.error("Select some text for the question first.");
+    return;
+  }
+  const back = window.prompt(`Answer for: “${front.slice(0, 80)}”`);
+  if (back === null) return;
+  const result = await api("/api/flashcards", {
+    method: "POST",
+    body: JSON.stringify({ front, back, sourceRef: `note:${noteId}${blockId ? `#${blockId}` : ""}` }),
+  });
+  if (result.ok) toast.success("Flashcard added");
+  else toast.error(result.error ?? "The flashcard could not be added.");
+}
+
+function Toolbar({ editor, noteId }: { editor: Editor; noteId: string }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const rerender = () => setTick((tick) => tick + 1);
@@ -542,6 +570,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       },
     },
     { label: "Divider", icon: <Minus size={15} />, run: () => chain().setHorizontalRule().run() },
+    "sep",
+    { label: "Make flashcard from selection", icon: <Layers size={15} />, run: () => void makeFlashcard(editor, noteId) },
   ];
 
   return (

@@ -21,6 +21,7 @@
     "test:security": "tsx --test lib/security/request.test.ts lib/security/sanitize.test.ts lib/services/ai-generate.service.test.ts",
     "test:items": "tsx --test lib/utils/item-patch.test.ts",
     "test:refs": "tsx --test lib/refs/refs.test.ts lib/refs/extract/link-rows.test.ts",
+    "test:flashcards": "tsx --test lib/flashcards/scheduler.test.ts",
     "test:notes": "tsx --test lib/notes/notes.test.ts lib/notes/note-storage.test.ts lib/notes/editor.test.ts lib/notes/legacy-text.test.ts",
     "test:workspace-pointer": "tsx --test lib/workspace/pointer-session.test.ts",
     "test:workspace-drawing": "tsx --test lib/workspace/drawing-geometry.test.ts",

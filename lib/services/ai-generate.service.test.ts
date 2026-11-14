@@ -14,7 +14,13 @@ const ASSET = "c" + "a".repeat(24);
 /** In-memory stand-ins for the database and the model, recording every call. */
 function fakeDeps(options: { cards?: unknown } = {}) {
   const calls: string[] = [];
-  const store = { summary: null as string | null, flashcards: [] as GeneratedFlashcard[] };
+  const store = {
+    summary: null as string | null,
+    flashcards: [] as GeneratedFlashcard[],
+    /** Fronts of cards with review history or edits; regenerating must keep them. */
+    protectedFronts: new Set<string>(),
+    savedOwner: null as string | null,
+  };
   const deps: AiGenerateDeps = {
     isAssetOwnedBy: async (assetId, ownerId) => {
       calls.push("isAssetOwnedBy");
@@ -28,11 +34,20 @@ function fakeDeps(options: { cards?: unknown } = {}) {
       calls.push("findSavedFlashcards");
       return store.flashcards;
     },
-    saveFlashcardsIfNone: async (_assetId, _transcript, cards) => {
+    saveFlashcardsIfNone: async (ownerId, _assetId, _transcript, cards) => {
       calls.push("saveFlashcardsIfNone");
+      store.savedOwner = ownerId;
       if (store.flashcards.length > 0) return { saved: false, flashcards: store.flashcards };
       store.flashcards = [...store.flashcards, ...cards];
       return { saved: true, flashcards: cards };
+    },
+    replaceRegenerableFlashcards: async (ownerId, _assetId, _transcript, cards) => {
+      calls.push("replaceRegenerableFlashcards");
+      store.savedOwner = ownerId;
+      const kept = store.flashcards.filter((card) => store.protectedFronts.has(card.front));
+      const replaced = store.flashcards.length - kept.length;
+      store.flashcards = [...kept, ...cards];
+      return { replaced, flashcards: store.flashcards };
     },
     generateSummary: async () => {
       calls.push("generateSummary");
@@ -54,7 +69,7 @@ function fakeDeps(options: { cards?: unknown } = {}) {
   return { deps, calls, store };
 }
 
-const MODEL_OR_WRITE = ["generateSummary", "generateFlashcards", "saveSummary", "saveFlashcardsIfNone"];
+const MODEL_OR_WRITE = ["generateSummary", "generateFlashcards", "saveSummary", "saveFlashcardsIfNone", "replaceRegenerableFlashcards"];
 
 test("a summary for another user's asset is refused before the model runs or anything is written", async () => {
   const { deps, calls, store } = fakeDeps();
@@ -121,4 +136,28 @@ test("request bodies are validated per action", () => {
   assert.equal(ok({ action: "summary", text: "x".repeat(80_001) }), false, "oversized text is rejected");
   assert.equal(ok({ action: "quiz", text: "x", assetId: ASSET }), false, "fields an action does not use are rejected");
   assert.equal(ok({ action: "chat", text: "d", userMessage: "q", history: [{ role: "system", content: "x" }] }), false);
+});
+
+test("saved cards belong to the requesting user", async () => {
+  const { deps, store } = fakeDeps();
+  const run = createAiGenerateService(deps);
+  await run(OWNER, { action: "flashcards", text: "notes", assetId: ASSET });
+  assert.equal(store.savedOwner, OWNER);
+});
+
+test("regenerating replaces only cards without reviews or edits, and checks ownership first", async () => {
+  const { deps, calls, store } = fakeDeps({ cards: [{ front: "New", back: "Card" }] });
+  const run = createAiGenerateService(deps);
+  store.flashcards = [{ front: "Reviewed", back: "A" }, { front: "Untouched", back: "B" }];
+  store.protectedFronts.add("Reviewed");
+
+  await assert.rejects(run(OTHER, { action: "flashcards", text: "x", assetId: ASSET, regenerate: true }), { status: 404 });
+  assert.equal(calls.includes("replaceRegenerableFlashcards"), false);
+
+  const result = await run(OWNER, { action: "flashcards", text: "notes", assetId: ASSET, regenerate: true });
+  assert.deepEqual(
+    "flashcards" in result && result.flashcards.map((card) => card.front),
+    ["Reviewed", "New"],
+    "the reviewed card is kept and the untouched one replaced",
+  );
 });
