@@ -4,13 +4,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import {
-  AtSign, Bold, CaseSensitive, Highlighter, Italic, KeyboardOff, Layers, Link2, ListChecks, Paperclip, Plus, Strikethrough, Underline,
+  AtSign, Bold, CaseSensitive, Highlighter, Italic, KeyboardOff, Layers, Link2, ListChecks, Paperclip, Plus, Strikethrough, Table2, Underline,
 } from "lucide-react";
 import { placeAtVisibleBottom, setFloatingBottomInset } from "@/lib/notes/floating";
 import { editLink } from "./editor-actions";
 import { FontMenu, TextColorMenu } from "./style-menus";
+import { TABLE_ACTIONS } from "./table-actions";
 
-type Panel = "turn-into" | "attach" | null;
+type Panel = "turn-into" | "attach" | "table" | null;
 
 const TURN_INTO: Array<{ label: string; run: (editor: Editor) => void }> = [
   { label: "Text", run: (e) => e.chain().focus().setParagraph().run() },
@@ -28,8 +29,9 @@ const keepFocus = (event: React.PointerEvent | React.MouseEvent) => event.preven
 
 /**
  * The phone toolbar, docked above the keyboard while the note is being
- * edited. Typing: insert, text style, to-do, link a page, attach, hide the
- * keyboard. With text selected: formatting. It replaces the floating bubble
+ * edited. Typing: insert, text style, to-do (rows and columns inside a
+ * table), link a page, attach, hide the keyboard. With text selected:
+ * formatting. It replaces the floating bubble
  * on touch screens, which fought with the system's own Cut / Copy / Paste bar.
  */
 export function KeyboardToolbar({
@@ -99,6 +101,11 @@ export function KeyboardToolbar({
   if (!visible || !editor.isEditable) return null;
 
   const { empty } = editor.state.selection;
+  const inTable = editor.isActive("table");
+  // The table panel closes by itself once the caret leaves the table.
+  const shownPanel = panel === "table" && !inTable ? null : panel;
+  // Only what can run here: no "Delete row" on a one-row table.
+  const tableEntries = TABLE_ACTIONS.filter((action) => action.can(editor)).map((action) => ({ label: action.label, run: (current: Editor) => void action.run(current) }));
   const chain = () => editor.chain().focus();
   const button = (label: string, icon: ReactNode, run: () => void, active = false) => (
     <button
@@ -118,9 +125,9 @@ export function KeyboardToolbar({
 
   return createPortal(
     <div ref={barRef} className="note-keyboard-bar" role="toolbar" aria-label="Editing tools" onPointerDown={keepFocus} onMouseDown={keepFocus}>
-      {panel ? (
+      {shownPanel ? (
         <div className="note-keyboard-panel" role="menu">
-          {(panel === "turn-into" ? TURN_INTO : onAttach).map((entry) => (
+          {(shownPanel === "turn-into" ? TURN_INTO : shownPanel === "table" ? tableEntries : onAttach).map((entry) => (
             <button
               key={entry.label}
               type="button"
@@ -142,7 +149,9 @@ export function KeyboardToolbar({
           <>
             {button("Insert block", <Plus size={18} />, () => chain().insertContent("/").run())}
             {button("Turn into", <CaseSensitive size={19} />, () => setPanel(panel === "turn-into" ? null : "turn-into"), panel === "turn-into")}
-            {button("To-do", <ListChecks size={18} />, () => chain().toggleTaskList().run(), editor.isActive("taskList"))}
+            {inTable
+              ? button("Table", <Table2 size={18} />, () => setPanel(panel === "table" ? null : "table"), panel === "table")
+              : button("To-do", <ListChecks size={18} />, () => chain().toggleTaskList().run(), editor.isActive("taskList"))}
             {button("Link a page", <AtSign size={18} />, () => chain().insertContent("@").run())}
             {button("Attach", <Paperclip size={18} />, () => setPanel(panel === "attach" ? null : "attach"), panel === "attach")}
             {button("Hide keyboard", <KeyboardOff size={18} />, () => editor.commands.blur())}

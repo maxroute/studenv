@@ -2,6 +2,7 @@
 
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
+import { CellSelection } from "@tiptap/pm/tables";
 import { Bold, Code, Heading2, Highlighter, Italic, Layers, Link2, Strikethrough, Underline } from "lucide-react";
 import type { ReactNode } from "react";
 import { editLink } from "./editor-actions";
@@ -11,7 +12,8 @@ type Action = { label: string; icon: ReactNode; active?: boolean; run: () => voi
 
 /**
  * Formatting for the selected text, shown above the selection. Hidden in code
- * blocks and for empty selections, so it never covers the caret while typing.
+ * blocks and for empty selections, so it never covers the caret while typing,
+ * and for selections across table cells, which the table bar handles.
  */
 export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlashcard: () => void }) {
   const chain = () => editor.chain().focus();
@@ -36,7 +38,7 @@ export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlas
     <BubbleMenu
       editor={editor}
       shouldShow={({ editor: current, state }) =>
-        current.isEditable && !state.selection.empty && !current.isActive("codeBlock") && state.doc.textBetween(state.selection.from, state.selection.to).trim().length > 0
+        current.isEditable && !state.selection.empty && !(state.selection instanceof CellSelection) && !current.isActive("codeBlock") && state.doc.textBetween(state.selection.from, state.selection.to).trim().length > 0
       }
       options={{ placement: "top", offset: 8 }}
     >

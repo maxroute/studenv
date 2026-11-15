@@ -13,7 +13,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import Suggestion from "@tiptap/suggestion";
 import StarterKit from "@tiptap/starter-kit";
 import { BulletList, ListItem, ListKeymap, OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
-import { TableKit } from "@tiptap/extension-table";
+import { Table, TableKit, TableView } from "@tiptap/extension-table";
 import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
 import Highlight from "@tiptap/extension-highlight";
 import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
@@ -185,6 +185,19 @@ export type SlashCommandItem = {
 
 const slashPluginKey = new PluginKey("slashCommand");
 
+/**
+ * Tables keep TipTap's table view without column resizing. TipTap only
+ * installs that view together with resizing; without it the table's
+ * <colgroup> is drawn once and never updated, so adding or deleting a column
+ * leaves a stale column that squeezes the cells.
+ */
+const NoteTable = Table.extend({
+  addNodeView() {
+    const cellMinWidth = this.options.cellMinWidth;
+    return ({ node }) => new TableView(node, cellMinWidth);
+  },
+});
+
 /** "/" anywhere in a line opens the block menu (its own plugin key, so it never clashes with "@"). */
 const SlashCommand = Extension.create<{ suggestion: Omit<SuggestionOptions<SlashCommandItem>, "editor"> | null }>({
   name: "slashCommand",
@@ -240,7 +253,8 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     ListKeymap,
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableKit.configure({ table: { resizable: false } }),
+    TableKit.configure({ table: false }),
+    NoteTable.configure({ resizable: false }),
     Details.configure({ persist: true, HTMLAttributes: { class: "note-details" } }),
     DetailsSummary,
     DetailsContent,
