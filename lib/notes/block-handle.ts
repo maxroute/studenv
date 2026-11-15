@@ -179,8 +179,11 @@ class BlockHandleView {
     const lineHeight = Number.parseFloat(getComputedStyle(dom).lineHeight) || 24;
     const firstLine = Math.min(rect.height, lineHeight);
     this.handle.style.top = `${rect.top - hostRect.top + firstLine / 2 - 12}px`;
+    // A list item's box starts after its bullet or number; measure from the
+    // list's edge so the grip sits left of the marker instead of on it.
+    const list = unit.listPos !== null && dom.parentElement ? dom.parentElement.getBoundingClientRect() : rect;
     // Never off the left edge of the screen.
-    const left = Math.max(rect.left - hostRect.left - 26, 2 - hostRect.left);
+    const left = Math.max(Math.min(rect.left, list.left) - hostRect.left - 26, 2 - hostRect.left);
     this.handle.style.left = `${left}px`;
     this.handle.hidden = false;
   }

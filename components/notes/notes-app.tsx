@@ -19,6 +19,7 @@ import { AppearsIn } from "@/components/refs/appears-in";
 import { createMentionSuggestion } from "./mention-suggestion";
 import { createSlashSuggestion, slashCommands } from "./slash-commands";
 import { NoteBubbleMenu } from "./note-bubble-menu";
+import { TableBubbleMenu } from "./table-bubble-menu";
 import { editEquation } from "./editor-actions";
 import { askConfirm, askText } from "./note-dialogs";
 import { FontMenu, TextColorMenu } from "./style-menus";
@@ -527,6 +528,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
       {/* Mouse: a bubble on selection. Touch: one toolbar above the keyboard (the system's own
           selection bar takes the space a bubble would use). */}
       {editor && !readOnlyReason && !coarsePointer ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} /> : null}
+      {editor && !readOnlyReason && !coarsePointer ? <TableBubbleMenu editor={editor} /> : null}
       {editor && !readOnlyReason && coarsePointer ? (
         <KeyboardToolbar
           editor={editor}

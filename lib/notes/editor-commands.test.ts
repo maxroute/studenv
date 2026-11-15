@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Editor } from "@tiptap/core";
 import { JSDOM } from "jsdom";
 import { slashCommands } from "@/components/notes/slash-commands";
+import { TABLE_ACTIONS, hasHeaderRow, tableSize, type TableActionId } from "@/components/notes/table-actions";
 import { createNoteExtensions } from "./editor-extensions";
 import { fromEditorJSON } from "./editor-bridge";
 import { parseNoteDoc } from "./note-format";
@@ -71,4 +72,55 @@ test("headings, lists, to-dos, toggles and tables become the right nodes", async
   assert.equal(await typeOf("table"), "table");
   assert.equal(await typeOf("callout"), "callout");
   assert.equal(await typeOf("equation"), "blockMath");
+});
+
+test("table rows and columns can be added and removed from inside the table", () => {
+  const editor = freshEditor();
+  const table = slashCommands({ createSubPage: async () => null, makeFlashcard: () => {} }).find((entry) => entry.id === "table");
+  assert.ok(table);
+  table.run(editor, { from: 1, to: 5 });
+  const action = (id: TableActionId) => {
+    const found = TABLE_ACTIONS.find((entry) => entry.id === id);
+    assert.ok(found, id);
+    return found;
+  };
+  assert.deepEqual(tableSize(editor), { rows: 3, cols: 3 }, "the / command makes a 3 × 3 table with the caret inside");
+  assert.equal(hasHeaderRow(editor), true);
+
+  assert.equal(action("row-above").can(editor), false, "no row above the header row");
+  assert.ok(action("row-below").run(editor));
+  for (let cell = 0; cell < 3; cell += 1) editor.commands.goToNextCell();
+  assert.ok(action("row-above").run(editor), "a row above a body row");
+  assert.ok(action("col-right").run(editor));
+  assert.ok(action("col-left").run(editor));
+  assert.deepEqual(tableSize(editor), { rows: 5, cols: 5 });
+  const renderedColumns = () => editor.view.dom.querySelectorAll("table col").length;
+  assert.equal(renderedColumns(), 5, "the drawn columns follow added columns");
+
+  assert.ok(action("header-row").run(editor));
+  assert.equal(hasHeaderRow(editor), false, "header row toggles off");
+  assert.ok(action("header-row").run(editor));
+  assert.equal(hasHeaderRow(editor), true, "and back on");
+
+  for (let index = 0; index < 4; index += 1) {
+    assert.ok(action("delete-row").run(editor), "delete row");
+    assert.equal(editor.isActive("table"), true, "the caret stays in the table after deleting a row");
+  }
+  for (let index = 0; index < 4; index += 1) {
+    assert.ok(action("delete-col").run(editor), "delete column");
+    assert.equal(editor.isActive("table"), true, "the caret stays in the table after deleting a column");
+  }
+  assert.deepEqual(tableSize(editor), { rows: 1, cols: 1 });
+  assert.equal(renderedColumns(), 1, "and deleted ones (no stale column squeezing the cells)");
+  assert.equal(action("delete-row").can(editor), false, "the last row is left to Delete table");
+  assert.equal(action("delete-col").can(editor), false, "the last column is left to Delete table");
+
+  const parsed = parseNoteDoc(fromEditorJSON(editor.getJSON()));
+  assert.equal(parsed.warnings.filter((w) => w.startsWith("unrecognised")).length, 0, "the edited table is still a valid note block");
+
+  assert.ok(action("delete-table").run(editor));
+  assert.equal(editor.isActive("table"), false);
+  assert.ok(!JSON.stringify(editor.getJSON()).includes('"table"'), "the table is gone");
+  assert.deepEqual(tableSize(editor), { rows: 0, cols: 0 });
+  editor.destroy();
 });
