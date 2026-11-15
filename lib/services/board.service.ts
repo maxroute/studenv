@@ -8,10 +8,12 @@
 // item and file those notes mention or embed (their note links), so a note's
 // resources are always at hand on any board it is placed on.
 
-import { prisma } from "@/lib/db/prisma";
+import { INTERACTIVE_TRANSACTION_OPTIONS, prisma } from "@/lib/db/prisma";
+import { auditLog } from "@/lib/repositories/base.repository";
 import * as linkRepository from "@/lib/repositories/link.repository";
 import { parseNoteDoc } from "@/lib/notes/note-format";
 import { summarizeNoteDoc } from "@/lib/notes/note-summary";
+import { noteDocToPlainText } from "@/lib/notes/plain-text";
 import { getOrCreateAssetForItem } from "./item-asset.service";
 import * as workspaceService from "./workspace.service";
 
@@ -21,17 +23,69 @@ function notFound(message: string) {
 
 const boardMarker = (noteId: string) => `Board for note:${noteId}`;
 
-/** The note's own board, created the first time it is opened. */
+/**
+ * The note's own board, created the first time it is opened. Find-or-create
+ * runs under a transaction lock keyed on the note, so clicking "Board" several
+ * times (or on two devices) can never create two boards for one note.
+ */
 export async function openNoteBoard(userId: string, noteId: string, context?: { ip?: string | null; userAgent?: string | null }) {
   const note = await prisma.note.findFirst({ where: { id: noteId, ownerId: userId, deletedAt: null }, select: { id: true, title: true } });
   if (!note) throw notFound("Note not found.");
-  const existing = await prisma.workspace.findFirst({ where: { ownerId: userId, description: boardMarker(note.id) }, select: { id: true } });
-  if (existing) return { workspaceId: existing.id, created: false };
-  const workspace = await workspaceService.createWorkspace(
-    { ownerId: userId, title: note.title || "Untitled", description: boardMarker(note.id) },
-    context,
-  );
-  return { workspaceId: workspace.id, created: true };
+  return findOrCreateBoard(userId, note, context);
+}
+
+async function findOrCreateBoard(
+  userId: string,
+  note: { id: string; title: string },
+  context?: { ip?: string | null; userAgent?: string | null },
+) {
+  const marker = boardMarker(note.id);
+  const board = await prisma.$transaction(async (tx) => {
+    // Held until the transaction ends; a second request waits here, then finds the board.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${marker}))`;
+    const existing = await tx.workspace.findFirst({ where: { ownerId: userId, description: marker }, select: { id: true } });
+    if (existing) return { workspaceId: existing.id, created: false };
+    const workspace = await tx.workspace.create({
+      data: { ownerId: userId, title: note.title || "Untitled", description: marker },
+      select: { id: true, title: true },
+    });
+    return { workspaceId: workspace.id, created: true, title: workspace.title };
+  }, INTERACTIVE_TRANSACTION_OPTIONS);
+  if (board.created) {
+    await auditLog({
+      userId,
+      action: "CREATE_WORKSPACE",
+      resource: "workspace",
+      resourceId: board.workspaceId,
+      ipAddress: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { title: board.title },
+    });
+  }
+  return { workspaceId: board.workspaceId, created: board.created };
+}
+
+/**
+ * Everything opening a note's board needs, in one request: the board (created
+ * on first use), its latest scene, the note's card props and the card's
+ * preview. The board's server and database are far apart in round trips, so
+ * one request instead of four is what makes the board open quickly.
+ */
+export async function openNoteBoardWithContent(userId: string, noteId: string, context?: { ip?: string | null; userAgent?: string | null }) {
+  const note = await prisma.note.findFirst({
+    where: { id: noteId, ownerId: userId, deletedAt: null },
+    select: { id: true, title: true, docJson: true },
+  });
+  if (!note) throw notFound("Note not found.");
+  const { workspaceId, created } = await findOrCreateBoard(userId, note, context);
+  const [workspace, card] = await Promise.all([workspaceService.getWorkspace(userId, workspaceId), pageCard(userId, note.id)]);
+  return {
+    workspaceId,
+    created,
+    workspace: workspaceService.workspaceLoadPayload(workspace),
+    note: { id: note.id, title: note.title, excerpt: noteDocToPlainText(parseNoteDoc(safeJson(note.docJson)).envelope.doc) },
+    card,
+  };
 }
 
 export type BoardResource = {

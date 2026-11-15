@@ -44,6 +44,17 @@ function getWorkspacePreloadKey(workspaceId: string) {
   return `workspace-preload:${workspaceId}`;
 }
 
+/** A preload this recent was read from the server moments ago; reloading it again is wasted time. */
+const FRESH_PRELOAD_MS = 30_000;
+
+type PreloadedNoteCard = { id: string; title: string; excerpt: string };
+
+function preloadedNoteCard(value: unknown): PreloadedNoteCard | null {
+  if (!value || typeof value !== "object") return null;
+  const { id, title, excerpt } = value as Record<string, unknown>;
+  return typeof id === "string" && typeof title === "string" && typeof excerpt === "string" ? { id, title, excerpt } : null;
+}
+
 export default function WorkspacePage() {
   const router = useRouter();
   const { id } = useParams();
@@ -51,6 +62,8 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [showSlowLoadHint, setShowSlowLoadHint] = useState(false);
   const handledAutoOpenRef = useRef<string | null>(null);
+  // The page card that came with the preload (opening a page's board), so adding it needs no request.
+  const preloadedNoteCardRef = useRef<PreloadedNoteCard | null>(null);
   
   const { 
     loadWorkspace, 
@@ -101,9 +114,11 @@ export default function WorkspacePage() {
             version: parsed.version,
           });
           window.sessionStorage.removeItem(getWorkspacePreloadKey(id as string));
+          preloadedNoteCardRef.current = preloadedNoteCard(parsed.noteCard);
           usedPrefetch = true;
           setLoading(false);
-          void loadWorkspace(id as string);
+          const fresh = typeof parsed.preloadedAt === "number" && Date.now() - parsed.preloadedAt < FRESH_PRELOAD_MS;
+          if (!fresh) void loadWorkspace(id as string);
         }
       } catch (error) {
         console.warn("Failed to hydrate prefetched workspace", error);
@@ -231,7 +246,8 @@ export default function WorkspacePage() {
 
     const ensureNoteCard = async () => {
       try {
-        if (!(await addNoteCardToBoard(noteId))) throw new Error("Note not found");
+        const known = preloadedNoteCardRef.current?.id === noteId ? preloadedNoteCardRef.current : null;
+        if (!(await addNoteCardToBoard(noteId, known))) throw new Error("Note not found");
       } catch (error) {
         console.warn("Failed to add the note card", error);
       }

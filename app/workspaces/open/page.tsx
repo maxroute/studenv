@@ -2,10 +2,32 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { mutate } from "swr";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 function getWorkspacePreloadKey(workspaceId: string) {
   return `workspace-preload:${workspaceId}`;
+}
+
+type OpenedBoard = { workspaceId: string; preload: Record<string, unknown>; nextUrl: string };
+
+/**
+ * A page's board in one request: the board (created on first use), its scene,
+ * and the page's card. The card's preview is put in the cache its card reads.
+ */
+async function openNoteBoard(noteId: string): Promise<OpenedBoard> {
+  const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/board`, { method: "POST" });
+  const json = await res.json().catch(() => null);
+  const data = json?.data;
+  if (!res.ok || typeof data?.workspaceId !== "string" || !data.workspace) {
+    throw new Error(typeof json?.error === "string" ? json.error : "The board could not be opened.");
+  }
+  if (data.card) void mutate(`/api/notes/${encodeURIComponent(noteId)}/card`, data.card, { revalidate: false });
+  return {
+    workspaceId: data.workspaceId,
+    preload: { ...data.workspace, noteCard: data.note ?? null, preloadedAt: Date.now() },
+    nextUrl: `/workspaces/${encodeURIComponent(data.workspaceId)}?addNote=${encodeURIComponent(noteId)}`,
+  };
 }
 
 function advanceProgress(
@@ -19,6 +41,7 @@ export default function OpenWorkspacePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const itemId = searchParams.get("itemId");
+  const noteId = searchParams.get("note");
   const startedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -57,14 +80,41 @@ export default function OpenWorkspacePage() {
 
     startedRef.current = true;
 
-    if (!itemId) {
+    if (!itemId && !noteId) {
       router.replace("/workspaces");
       return;
     }
 
     let active = true;
 
+    // A page's board: one request, with the canvas code downloading meanwhile.
+    const openPageBoard = async (id: string) => {
+      try {
+        setError(null);
+        advanceProgress(setProgress, 16);
+        const canvasCode = import("@/components/workspace/canvas");
+        const board = await openNoteBoard(id);
+        if (!active) return;
+        advanceProgress(setProgress, 80);
+        try {
+          window.sessionStorage.setItem(getWorkspacePreloadKey(board.workspaceId), JSON.stringify(board.preload));
+        } catch (storageError) {
+          console.warn("Failed to cache workspace preload", storageError);
+        }
+        await canvasCode;
+        if (!active) return;
+        advanceProgress(setProgress, 100);
+        router.replace(board.nextUrl);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "The board could not be opened.");
+        setProgress(0);
+        startedRef.current = false;
+      }
+    };
+
     const openWorkspace = async () => {
+      if (!itemId) return;
       try {
         setError(null);
         advanceProgress(setProgress, 16);
@@ -130,12 +180,13 @@ export default function OpenWorkspacePage() {
       }
     };
 
-    void openWorkspace();
+    if (noteId) void openPageBoard(noteId);
+    else void openWorkspace();
 
     return () => {
       active = false;
     };
-  }, [itemId, retryNonce, router]);
+  }, [itemId, noteId, retryNonce, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0e0e0b] px-6 text-[#e4dfcf]">
@@ -143,15 +194,17 @@ export default function OpenWorkspacePage() {
         <div className="mb-5 flex items-center gap-3 text-[#c97d0c]">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span className="text-sm font-medium uppercase tracking-[0.16em]">
-            Opening Workspace
+            {noteId ? "Opening board" : "Opening Workspace"}
           </span>
         </div>
 
         <h1 className="font-fraunces text-3xl font-semibold tracking-[-0.04em] text-[#e4dfcf]">
-          Getting your studio ready.
+          {noteId ? "Getting your board ready." : "Getting your studio ready."}
         </h1>
         <p className="mt-3 text-sm leading-6 text-[#9c9788]">
-          We are preparing the workspace and moving your item into view.
+          {noteId
+            ? "We are opening this page's board and placing the page on it."
+            : "We are preparing the workspace and moving your item into view."}
         </p>
 
         {error ? (
@@ -173,11 +226,11 @@ export default function OpenWorkspacePage() {
               <button
                 className="rounded-lg px-4 py-2 text-sm text-[#9c9788] transition hover:text-[#e4dfcf]"
                 type="button"
-                onClick={() => router.push("/shelf")}
+                onClick={() => router.push(noteId ? `/notes/${encodeURIComponent(noteId)}` : "/shelf")}
               >
                 <span className="inline-flex items-center gap-2">
                   <ArrowLeft className="h-4 w-4" />
-                  Back to shelf
+                  {noteId ? "Back to page" : "Back to shelf"}
                 </span>
               </button>
             </div>

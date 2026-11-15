@@ -20,16 +20,15 @@ const STATUSES: Array<{ key: ItemStatus; label: string }> = [
   { key: "done", label: "Done" },
 ];
 
-/** Opens the note's own board (created on first use) with the note's card on it. */
+/** The loading screen that opens the note's own board (created on first use) with its card. */
+export const noteBoardUrl = (noteId: string) => `/workspaces/open?note=${encodeURIComponent(noteId)}`;
+
+/**
+ * Opens the note's own board with the note's card on it. Goes to the loading
+ * screen at once; it fetches the board in one request.
+ */
 export async function openNoteBoard(noteId: string, push: (url: string) => void) {
-  const response = await fetch(`/api/notes/${encodeURIComponent(noteId)}/board`, { method: "POST" });
-  const json = await response.json().catch(() => null);
-  const workspaceId = json?.data?.workspaceId;
-  if (!response.ok || typeof workspaceId !== "string") {
-    toast.error("The board could not be opened.");
-    return;
-  }
-  push(`/workspaces/${encodeURIComponent(workspaceId)}?addNote=${encodeURIComponent(noteId)}`);
+  push(noteBoardUrl(noteId));
 }
 
 /** A menu under a button, portalled and kept on screen (and above the phone keyboard). */
@@ -158,9 +157,10 @@ export function NoteTopline({
       {crumbs}
       {status}
       {!embedded ? (
-        <button type="button" className="note-chip-button" onClick={() => void openNoteBoard(noteId, router.push)} title="Open this page's board">
+        // A link, so a tap works even before the page's code has finished loading.
+        <Link href={noteBoardUrl(noteId)} prefetch={false} className="note-chip-button" title="Open this page's board">
           <LayoutDashboard size={14} /> Board
-        </button>
+        </Link>
       ) : null}
       <button
         ref={menuButtonRef}

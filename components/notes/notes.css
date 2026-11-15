@@ -2012,6 +2012,7 @@ textarea.note-dialog-input {
   background: transparent;
   color: var(--text);
   font-size: 13px;
+  text-decoration: none;
   cursor: pointer;
 }
 

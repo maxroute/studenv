@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import * as workspaceService from "@/lib/services/workspace.service";
-import {
-  createWorkspaceScene,
-  parseWorkspaceSceneJson,
-  serializeWorkspaceScene,
-} from "@/types/workspace";
 
 export async function GET(
   req: NextRequest,
@@ -14,36 +9,7 @@ export async function GET(
   try {
     const user = await requireAuth();
     const workspace = await workspaceService.getWorkspace(user.id, params.id);
-    
-    // Get the latest snapshot
-    const latestSnapshot = workspace.snapshots[0];
-
-    let normalizedSceneJson: string | null = null;
-
-    if (latestSnapshot?.sceneJson) {
-      try {
-        normalizedSceneJson = serializeWorkspaceScene(
-          parseWorkspaceSceneJson(latestSnapshot.sceneJson),
-        );
-      } catch (error) {
-        console.warn(
-          `Workspace ${workspace.id} snapshot normalization failed. Falling back to an empty scene.`,
-          error,
-        );
-        normalizedSceneJson = serializeWorkspaceScene(createWorkspaceScene());
-      }
-    }
-
-    return NextResponse.json({
-      id: workspace.id,
-      title: workspace.title,
-      description: workspace.description,
-      coverAssetId: workspace.coverAssetId ?? null,
-      latestVersion: latestSnapshot?.version || workspace.latestVersion,
-      sceneJson: normalizedSceneJson,
-      cameraJson: latestSnapshot?.cameraJson || null,
-      version: latestSnapshot?.version || 0,
-    });
+    return NextResponse.json(workspaceService.workspaceLoadPayload(workspace));
   } catch (error: any) {
     return NextResponse.json(
       { error: "Workspace could not be loaded. Please try again shortly." },
