@@ -2,6 +2,7 @@ import * as workspaceRepository from "@/lib/repositories/workspace.repository";
 import { CreateWorkspaceInput, SaveSnapshotInput } from "@/lib/models/workspace.model";
 import { auditLog } from "@/lib/repositories/base.repository";
 import { applySceneLinks, planSceneLinks } from "@/lib/services/link-index.service";
+import { createWorkspaceScene, parseWorkspaceSceneJson, serializeWorkspaceScene } from "@/types/workspace";
 
 export async function createWorkspace(
   input: CreateWorkspaceInput,
@@ -30,6 +31,44 @@ export async function getWorkspace(userId: string, id: string) {
     throw error;
   }
   return workspace;
+}
+
+export type WorkspaceLoadPayload = {
+  id: string;
+  title: string;
+  description: string | null;
+  coverAssetId: string | null;
+  latestVersion: number;
+  sceneJson: string | null;
+  cameraJson: string | null;
+  version: number;
+};
+
+/**
+ * What opening a workspace needs: its title and latest scene, normalized so
+ * legacy snapshots load. A scene that cannot be read falls back to an empty one.
+ */
+export function workspaceLoadPayload(workspace: Awaited<ReturnType<typeof getWorkspace>>): WorkspaceLoadPayload {
+  const latestSnapshot = workspace.snapshots[0];
+  let sceneJson: string | null = null;
+  if (latestSnapshot?.sceneJson) {
+    try {
+      sceneJson = serializeWorkspaceScene(parseWorkspaceSceneJson(latestSnapshot.sceneJson));
+    } catch (error) {
+      console.warn(`Workspace ${workspace.id} snapshot normalization failed. Falling back to an empty scene.`, error);
+      sceneJson = serializeWorkspaceScene(createWorkspaceScene());
+    }
+  }
+  return {
+    id: workspace.id,
+    title: workspace.title,
+    description: workspace.description,
+    coverAssetId: workspace.coverAssetId ?? null,
+    latestVersion: latestSnapshot?.version || workspace.latestVersion,
+    sceneJson,
+    cameraJson: latestSnapshot?.cameraJson || null,
+    version: latestSnapshot?.version || 0,
+  };
 }
 
 /** For pickers: ids and titles without loading scenes. */
