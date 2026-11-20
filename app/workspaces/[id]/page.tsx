@@ -8,6 +8,7 @@ import { useViewerStore } from "@/hooks/use-viewer-store";
 import { centeredCardPosition, findResourceCard, resourceCardProps } from "@/lib/workspace/resource-card";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { addNoteCardToBoard } from "@/components/workspace/note-card-actions";
+import { RanganHost } from "@/components/rangan/rangan-host";
 import { Loader2, ArrowLeft, Save, CheckCircle2, Video, FileText, Maximize2, RefreshCw, AlertCircle, Music4, Globe } from "lucide-react";
 
 // Dynamically import tldraw to avoid SSR issues
@@ -492,6 +493,7 @@ export default function WorkspacePage() {
         <TldrawCanvas workspaceId={id as string} />
       </div>
       <NotePanelHost />
+      <RanganHost />
 
       {/* Floating Viewer Layer */}
       {viewers.map((viewer) => (
