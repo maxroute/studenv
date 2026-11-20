@@ -5,6 +5,7 @@ import { JSDOM } from "jsdom";
 import { slashCommands } from "@/components/notes/slash-commands";
 import { TABLE_ACTIONS, hasHeaderRow, tableSize, type TableActionId } from "@/components/notes/table-actions";
 import { createNoteExtensions } from "./editor-extensions";
+import { liftLineOutOfList } from "./list-behavior";
 import { fromEditorJSON } from "./editor-bridge";
 import { parseNoteDoc } from "./note-format";
 
@@ -12,7 +13,7 @@ import { parseNoteDoc } from "./note-format";
 const dom = new JSDOM("<!doctype html><html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, getComputedStyle: dom.window.getComputedStyle });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
-for (const key of ["HTMLElement", "HTMLInputElement", "Node", "Element", "MutationObserver", "DOMParser", "Text"] as const) {
+for (const key of ["HTMLElement", "HTMLInputElement", "Node", "Element", "MutationObserver", "DOMParser", "Text", "KeyboardEvent"] as const) {
   Object.assign(globalThis, { [key]: dom.window[key] });
 }
 Object.assign(globalThis, {
@@ -123,4 +124,109 @@ test("table rows and columns can be added and removed from inside the table", ()
   assert.ok(!JSON.stringify(editor.getJSON()).includes('"table"'), "the table is gone");
   assert.deepEqual(tableSize(editor), { rows: 0, cols: 0 });
   editor.destroy();
+});
+
+// --- lists: per-line type and Backspace ------------------------------------
+
+const para = (text?: string) => ({ type: "paragraph", ...(text ? { content: [{ type: "text", text }] } : {}) });
+const li = (text?: string) => ({ type: "listItem", content: [para(text)] });
+const listEditor = (content: unknown[]) => new Editor({ extensions: createNoteExtensions({}), content: { type: "doc", content } as never });
+
+/** The cursor at the end of the nth text block (0-based) that holds `text` (or the empty one). */
+function cursorIn(editor: Editor, text: string) {
+  let found = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (found === -1 && node.isTextblock && node.textContent === text) found = pos + 1 + node.content.size;
+  });
+  assert.notEqual(found, -1, `a line "${text}"`);
+  editor.commands.setTextSelection(found);
+}
+
+/** A compact shape of the document: "bullet[a,b] ordered[c] p[d]". */
+type JsonNode = { type?: string; text?: string; content?: JsonNode[] };
+function shape(editor: Editor) {
+  const blocks: JsonNode[] = [...(editor.getJSON().content as JsonNode[])];
+  // The editor keeps an empty paragraph after a final list or block; it is not part of what is tested.
+  const last = blocks[blocks.length - 1];
+  if (blocks.length > 1 && last.type === "paragraph" && !last.content?.length) blocks.pop();
+  return blocks.map((node) => {
+      const name = node.type === "bulletList" ? "bullet" : node.type === "orderedList" ? "ordered" : node.type === "paragraph" ? "p" : String(node.type);
+      const texts = node.type === "paragraph"
+        ? [node.content?.[0]?.text ?? ""]
+        : (node.content ?? []).map((item) => item.content?.[0]?.content?.[0]?.text ?? "");
+      return `${name}[${texts.join(",")}]`;
+    })
+    .join(" ");
+}
+
+test("choosing numbers on a new line leaves the bullets above as bullets", () => {
+  const editor = listEditor([{ type: "bulletList", content: [li("a"), li("b"), li("c"), li()] }]);
+  cursorIn(editor, "");
+  editor.commands.toggleOrderedList();
+  assert.equal(shape(editor), "bullet[a,b,c] ordered[]");
+  assert.ok(editor.isActive("orderedList"), "the cursor stays in the new line");
+});
+
+test("switching the other way leaves numbers above as numbers", () => {
+  const editor = listEditor([{ type: "orderedList", content: [li("a"), li("b"), li()] }]);
+  cursorIn(editor, "");
+  editor.commands.toggleBulletList();
+  assert.equal(shape(editor), "ordered[a,b] bullet[]");
+});
+
+test("switching a middle line splits the list around it", () => {
+  const editor = listEditor([{ type: "bulletList", content: [li("a"), li("b"), li("c")] }]);
+  cursorIn(editor, "b");
+  editor.commands.toggleOrderedList();
+  assert.equal(shape(editor), "bullet[a] ordered[b] bullet[c]");
+  assert.equal(editor.state.selection.$from.parent.textContent, "b");
+});
+
+test("a line switched next to a list of its new type joins it", () => {
+  const editor = listEditor([
+    { type: "orderedList", content: [li("one"), li("two")] },
+    { type: "bulletList", content: [li("three")] },
+  ]);
+  cursorIn(editor, "three");
+  editor.commands.toggleOrderedList();
+  assert.equal(shape(editor), "ordered[one,two,three]");
+});
+
+test("the same list type still toggles the line off, and plain text becomes a list", () => {
+  const editor = listEditor([{ type: "bulletList", content: [li("a"), li("b")] }, para("plain")]);
+  cursorIn(editor, "plain");
+  editor.commands.toggleOrderedList();
+  assert.equal(shape(editor), "bullet[a,b] ordered[plain]");
+  cursorIn(editor, "b");
+  editor.commands.toggleBulletList();
+  assert.equal(shape(editor), "bullet[a] p[b] ordered[plain]");
+});
+
+test("Backspace on an empty list line removes the marker and stays on that line", () => {
+  const editor = listEditor([{ type: "bulletList", content: [li("a"), li("b"), li()] }]);
+  cursorIn(editor, "");
+  editor.commands.keyboardShortcut("Backspace");
+  assert.equal(shape(editor), "bullet[a,b] p[]");
+  assert.equal(editor.state.selection.$from.parent.type.name, "paragraph");
+  assert.equal(editor.state.selection.$from.parent.textContent, "", "the cursor is on the emptied line, not on b");
+});
+
+test("Backspace at the start of a numbered line with text turns it into plain text", () => {
+  const editor = listEditor([{ type: "orderedList", content: [li("a"), li("b")] }]);
+  const doc = editor.state.doc;
+  let start = -1;
+  doc.descendants((node, pos) => {
+    if (start === -1 && node.isTextblock && node.textContent === "b") start = pos + 1;
+  });
+  editor.commands.setTextSelection(start);
+  editor.commands.keyboardShortcut("Backspace");
+  assert.equal(shape(editor), "ordered[a] p[b]");
+  assert.equal(editor.state.selection.$from.parent.textContent, "b");
+});
+
+test("Backspace inside list text is left to the browser, which deletes a character", () => {
+  const editor = listEditor([{ type: "bulletList", content: [li("ab")] }]);
+  cursorIn(editor, "ab");
+  assert.equal(liftLineOutOfList(editor), false, "not handled by the list");
+  assert.equal(shape(editor), "bullet[ab]");
 });
