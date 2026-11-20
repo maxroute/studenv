@@ -60,3 +60,22 @@ test("gpt-oss style citation marks are read as [n]", () => {
   assert.deepEqual(citedNumbers(normalizeCitationMarks("A【2】 B【1】"), 2), [2, 1]);
   assert.equal(normalizeCitationMarks("Plain [1] stays."), "Plain [1] stays.");
 });
+
+test("a source that fits is kept whole; a long one is sampled evenly, in order", async () => {
+  const { samplePassages } = await import("./citations");
+  const small = [{ content: "a" }, { content: "b" }];
+  assert.deepEqual(samplePassages(small, 100), { selected: small, truncated: false });
+  const long = Array.from({ length: 50 }, (_, i) => ({ id: i, content: "x".repeat(100) }));
+  const { selected, truncated } = samplePassages(long, 1_000);
+  assert.equal(truncated, true);
+  assert.equal(selected.length, 10);
+  assert.deepEqual(selected.map((p) => p.id), [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]);
+  // One passage bigger than the whole budget is still sent, alone.
+  assert.equal(samplePassages([{ content: "y".repeat(5_000) }, { content: "z" }], 1_000).selected.length, 1);
+});
+
+test("selected text is quoted with the page title when there is one", async () => {
+  const { focusBlock } = await import("./citations");
+  assert.equal(focusBlock({ text: " ATP ", title: "Bio" }), 'The student selected this text on their page "Bio":\n"""\nATP\n"""');
+  assert.equal(focusBlock({ text: "ATP" }), 'The student selected this text:\n"""\nATP\n"""');
+});

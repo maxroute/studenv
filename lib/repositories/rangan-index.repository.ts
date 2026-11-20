@@ -247,3 +247,16 @@ export async function findItemIdsForAssets(ownerId: string, assetIds: readonly s
   });
   return new Map(assets.flatMap((asset) => (asset.itemId ? [[asset.id, asset.itemId] as const] : [])));
 }
+
+/** Title of one of the user's sources, or null when it is not theirs. */
+export async function findSourceTitle(ownerId: string, type: IndexSourceType, id: string): Promise<string | null> {
+  switch (type) {
+    case "note":
+      return (await prisma.note.findFirst({ where: { id, ownerId, deletedAt: null }, select: { title: true } }))?.title ?? null;
+    case "pdf":
+    case "transcript":
+      return (await prisma.mediaAsset.findFirst({ where: { id, ownerId }, select: { title: true } }))?.title ?? null;
+    case "item":
+      return (await prisma.item.findFirst({ where: { id, userId: ownerId }, select: { title: true } }))?.title ?? null;
+  }
+}

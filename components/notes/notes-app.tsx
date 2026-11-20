@@ -28,6 +28,7 @@ import { ResourceEmbedView } from "./resource-embed";
 import { PdfPageBlockView } from "./pdf-page-block";
 import { CollectionsDialog, NoteChips, NoteTopline } from "./note-header";
 import { KeyboardToolbar } from "./keyboard-toolbar";
+import { useRanganStore } from "@/hooks/use-rangan-store";
 import { embedFromShelf, embedFromUrl, pickAndUpload, uploadIntoNote, type ShelfEntry } from "./resource-actions";
 
 type NoteListEntry = { id: string; title: string; parentId: string | null; sortKey: string; itemId: string | null; version: number; updatedAt: string };
@@ -527,12 +528,13 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
       {note && !readOnlyReason ? <NoteChips noteId={noteId} itemId={note.itemId} /> : null}
       {/* Mouse: a bubble on selection. Touch: one toolbar above the keyboard (the system's own
           selection bar takes the space a bubble would use). */}
-      {editor && !readOnlyReason && !coarsePointer ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} /> : null}
+      {editor && !readOnlyReason && !coarsePointer ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} onAskRangan={() => askRanganAbout(editor, title)} /> : null}
       {editor && !readOnlyReason && !coarsePointer ? <TableBubbleMenu editor={editor} /> : null}
       {editor && !readOnlyReason && coarsePointer ? (
         <KeyboardToolbar
           editor={editor}
           onFlashcard={() => void makeFlashcard(editor, noteId)}
+          onAskRangan={() => askRanganAbout(editor, title)}
           onAttach={[
             { label: "Upload a file", run: (current) => pickAndUpload(current) },
             { label: "From your Shelf", run: (current) => void embedFromShelf(current, shelfRef.current) },
@@ -594,6 +596,17 @@ function stopInteractiveEvent({ event }: { event: Event }) {
 }
 
 /** "Make flashcard": the selected text (or the current block) becomes the question; the card points at the block. */
+/** "Explain this": hands the selected text, and the page it is on, to Rangan. */
+function askRanganAbout(editor: Editor, title: string) {
+  const { from, to } = editor.state.selection;
+  const text = editor.state.doc.textBetween(from, to, " ").trim();
+  if (!text) {
+    toast.error("Select some text for Rangan to explain.");
+    return;
+  }
+  void useRanganStore.getState().explain(text, title);
+}
+
 async function makeFlashcard(editor: Editor, noteId: string) {
   const { state } = editor;
   const { from, to, $from } = state.selection;

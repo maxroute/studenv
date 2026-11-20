@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, FileText, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, FileText, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -68,6 +68,9 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
       >
         {linkCitations(turn.content, turn.citations.map((citation) => citation.n))}
       </ReactMarkdown>
+      {turn.partial ? (
+        <p className="rangan-partial">This is long, so Rangan summarized evenly spaced parts of it.</p>
+      ) : null}
       {turn.citations.length > 0 ? (
         <div className="rangan-sources" aria-label="Sources">
           <div className="rangan-sources-label">From your library</div>
@@ -105,13 +108,17 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
 export function RanganPanel() {
   const router = useRouter();
   const pathname = usePathname();
-  const { turns, pending, usage, close, ask, retry, clear } = useRanganStore();
+  const { turns, pending, usage, close, ask, retry, clear, summarize } = useRanganStore();
+  const boardNoteId = useNotePanelStore((state) => state.noteId);
   const [draft, setDraft] = useState("");
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const onBoard = pathname?.startsWith("/workspaces/") ?? false;
   const spent = usage !== null && usage.remaining <= 0;
+  // The page in front of the student: the open page, or the page in the board's side panel.
+  const pageMatch = pathname?.match(/^\/notes\/([^/?#]+)/);
+  const currentNoteId = pageMatch ? decodeURIComponent(pageMatch[1]) : onBoard ? boardNoteId : null;
 
   useEffect(() => {
     // Focus without scrolling the page; on phones this also brings up the keyboard.
@@ -204,6 +211,7 @@ export function RanganPanel() {
         {turns.map((turn) =>
           turn.role === "user" ? (
             <div key={turn.id} className="rangan-question">
+              {turn.quote ? <blockquote className="rangan-quote">{turn.quote}</blockquote> : null}
               {turn.content}
             </div>
           ) : turn.role === "assistant" ? (
@@ -211,8 +219,8 @@ export function RanganPanel() {
           ) : (
             <div key={turn.id} className="rangan-error" role="alert">
               <span>{turn.content}</span>
-              {turn.retryQuestion ? (
-                <button type="button" className="rangan-retry" onClick={() => void retry(turn.retryQuestion ?? "")}>
+              {turn.retry ? (
+                <button type="button" className="rangan-retry" onClick={() => turn.retry && void retry(turn.retry)}>
                   <RotateCcw size={13} aria-hidden /> Try again
                 </button>
               ) : null}
@@ -264,6 +272,18 @@ export function RanganPanel() {
             submit();
           }}
         >
+          {currentNoteId && !spent ? (
+            <div className="rangan-chips">
+              <button
+                type="button"
+                className="rangan-chip"
+                disabled={pending}
+                onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
+              >
+                <ListTree size={14} aria-hidden /> Summarize this page
+              </button>
+            </div>
+          ) : null}
           <div className="rangan-input-row">
             <textarea
               ref={inputRef}

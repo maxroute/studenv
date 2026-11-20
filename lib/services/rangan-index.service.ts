@@ -21,6 +21,7 @@ export type RanganIndexDeps = {
     ownerId: string,
     ids: readonly string[],
   ) => Promise<Array<{ id: string; sourceType: string; sourceId: string; anchor: string; title: string; heading: string; content: string }>>;
+  findSourceTitle: (ownerId: string, type: IndexSourceType, id: string) => Promise<string | null>;
   /** Shelf item of each asset that has one, for opening PDF and video citations. */
   findItemIdsForAssets: (ownerId: string, assetIds: readonly string[]) => Promise<Map<string, string>>;
   /** Throws when embeddings are unavailable; the index then works by keyword only. */
@@ -167,5 +168,28 @@ export function createRanganIndexService(deps: RanganIndexDeps) {
     return { results, mode: meaningMatches === null ? ("keyword" as const) : ("hybrid" as const) };
   }
 
-  return { sync, search };
+  /**
+   * One source's passages in document order, read live (not from the index),
+   * each with its citation and where it opens. Null when it is not the user's.
+   */
+  async function loadSource(ownerId: string, type: IndexSourceType, id: string) {
+    const [title, passages] = await Promise.all([deps.findSourceTitle(ownerId, type, id), deps.loadPassages(ownerId, type, id)]);
+    if (title === null || passages === null) return null;
+    const itemIdByAsset =
+      type === "pdf" || type === "transcript" ? await deps.findItemIdsForAssets(ownerId, [id]) : new Map<string, string>();
+    return {
+      title,
+      passages: passages.map((passage) => ({
+        ref: passageRef(type, id, passage.anchor),
+        sourceType: type,
+        title,
+        heading: passage.heading,
+        snippet: snippet(passage.content),
+        content: passage.content,
+        open: openTarget(type, id, passage.anchor, itemIdByAsset),
+      })),
+    };
+  }
+
+  return { sync, search, loadSource };
 }

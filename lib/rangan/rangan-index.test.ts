@@ -274,6 +274,7 @@ function memoryIndex(library: Record<string, { sources: SourceVersion[]; passage
       rows.filter((r) => r.ownerId === ownerId && r.vector).map((r) => ({ id: r.id, similarity: 0.5 })).reverse(),
     loadChunks: async (ownerId, ids) => rows.filter((r) => r.ownerId === ownerId && ids.includes(r.id)),
     findItemIdsForAssets: async (_ownerId, assetIds) => new Map(assetIds.map((assetId) => [assetId, `item-of-${assetId}`])),
+    findSourceTitle: async (ownerId, type, id) => library[ownerId]?.sources.find((s) => s.type === type && s.id === id)?.title ?? null,
     embed: async (texts) => {
       if (options.embedFails) throw new EmbeddingUnavailableError("http_500");
       calls.embedded += texts.length;
@@ -402,4 +403,21 @@ test("concurrent refreshes for one user share a single run", async () => {
 test("passages are embedded with their title and heading for context", () => {
   assert.equal(embeddingText({ title: "Bio", heading: "Osmosis", content: "Water moves." }), "Bio\nOsmosis\nWater moves.");
   assert.equal(embeddingText({ title: "Bio", heading: "", content: "Water." }), "Bio\nWater.");
+});
+
+test("a source loads live with its title, citations and open targets, only for its owner", async () => {
+  const lib = {
+    u1: {
+      sources: [{ type: "pdf" as const, id: "a1", title: "Textbook", version: "1" }],
+      passages: { "pdf:a1": withHashes([{ anchor: "page3", heading: "Page 3", content: "Enzymes speed reactions." }]) },
+    },
+  };
+  const index = createRanganIndexService(memoryIndex(lib).deps);
+  const source = await index.loadSource("u1", "pdf", "a1");
+  assert.equal(source?.title, "Textbook");
+  assert.deepEqual(
+    source?.passages.map((p) => [p.ref, p.open]),
+    [["asset:a1#page3", { kind: "pdf", assetId: "a1", page: 3, itemId: "item-of-a1" }]],
+  );
+  assert.equal(await index.loadSource("u2", "pdf", "a1"), null);
 });
