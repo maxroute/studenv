@@ -44,7 +44,9 @@
 /* Same for the phone sidebar drawer (90) and its backdrop (85), which sit
    below this button's layer. */
 body:has([data-asset-drawer]) .rangan-fab,
-body:has(.sidebar.mobile-open) .rangan-fab {
+body:has(.sidebar.mobile-open) .rangan-fab,
+/* While a page is being edited on a phone, Rangan is in the keyboard toolbar. */
+body:has(.note-keyboard-bar) .rangan-fab {
   opacity: 0;
   pointer-events: none;
 }
@@ -532,3 +534,56 @@ body:has(.sidebar.mobile-open) .rangan-fab {
   font-size: 11px;
   line-height: 1.4;
 }
+
+.rangan-quote {
+  margin: 0 0 6px;
+  max-height: 7.5em;
+  overflow: hidden;
+  border-left: 2px solid var(--amber-dim);
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.rangan-partial {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.rangan-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rangan-chip {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 4px 12px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.rangan-chip:hover:not(:disabled) {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+.rangan-chip:disabled {
+  opacity: 0.5;
+}
+
+/* Rangan's logo inside other toolbars (page bubble, keyboard bar). */
+.note-rangan-icon {
+  border-radius: 50%;
+}
+

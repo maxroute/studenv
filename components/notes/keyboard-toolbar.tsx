@@ -6,6 +6,7 @@ import type { Editor } from "@tiptap/react";
 import {
   AtSign, Bold, CaseSensitive, Highlighter, Italic, KeyboardOff, Layers, Link2, ListChecks, Paperclip, Plus, Strikethrough, Table2, Underline,
 } from "lucide-react";
+import { RanganLogo } from "@/components/rangan/rangan-launcher";
 import { placeAtVisibleBottom, setFloatingBottomInset } from "@/lib/notes/floating";
 import { editLink } from "./editor-actions";
 import { FontMenu, TextColorMenu } from "./style-menus";
@@ -35,10 +36,11 @@ const keepFocus = (event: React.PointerEvent | React.MouseEvent) => event.preven
  * on touch screens, which fought with the system's own Cut / Copy / Paste bar.
  */
 export function KeyboardToolbar({
-  editor, onFlashcard, onAttach,
+  editor, onFlashcard, onAskRangan, onAttach,
 }: {
   editor: Editor;
   onFlashcard: () => void;
+  onAskRangan: () => void;
   onAttach: Array<{ label: string; run: (editor: Editor) => void }>;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -167,6 +169,7 @@ export function KeyboardToolbar({
             <FontMenu editor={editor} />
             {button("Link", <Link2 size={17} />, () => void editLink(editor), editor.isActive("link"))}
             {button("Make flashcard", <Layers size={17} />, onFlashcard)}
+            {button("Ask Rangan to explain", <RanganLogo size={20} className="note-rangan-icon" />, onAskRangan)}
           </>
         )}
       </div>

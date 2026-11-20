@@ -5,6 +5,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import { CellSelection } from "@tiptap/pm/tables";
 import { Bold, Code, Heading2, Highlighter, Italic, Layers, Link2, Strikethrough, Underline } from "lucide-react";
 import type { ReactNode } from "react";
+import { RanganLogo } from "@/components/rangan/rangan-launcher";
 import { editLink } from "./editor-actions";
 import { FontMenu, TextColorMenu } from "./style-menus";
 
@@ -15,7 +16,7 @@ type Action = { label: string; icon: ReactNode; active?: boolean; run: () => voi
  * blocks and for empty selections, so it never covers the caret while typing,
  * and for selections across table cells, which the table bar handles.
  */
-export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlashcard: () => void }) {
+export function NoteBubbleMenu({ editor, onFlashcard, onAskRangan }: { editor: Editor; onFlashcard: () => void; onAskRangan: () => void }) {
   const chain = () => editor.chain().focus();
   const actions: Action[] = [
     { label: "Bold", icon: <Bold size={15} />, active: editor.isActive("bold"), run: () => chain().toggleBold().run() },
@@ -32,6 +33,7 @@ export function NoteBubbleMenu({ editor, onFlashcard }: { editor: Editor; onFlas
     },
     { label: "Turn into heading", icon: <Heading2 size={15} />, active: editor.isActive("heading", { level: 2 }), run: () => chain().toggleHeading({ level: 2 }).run() },
     { label: "Make flashcard", icon: <Layers size={15} />, run: onFlashcard },
+    { label: "Ask Rangan to explain", icon: <RanganLogo size={18} className="note-rangan-icon" />, run: onAskRangan },
   ];
 
   return (

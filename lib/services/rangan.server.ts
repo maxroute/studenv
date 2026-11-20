@@ -13,4 +13,5 @@ export const rangan = createRanganService({
   refundQuestion: usageRepository.refundQuestion,
   complete,
   searchLibrary: async (userId, query, limit) => (await ranganIndex.search(userId, query, limit)).results,
+  loadSource: (userId, type, id) => ranganIndex.loadSource(userId, type, id),
 });

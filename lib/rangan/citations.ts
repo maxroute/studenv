@@ -100,6 +100,37 @@ export function citedNumbers(answer: string, passageCount: number): number[] {
   return seen;
 }
 
+/** Characters of a source handed to the model for a summary (about 3,000 tokens). */
+export const SUMMARY_BUDGET_CHARS = 12_000;
+
+/**
+ * Passages of one source that fit `budget` characters. A source that fits is
+ * kept whole; a longer one is sampled evenly from start to end, in order, so a
+ * summary still covers the whole document rather than only its beginning.
+ */
+export function samplePassages<T extends { content: string }>(passages: readonly T[], budget = SUMMARY_BUDGET_CHARS) {
+  const total = passages.reduce((sum, passage) => sum + passage.content.length, 0);
+  if (total <= budget) return { selected: [...passages], truncated: false };
+  const average = total / passages.length;
+  const count = Math.max(1, Math.min(passages.length, Math.floor(budget / average)));
+  const selected: T[] = [];
+  let used = 0;
+  for (let i = 0; i < count; i += 1) {
+    const passage = passages[Math.floor((i * passages.length) / count)];
+    if (selected.includes(passage)) continue;
+    if (used + passage.content.length > budget && selected.length > 0) break;
+    selected.push(passage);
+    used += passage.content.length;
+  }
+  return { selected, truncated: true };
+}
+
+/** The selected text a student asks Rangan to explain, quoted for the model. */
+export function focusBlock(focus: { text: string; title?: string }): string {
+  const where = focus.title?.trim() ? ` on their page "${focus.title.trim()}"` : "";
+  return `The student selected this text${where}:\n"""\n${focus.text.trim()}\n"""`;
+}
+
 /** Href prefix of an in-answer citation link; the panel renders these as source chips. */
 export const CITATION_HREF_PREFIX = "#rangan-cite-";
 

@@ -27,12 +27,21 @@ const PASSAGES: LibraryPassage[] = [
 ];
 
 function fakeDeps(
-  options: { limit?: number; now?: Date; fail?: boolean; answer?: string; passages?: LibraryPassage[]; searchFails?: boolean } = {},
+  options: {
+    limit?: number;
+    now?: Date;
+    fail?: boolean;
+    answer?: string;
+    passages?: LibraryPassage[];
+    searchFails?: boolean;
+    sources?: Record<string, { title: string; passages: LibraryPassage[] }>;
+  } = {},
 ) {
   const counts = new Map<string, number>();
   const key = (userId: string, day: Date) => `${userId}|${day.toISOString()}`;
   const sent: ChatMessage[][] = [];
   const searches: string[] = [];
+  const loads: string[] = [];
   const deps: RanganDeps = {
     dailyLimit: options.limit ?? 3,
     now: () => options.now ?? new Date("2026-11-20T15:30:00Z"),
@@ -57,8 +66,12 @@ function fakeDeps(
       if (options.searchFails) throw new Error("db down");
       return options.passages ?? [];
     },
+    loadSource: async (userId, type, id) => {
+      loads.push(`${type}:${id}`);
+      return userId === "u1" ? (options.sources?.[`${type}:${id}`] ?? null) : null;
+    },
   };
-  return { deps, counts, sent, searches };
+  return { deps, counts, sent, searches, loads };
 }
 
 test("an answer reports how many questions are left today", async () => {
@@ -189,4 +202,98 @@ test("a client cannot inject a system message or an oversized question", () => {
 
 test("utcDayStart ignores the server's time zone", () => {
   assert.equal(utcDayStart(new Date("2026-11-20T23:30:00-05:00")).toISOString(), "2026-11-21T00:00:00.000Z");
+});
+
+// ── Explain this ────────────────────────────────────────────────────────────
+
+test("explaining selected text searches with it and quotes it to the model", async () => {
+  const { deps, sent, searches } = fakeDeps({ passages: PASSAGES });
+  await createRanganService(deps).ask("u1", {
+    question: "Explain this",
+    focus: { text: "Mitochondria make ATP.", title: "Cell biology" },
+  });
+  assert.equal(searches[0], "Mitochondria make ATP. Explain this");
+  const last = sent[0].at(-1)?.content ?? "";
+  assert.match(last, /The student selected this text on their page "Cell biology":\n"""\nMitochondria make ATP\.\n"""/);
+  assert.match(last, /Question: Explain this$/);
+});
+
+test("selected text is limited in size and cannot carry extra fields", () => {
+  assert.equal(ranganAskSchema.safeParse({ question: "Explain", focus: { text: "x".repeat(4_001) } }).success, false);
+  assert.equal(ranganAskSchema.safeParse({ question: "Explain", focus: { text: "ok", noteId: "n1" } }).success, false);
+  assert.equal(ranganAskSchema.safeParse({ question: "Explain", focus: { text: "ok" } }).success, true);
+});
+
+// ── Summarize ───────────────────────────────────────────────────────────────
+
+const pagePassages = (n: number, size = 100): LibraryPassage[] =>
+  Array.from({ length: n }, (_, i) => ({
+    ref: `note:n1#b_${String(i).padStart(10, "0")}`,
+    sourceType: "note",
+    title: "Cell biology",
+    heading: "",
+    snippet: `Part ${i}`,
+    content: `Part ${i} `.padEnd(size, "."),
+    open: { kind: "note" as const, noteId: "n1", blockId: `b_${String(i).padStart(10, "0")}` },
+  }));
+
+test("a page summary uses the page's passages and cites its blocks", async () => {
+  const { deps, sent } = fakeDeps({
+    sources: { "note:n1": { title: "Cell biology", passages: pagePassages(3) } },
+    answer: "Overview [1].\n- Point [3]",
+  });
+  const result = await createRanganService(deps).summarize("u1", { ref: "note:n1" });
+  assert.equal(result.title, "Cell biology");
+  assert.equal(result.partial, false);
+  assert.deepEqual(result.citations.map((c) => [c.n, c.open]), [
+    [1, { kind: "note", noteId: "n1", blockId: "b_0000000000" }],
+    [3, { kind: "note", noteId: "n1", blockId: "b_0000000002" }],
+  ]);
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.match(prompt, /Summarize "Cell biology"/);
+  assert.match(prompt, /the whole of it/);
+  assert.equal(result.usage.used, 1);
+});
+
+test("a long source is sampled evenly and the summary says it is partial", async () => {
+  const { deps, sent } = fakeDeps({ sources: { "pdf:a1": { title: "Textbook", passages: pagePassages(100, 1_000) } } });
+  const result = await createRanganService(deps).summarize("u1", { ref: "asset:a1" });
+  assert.equal(result.partial, true);
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.match(prompt, /evenly spaced parts/);
+  assert.match(prompt, /Part 0 /, "starts at the beginning");
+  assert.match(prompt, /Part 9\d /, "reaches the end");
+  assert.ok(prompt.length < 16_000);
+});
+
+test("an asset is summarized as a PDF, or as a video transcript when it has no pages", async () => {
+  const { deps, loads } = fakeDeps({ sources: { "transcript:v1": { title: "Lecture", passages: pagePassages(2) } } });
+  const result = await createRanganService(deps).summarize("u1", { ref: "asset:v1" });
+  assert.equal(result.title, "Lecture");
+  assert.deepEqual(loads, ["pdf:v1", "transcript:v1"]);
+});
+
+test("someone else's page, a missing page or an empty one costs no question", async () => {
+  const { deps, sent } = fakeDeps({ sources: { "note:empty": { title: "Empty", passages: [] }, "note:n1": { title: "Mine", passages: pagePassages(1) } } });
+  const rangan = createRanganService(deps);
+  for (const [user, ref] of [["u2", "note:n1"], ["u1", "note:nope"], ["u1", "note:empty"]] as const) {
+    await assert.rejects(rangan.summarize(user, { ref }), (error: { status?: number }) => error.status === 404);
+  }
+  assert.equal(sent.length, 0);
+  assert.equal((await rangan.getUsage("u1")).used, 0);
+});
+
+test("only pages and assets can be summarized", async () => {
+  const { deps } = fakeDeps();
+  const rangan = createRanganService(deps);
+  for (const ref of ["item:i1", "workspace:w1", "not a ref", "note:"]) {
+    await assert.rejects(rangan.summarize("u1", { ref }), (error: { status?: number }) => error.status === 400);
+  }
+});
+
+test("a failed summary gives the question back", async () => {
+  const { deps } = fakeDeps({ fail: true, sources: { "note:n1": { title: "Mine", passages: pagePassages(1) } } });
+  const rangan = createRanganService(deps);
+  await assert.rejects(rangan.summarize("u1", { ref: "note:n1" }), AiUnavailableError);
+  assert.equal((await rangan.getUsage("u1")).used, 0);
 });
