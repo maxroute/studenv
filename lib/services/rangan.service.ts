@@ -1,5 +1,5 @@
 import type { ChatMessage, CompletionOptions, CompletionResult, ProviderId } from "@/lib/ai/providers";
-import type { RanganAskInput, RanganSummarizeInput, RanganUsageSummary } from "@/lib/models/rangan.model";
+import type { RanganAskInput, RanganExploreInput, RanganSummarizeInput, RanganUsageSummary } from "@/lib/models/rangan.model";
 import { parseRef } from "@/lib/refs/ref-grammar";
 import {
   buildLibraryContext,
@@ -11,6 +11,7 @@ import {
   samplePassages,
   type OpenTarget,
 } from "@/lib/rangan/citations";
+import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 
 /** A library passage as Rangan's search returns it. */
 export type LibraryPassage = {
@@ -21,6 +22,8 @@ export type LibraryPassage = {
   snippet: string;
   content: string;
   open: OpenTarget | null;
+  /** How the search found it ("keyword", "meaning"); absent for passages loaded directly. */
+  matchedBy?: string[];
 };
 
 export type RanganCitation = Omit<LibraryPassage, "content"> & { n: number };
@@ -36,6 +39,8 @@ export type RanganDeps = {
   searchLibrary: (userId: string, query: string, limit: number) => Promise<LibraryPassage[]>;
   /** One of the user's sources with all its passages in order, or null when it is not theirs or has no text. */
   loadSource: (userId: string, type: SummarySourceType, id: string) => Promise<{ title: string; passages: LibraryPassage[] } | null>;
+  /** The user's most recently edited pages, newest first. */
+  recentNoteIds: (userId: string, limit: number) => Promise<string[]>;
 };
 
 export type SummarySourceType = "note" | "pdf" | "transcript";
@@ -53,6 +58,34 @@ export type RanganSummary = RanganAnswer & {
   /** True when the source was too long to send whole and evenly spaced parts were used. */
   partial: boolean;
 };
+
+/** A library passage as the explore card shows it: where it is and how to open it, without its text. */
+export type RanganPassageLink = Omit<LibraryPassage, "content" | "matchedBy">;
+
+export type RanganExplore = {
+  title: string;
+  /** The page explored from, `note:<id>`. */
+  pageRef: string;
+  /** Ideas worth learning next; `covered` is where the library already has them, or null when it does not yet. */
+  gaps: Array<{ concept: string; why: string; covered: RanganPassageLink | null }>;
+  /** Other material of the student's that adds to the page. */
+  connect: Array<RanganPassageLink & { why: string }>;
+  questions: string[];
+  provider: ProviderId;
+  usage: RanganUsageSummary;
+};
+
+/** Characters of the page sent when exploring from it; the rest of the context is related material. */
+const EXPLORE_PAGE_BUDGET = 7_000;
+/** Related passages sent alongside the page. */
+const EXPLORE_RELATED_PASSAGES = 6;
+/** Recent pages tried when no page is open. */
+const EXPLORE_RECENT_PAGES = 5;
+
+/** The source part of a passage ref: "asset:a1#page4" → "asset:a1". */
+const sourceOf = (ref: string) => ref.split("#")[0];
+
+const passageLink = ({ content: _content, matchedBy: _matchedBy, ...link }: LibraryPassage): RanganPassageLink => link;
 
 export const RANGAN_SYSTEM_PROMPT = [
   "You are Rangan, the librarian and learning companion inside Studenv, a study app.",
@@ -189,5 +222,77 @@ export function createRanganService(deps: RanganDeps) {
     });
   }
 
-  return { ask, summarize, getUsage };
+  /** The page to explore from: the given one, or the most recently edited page that has text. */
+  async function explorePage(userId: string, input: RanganExploreInput) {
+    if (input.ref) {
+      const ref = parseRef(input.ref);
+      if (!ref || ref.type !== "note") throw Object.assign(new Error("Rangan can explore from a page."), { status: 400 });
+      const source = await deps.loadSource(userId, "note", ref.id);
+      return source && source.passages.length > 0 ? { id: ref.id, source } : null;
+    }
+    for (const id of await deps.recentNoteIds(userId, EXPLORE_RECENT_PAGES)) {
+      const source = await deps.loadSource(userId, "note", id);
+      if (source && source.passages.length > 0) return { id, source };
+    }
+    return null;
+  }
+
+  /**
+   * "What should I explore next?" from a page: gaps worth learning, the
+   * student's other material that adds to the page, and questions to ask.
+   * Each gap is checked against the library afterwards, so "not in your
+   * library yet" comes from a search, not from the model. One question.
+   */
+  async function explore(userId: string, input: RanganExploreInput): Promise<RanganExplore> {
+    // Found, owned and readable before a question is used.
+    const page = await explorePage(userId, input);
+    if (!page) {
+      throw Object.assign(new Error("Open a page with some writing on it, and Rangan will suggest what to explore next."), { status: 404 });
+    }
+    const pageRef = `note:${page.id}`;
+    const inPage = (ref: string) => ref === pageRef || ref.startsWith(`${pageRef}#`);
+
+    return withQuestion(userId, async (usage) => {
+      const { selected } = samplePassages(page.source.passages, EXPLORE_PAGE_BUDGET);
+      const query = `${page.source.title} ${selected.map((passage) => passage.content).join(" ")}`.slice(0, 500);
+      const related = (await deps.searchLibrary(userId, query, EXPLORE_RELATED_PASSAGES * 2))
+        .filter((passage) => !inPage(passage.ref))
+        .slice(0, EXPLORE_RELATED_PASSAGES);
+
+      const result = await deps.complete(
+        [
+          { role: "system", content: RANGAN_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `${buildLibraryContext([...selected, ...related])}\n\n${exploreInstruction(page.source.title, selected.length, related.length)}`,
+          },
+        ],
+        { maxTokens: 1_500, temperature: 0.4 },
+      );
+      const reply = parseExploreReply(result.text, selected.length, related.length);
+      if (reply.gaps.length + reply.connect.length + reply.questions.length === 0) {
+        throw Object.assign(new Error("Rangan couldn't find what to explore from this page. Please try again."), { status: 502 });
+      }
+      const gaps = await Promise.all(
+        reply.gaps.map(async (gap) => {
+          const covered = coveringResult(await deps.searchLibrary(userId, gap.concept, 4), pageRef);
+          return { ...gap, covered: covered ? passageLink(covered) : null };
+        }),
+      );
+      return {
+        title: page.source.title,
+        pageRef,
+        gaps,
+        // One connection per source: two pages of the same PDF say the same thing twice.
+        connect: reply.connect
+          .filter(({ passage }, index, all) => all.findIndex((other) => sourceOf(related[other.passage].ref) === sourceOf(related[passage].ref)) === index)
+          .map(({ passage, why }) => ({ ...passageLink(related[passage]), why })),
+        questions: reply.questions,
+        provider: result.provider,
+        usage,
+      };
+    });
+  }
+
+  return { ask, summarize, explore, getUsage };
 }

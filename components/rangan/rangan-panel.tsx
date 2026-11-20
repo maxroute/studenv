@@ -5,12 +5,14 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, FileText, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, Compass, FileText, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
 import { RanganLogo } from "./rangan-launcher";
+import { RanganExploreCard } from "./rangan-explore-card";
 import { RanganPlanCard } from "./rangan-plan-card";
+import { isExploreRequest } from "@/lib/rangan/discover";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -110,7 +112,7 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
 export function RanganPanel() {
   const router = useRouter();
   const pathname = usePathname();
-  const { turns, pending, usage, close, ask, retry, clear, summarize } = useRanganStore();
+  const { turns, pending, usage, close, ask, retry, clear, summarize, explore } = useRanganStore();
   const boardNoteId = useNotePanelStore((state) => state.noteId);
   const [draft, setDraft] = useState("");
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
@@ -173,7 +175,9 @@ export function RanganPanel() {
     const question = draft.trim();
     if (!question || pending || spent) return;
     setDraft("");
-    void ask(question);
+    // "What should I explore next?" gets a card built from the page in front of the student.
+    if (isExploreRequest(question)) void explore(currentNoteId ? `note:${currentNoteId}` : undefined, question);
+    else void ask(question);
   };
 
   const onInputKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -218,6 +222,17 @@ export function RanganPanel() {
             </div>
           ) : turn.role === "assistant" ? (
             <Answer key={turn.id} turn={turn} onOpen={openCitation} />
+          ) : turn.role === "explore" ? (
+            <RanganExploreCard
+              key={turn.id}
+              turn={turn}
+              onOpen={(link) => openCitation({ ...link, n: 0 })}
+              onAsk={(question) => void ask(question)}
+              onBoard={onBoard}
+              onNavigate={() => {
+                if (isNarrow() && !onBoard) close();
+              }}
+            />
           ) : turn.role === "plan" ? (
             <RanganPlanCard
               key={turn.id}
@@ -283,15 +298,26 @@ export function RanganPanel() {
             submit();
           }}
         >
-          {currentNoteId && !spent ? (
+          {!spent ? (
             <div className="rangan-chips">
+              {currentNoteId ? (
+                <button
+                  type="button"
+                  className="rangan-chip"
+                  disabled={pending}
+                  onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
+                >
+                  <ListTree size={14} aria-hidden /> Summarize this page
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="rangan-chip"
                 disabled={pending}
-                onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
+                onClick={() => void explore(currentNoteId ? `note:${currentNoteId}` : undefined)}
+                title={currentNoteId ? "From this page" : "From the page you edited last"}
               >
-                <ListTree size={14} aria-hidden /> Summarize this page
+                <Compass size={14} aria-hidden /> What should I explore next?
               </button>
             </div>
           ) : null}

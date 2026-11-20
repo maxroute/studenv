@@ -35,6 +35,7 @@ function fakeDeps(
     passages?: LibraryPassage[];
     searchFails?: boolean;
     sources?: Record<string, { title: string; passages: LibraryPassage[] }>;
+    recent?: string[];
   } = {},
 ) {
   const counts = new Map<string, number>();
@@ -70,6 +71,7 @@ function fakeDeps(
       loads.push(`${type}:${id}`);
       return userId === "u1" ? (options.sources?.[`${type}:${id}`] ?? null) : null;
     },
+    recentNoteIds: async (userId) => (userId === "u1" ? (options.recent ?? []) : []),
   };
   return { deps, counts, sent, searches, loads };
 }
@@ -296,4 +298,104 @@ test("a failed summary gives the question back", async () => {
   const rangan = createRanganService(deps);
   await assert.rejects(rangan.summarize("u1", { ref: "note:n1" }), AiUnavailableError);
   assert.equal((await rangan.getUsage("u1")).used, 0);
+});
+
+// ── "What should I explore next?" ──────────────────────────────────────────
+
+const pagePassage = (n: number, content: string): LibraryPassage => ({
+  ref: `note:p1#b${n}`,
+  sourceType: "note",
+  title: "Photosynthesis",
+  heading: "",
+  snippet: content,
+  content,
+  open: { kind: "note", noteId: "p1", blockId: `b${n}` },
+});
+
+const PAGE = { title: "Photosynthesis", passages: [pagePassage(1, "Light reactions make ATP."), pagePassage(2, "The Calvin cycle fixes carbon.")] };
+
+/** Search results by query: related material for the page, and one covered gap. */
+function exploreSearch(query: string): LibraryPassage[] {
+  if (query.startsWith("Photosynthesis")) {
+    return [
+      PAGE.passages[0],
+      { ...PASSAGES[0], matchedBy: ["meaning"] },
+      { ...PASSAGES[1], matchedBy: ["keyword"] },
+      { ...PASSAGES[0], ref: "note:n1#b_BBBBBBBBBB", matchedBy: ["meaning"] },
+    ];
+  }
+  if (query === "ATP") return [{ ...PAGE.passages[0], matchedBy: ["keyword", "meaning"] }, { ...PASSAGES[1], matchedBy: ["keyword", "meaning"] }];
+  return [{ ...PASSAGES[0], matchedBy: ["meaning"] }];
+}
+
+const EXPLORE_REPLY = JSON.stringify({
+  gaps: [
+    { concept: "ATP", why: "It powers the Calvin cycle." },
+    { concept: "Electron transport chain", why: "It makes the ATP." },
+  ],
+  connect: [
+    { passage: 3, why: "Your cell biology notes explain where ATP is made." },
+    { passage: 5, why: "Another block of the same notes." },
+    { passage: 1, why: "This is the page itself." },
+    { passage: 9, why: "Out of range." },
+  ],
+  questions: ["Why does the Calvin cycle need ATP?"],
+});
+
+function exploreDeps(options: { recent?: string[]; answer?: string; fail?: boolean } = {}) {
+  const fake = fakeDeps({ answer: options.answer ?? EXPLORE_REPLY, fail: options.fail, sources: { "note:p1": PAGE, "note:empty": { title: "Empty", passages: [] } }, recent: options.recent });
+  fake.deps.searchLibrary = async (_userId, query) => {
+    fake.searches.push(query);
+    return exploreSearch(query);
+  };
+  return fake;
+}
+
+test("explore finds gaps, checks each against the library, and links related material, for one question", async () => {
+  const { deps, counts, sent, searches } = exploreDeps();
+  const result = await createRanganService(deps).explore("u1", { ref: "note:p1" });
+  assert.equal(result.title, "Photosynthesis");
+  assert.equal(result.pageRef, "note:p1");
+  // The page's own passage is not offered as related; the related ones follow the page's in the prompt.
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.match(prompt, /Passages 1 to 2 are the student's page "Photosynthesis". Passages 3 to 5 are other material/);
+  // "ATP" is covered by the textbook (the page itself does not count); the electron transport chain is not in the library.
+  assert.deepEqual(
+    result.gaps.map((gap) => [gap.concept, gap.covered?.ref ?? null]),
+    [
+      ["ATP", "asset:a1#page4"],
+      ["Electron transport chain", null],
+    ],
+  );
+  assert.equal("content" in (result.gaps[0].covered ?? {}), false, "links carry no passage text");
+  // One connection per source: the second block of the same notes is dropped.
+  assert.deepEqual(result.connect.map((link) => [link.ref, link.why]), [["note:n1#b_AAAAAAAAAA", "Your cell biology notes explain where ATP is made."]]);
+  assert.deepEqual(result.questions, ["Why does the Calvin cycle need ATP?"]);
+  assert.deepEqual(searches.slice(1), ["ATP", "Electron transport chain"]);
+  assert.equal([...counts.values()][0], 1);
+});
+
+test("without a page, explore uses the most recently edited page that has text", async () => {
+  const { deps, loads } = exploreDeps({ recent: ["empty", "p1"] });
+  const result = await createRanganService(deps).explore("u1", {});
+  assert.equal(result.pageRef, "note:p1");
+  assert.deepEqual(loads, ["note:empty", "note:p1"]);
+});
+
+test("no page, someone else's page or a bad ref costs no question", async () => {
+  const { deps, counts } = exploreDeps({ recent: [] });
+  const service = createRanganService(deps);
+  await assert.rejects(service.explore("u1", {}), { status: 404 });
+  await assert.rejects(service.explore("u2", { ref: "note:p1" }), { status: 404 });
+  await assert.rejects(service.explore("u1", { ref: "note:empty" }), { status: 404 });
+  await assert.rejects(service.explore("u1", { ref: "asset:a1" }), { status: 400 });
+  assert.equal(counts.size, 0);
+});
+
+test("an empty reply or a model failure gives the question back", async () => {
+  for (const options of [{ answer: "{}" }, { fail: true }]) {
+    const { deps, counts } = exploreDeps(options);
+    await assert.rejects(createRanganService(deps).explore("u1", { ref: "note:p1" }));
+    assert.equal([...counts.values()][0], 0);
+  }
 });

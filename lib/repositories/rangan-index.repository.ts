@@ -260,3 +260,68 @@ export async function findSourceTitle(ownerId: string, type: IndexSourceType, id
       return (await prisma.item.findFirst({ where: { id, userId: ownerId }, select: { title: true } }))?.title ?? null;
   }
 }
+
+/** Page passages compared when finding related material: the first ones, in order. */
+const RELATED_PAGE_PASSAGES = 40;
+
+/**
+ * The user's passages from other sources that are closest in meaning to the
+ * given source: each passage scored by its best match among the source's
+ * passages, best first.
+ */
+export async function relatedChunks(
+  ownerId: string,
+  sourceType: IndexSourceType,
+  sourceId: string,
+  limit: number,
+): Promise<Array<{ id: string; similarity: number }>> {
+  const rows = await prisma.$queryRaw<Array<{ id: string; similarity: number }>>`
+    WITH page AS (
+      SELECT p."embedding"
+      FROM "RanganChunk" AS p
+      WHERE p."ownerId" = ${ownerId} AND p."sourceType" = ${sourceType} AND p."sourceId" = ${sourceId} AND p."embedding" IS NOT NULL
+      ORDER BY p."ordinal"
+      LIMIT ${RELATED_PAGE_PASSAGES}
+    )
+    SELECT c."id", MAX(1 - (c."embedding" <=> page."embedding"))::float8 AS similarity
+    FROM "RanganChunk" AS c
+    CROSS JOIN page
+    WHERE c."ownerId" = ${ownerId}
+      AND c."embedding" IS NOT NULL
+      AND NOT (c."sourceType" = ${sourceType} AND c."sourceId" = ${sourceId})
+    GROUP BY c."id"
+    ORDER BY similarity DESC, c."id"
+    LIMIT ${limit}`;
+  return rows.map((row) => ({ id: row.id, similarity: Number(row.similarity) }));
+}
+
+/** What a source links to and what links to it, as "type:id" keys (e.g. "note:abc", "asset:def"). */
+export async function linkedRefKeys(ownerId: string, ref: { type: string; id: string }): Promise<Set<string>> {
+  const [outgoing, incoming] = await Promise.all([
+    prisma.contentLink.findMany({
+      where: { ownerId, sourceType: ref.type, sourceId: ref.id },
+      select: { targetType: true, targetId: true },
+      distinct: ["targetType", "targetId"],
+    }),
+    prisma.contentLink.findMany({
+      where: { ownerId, targetType: ref.type, targetId: ref.id },
+      select: { sourceType: true, sourceId: true },
+      distinct: ["sourceType", "sourceId"],
+    }),
+  ]);
+  return new Set([
+    ...outgoing.map((link) => `${link.targetType}:${link.targetId}`),
+    ...incoming.map((link) => `${link.sourceType}:${link.sourceId}`),
+  ]);
+}
+
+/** The user's most recently edited pages, newest first. */
+export async function recentNoteIds(ownerId: string, limit: number): Promise<string[]> {
+  const notes = await prisma.note.findMany({
+    where: { ownerId, deletedAt: null },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+    take: limit,
+  });
+  return notes.map((note) => note.id);
+}
