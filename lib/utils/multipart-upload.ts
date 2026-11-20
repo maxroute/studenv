@@ -1,6 +1,8 @@
 
 "use client";
 
+import { isPdfUpload, savePdfPageText } from "@/lib/client/pdf-page-text";
+
 const DEFAULT_PART_SIZE = 10 * 1024 * 1024; // 10 MB
 const UPLOAD_CONCURRENCY = 3;
 const MAX_PART_RETRIES = 3;
@@ -188,6 +190,13 @@ export async function uploadWorkspaceAsset(
             throw new Error(
                 "Upload completed, but the server returned incomplete asset details.",
             );
+        }
+
+        if (isPdfUpload(result.contentType || contentType, file.name)) {
+            // In the background: the upload is done whether or not this works.
+            savePdfPageText(file, result.assetId, result.revisionId).catch((error) => {
+                console.error("Could not save the PDF's page text:", error);
+            });
         }
 
         return {

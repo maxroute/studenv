@@ -6,6 +6,8 @@ import {
 import { MediaAssetStatus } from "@prisma/client";
 import { auditLog } from "@/lib/repositories/base.repository";
 import * as storageService from "@/lib/storage/s3";
+import type { PdfPageTextBatch } from "@/lib/models/asset.model";
+import { batchPageTexts, pagesToRead, pageTextFromItems, type PdfPageText } from "@/lib/utils/pdf-text";
 
 let pdfJsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
 
@@ -141,33 +143,47 @@ export async function getRevisionDetails(revisionId: string) {
   return assetRepository.getRevisionWithManifests(revisionId);
 }
 
+/** Saves a batch of a PDF's page text sent by the browser. Only the owner can, and only for the current revision. */
+export async function savePdfPageText(userId: string, assetId: string, batch: PdfPageTextBatch) {
+  const asset = await assetRepository.findAssetById(assetId);
+  if (!asset || asset.ownerId !== userId || asset.kind !== "pdf") {
+    throw Object.assign(new Error("Asset not found."), { status: 404 });
+  }
+  if (asset.currentRevisionId !== batch.revisionId) {
+    // The PDF was replaced (an export) since the browser read it.
+    throw Object.assign(new Error("This PDF has changed. Its text was not saved."), { status: 409 });
+  }
+  return assetRepository.savePageTexts(batch.revisionId, batch.pageCount, batch.pages);
+}
+
+/**
+ * Reads a revision's page text on the server and saves it, for PDFs uploaded
+ * before the browser did this. Up to {@link PDF_TEXT_MAX_PAGES} pages.
+ */
 export async function extractTextFromRevision(revisionId: string) {
   const revision = await assetRepository.getRevisionById(revisionId);
   if (!revision) throw new Error("Revision not found");
 
   const pdfjsLib = await getServerPdfJs();
   const buffer = await storageService.getFileBuffer(revision.storageKey);
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    disableWorker: true,
-  } as any);
-  const pdf = await loadingTask.promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
 
-  const pageManifests = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const strings = content.items.map((item: any) => item.str);
-    const text = strings.join(" ");
-    const { width, height } = page.getViewport({ scale: 1.0 });
+  try {
+    const pages: PdfPageText[] = [];
+    for (let pageNumber = 1; pageNumber <= pagesToRead(pdf.numPages); pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      const { width, height } = page.getViewport({ scale: 1 });
+      const content = await page.getTextContent();
+      pages.push({ pageNumber, width, height, text: pageTextFromItems(content.items) });
+      page.cleanup();
+    }
 
-    pageManifests.push({
-      pageNumber: i,
-      width,
-      height,
-      searchText: text,
-    });
+    let created = 0;
+    for (const batch of batchPageTexts(pages)) {
+      created += (await assetRepository.savePageTexts(revisionId, pdf.numPages, batch)).created;
+    }
+    return { pageCount: pdf.numPages, pagesRead: pages.length, pagesWithText: pages.filter((page) => page.text).length, created };
+  } finally {
+    await pdf.destroy();
   }
-
-  return assetRepository.createPageManifests(revisionId, pageManifests);
 }
