@@ -49,6 +49,11 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
+  // A stroke is hit-tested on its painted path only (DrawingNode). Its box
+  // must not take pointer events, or a big stroke would cover the strokes
+  // drawn under its bounding box and make them unselectable.
+  const isStroke = item.type === "drawing";
+  const boxPointerEvents = isDrawingMode || passThrough || isStroke ? "none" : "auto";
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const rotationStartRef = useRef<{
@@ -356,7 +361,7 @@ export function StudioItemComponent({
       }}
       style={{
         zIndex: item.zIndex,
-        pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
+        pointerEvents: boxPointerEvents,
       }}
       dragHandleClassName="drag-handle"
     >
@@ -378,12 +383,12 @@ export function StudioItemComponent({
           ? "overflow-visible bg-transparent border-0 shadow-none rounded-none"
           : "overflow-hidden bg-white border shadow-md rounded"
           }`}>
-          {!isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
+          {!isDrawingMode && !isStroke && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           <div
             ref={rotatedContentRef}
             className="relative z-10 w-full h-full"
             style={{
-              pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
+              pointerEvents: boxPointerEvents,
               cursor: isDrawingMode ? "inherit" : undefined,
               transform: `rotate(${item.rotation ?? 0}deg)`,
               transformOrigin: "center",

@@ -2435,6 +2435,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "drawing" && (
                       <DrawingNode
                         item={item as any}
+                        canvasScale={viewport.zoom}
                         isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         onSelect={() => {
                           if (isPanning) return;
