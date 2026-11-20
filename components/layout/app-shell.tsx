@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { VideoPlayerOverlay } from "@/components/items/video-player-overlay";
 import { Sidebar } from "@/components/layout/sidebar";
+import { RanganHost } from "@/components/rangan/rangan-host";
 import { Topbar } from "@/components/layout/topbar";
 
 type AppShellProps = PropsWithChildren<{
@@ -43,6 +44,7 @@ export function AppShell({ user, children }: AppShellProps) {
         {children}
       </div>
       <VideoPlayerOverlay />
+      <RanganHost />
     </div>
   );
 }

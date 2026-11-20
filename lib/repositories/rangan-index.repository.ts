@@ -238,3 +238,12 @@ export async function loadChunks(ownerId: string, ids: readonly string[]) {
     select: { id: true, sourceType: true, sourceId: true, anchor: true, title: true, heading: true, content: true },
   });
 }
+
+/** Shelf item id of each of the user's assets that has one. */
+export async function findItemIdsForAssets(ownerId: string, assetIds: readonly string[]): Promise<Map<string, string>> {
+  const assets = await prisma.mediaAsset.findMany({
+    where: { ownerId, id: { in: [...assetIds] }, itemId: { not: null } },
+    select: { id: true, itemId: true },
+  });
+  return new Map(assets.flatMap((asset) => (asset.itemId ? [[asset.id, asset.itemId] as const] : [])));
+}

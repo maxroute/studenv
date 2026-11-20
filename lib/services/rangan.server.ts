@@ -1,6 +1,7 @@
 import { complete } from "@/lib/ai/providers";
 import { RANGAN_DAILY_LIMIT } from "@/lib/models/rangan.model";
 import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
+import { ranganIndex } from "@/lib/services/rangan-index.server";
 import { createRanganService } from "@/lib/services/rangan.service";
 
 /** Rangan wired to the database and the real model chain. */
@@ -11,4 +12,5 @@ export const rangan = createRanganService({
   consumeQuestion: usageRepository.consumeQuestion,
   refundQuestion: usageRepository.refundQuestion,
   complete,
+  searchLibrary: async (userId, query, limit) => (await ranganIndex.search(userId, query, limit)).results,
 });

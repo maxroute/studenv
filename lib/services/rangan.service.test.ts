@@ -2,13 +2,37 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AiUnavailableError, type ChatMessage } from "@/lib/ai/providers";
 import { ranganAskSchema } from "@/lib/models/rangan.model";
-import { createRanganService, RANGAN_SYSTEM_PROMPT, utcDayStart, type RanganDeps } from "./rangan.service";
+import { createRanganService, RANGAN_SYSTEM_PROMPT, utcDayStart, type LibraryPassage, type RanganDeps } from "./rangan.service";
 
 /** In-memory allowance table mirroring the repository's conditional increment. */
-function fakeDeps(options: { limit?: number; now?: Date; fail?: boolean } = {}) {
+const PASSAGES: LibraryPassage[] = [
+  {
+    ref: "note:n1#b_AAAAAAAAAA",
+    sourceType: "note",
+    title: "Cell biology",
+    heading: "Energy",
+    snippet: "Mitochondria make ATP.",
+    content: "Mitochondria make ATP.",
+    open: { kind: "note", noteId: "n1", blockId: "b_AAAAAAAAAA" },
+  },
+  {
+    ref: "asset:a1#page4",
+    sourceType: "pdf",
+    title: "Textbook",
+    heading: "Page 4",
+    snippet: "ATP stores energy in phosphate bonds.",
+    content: "ATP stores energy in phosphate bonds.",
+    open: { kind: "pdf", assetId: "a1", page: 4, itemId: "i1" },
+  },
+];
+
+function fakeDeps(
+  options: { limit?: number; now?: Date; fail?: boolean; answer?: string; passages?: LibraryPassage[]; searchFails?: boolean } = {},
+) {
   const counts = new Map<string, number>();
   const key = (userId: string, day: Date) => `${userId}|${day.toISOString()}`;
   const sent: ChatMessage[][] = [];
+  const searches: string[] = [];
   const deps: RanganDeps = {
     dailyLimit: options.limit ?? 3,
     now: () => options.now ?? new Date("2026-11-20T15:30:00Z"),
@@ -26,10 +50,15 @@ function fakeDeps(options: { limit?: number; now?: Date; fail?: boolean } = {}) 
     complete: async (messages) => {
       sent.push(messages);
       if (options.fail) throw new AiUnavailableError([]);
-      return { text: "An answer.", provider: "groq-large", model: "m" };
+      return { text: options.answer ?? "An answer.", provider: "groq-large", model: "m" };
+    },
+    searchLibrary: async (_userId, query) => {
+      searches.push(query);
+      if (options.searchFails) throw new Error("db down");
+      return options.passages ?? [];
     },
   };
-  return { deps, counts, sent };
+  return { deps, counts, sent, searches };
 }
 
 test("an answer reports how many questions are left today", async () => {
@@ -87,8 +116,8 @@ test("usage for a new day starts full", async () => {
   });
 });
 
-test("the model sees Rangan's instructions, then history, then the question", async () => {
-  const { deps, sent } = fakeDeps();
+test("the model sees Rangan's instructions, then history, then the library passages with the question", async () => {
+  const { deps, sent } = fakeDeps({ passages: PASSAGES });
   await createRanganService(deps).ask("u1", {
     question: "And diffusion?",
     history: [
@@ -96,12 +125,59 @@ test("the model sees Rangan's instructions, then history, then the question", as
       { role: "assistant", content: "Water crossing a membrane." },
     ],
   });
-  assert.deepEqual(sent[0], [
-    { role: "system", content: RANGAN_SYSTEM_PROMPT },
-    { role: "user", content: "What is osmosis?" },
-    { role: "assistant", content: "Water crossing a membrane." },
-    { role: "user", content: "And diffusion?" },
+  const [system, firstUser, firstAnswer, last] = sent[0];
+  assert.deepEqual(system, { role: "system", content: RANGAN_SYSTEM_PROMPT });
+  assert.deepEqual(firstUser, { role: "user", content: "What is osmosis?" });
+  assert.deepEqual(firstAnswer, { role: "assistant", content: "Water crossing a membrane." });
+  assert.equal(last.role, "user");
+  assert.match(last.content, /\[1\] Cell biology › Energy\nMitochondria make ATP\./);
+  assert.match(last.content, /\[2\] Textbook › Page 4\n/);
+  assert.match(last.content, /Question: And diffusion\?$/);
+});
+
+test("an answer returns the passages it cites, in citation order, without their full text", async () => {
+  const { deps } = fakeDeps({ passages: PASSAGES, answer: "ATP holds energy [2]. Mitochondria make it [1][2]. See [7]." });
+  const result = await createRanganService(deps).ask("u1", { question: "What is ATP?" });
+  assert.deepEqual(result.citations.map((c) => [c.n, c.ref]), [
+    [2, "asset:a1#page4"],
+    [1, "note:n1#b_AAAAAAAAAA"],
   ]);
+  assert.equal("content" in result.citations[0], false);
+  assert.deepEqual(result.citations[0].open, { kind: "pdf", assetId: "a1", page: 4, itemId: "i1" });
+});
+
+test("gpt-oss citation marks become [n] in the answer and count as citations", async () => {
+  const { deps } = fakeDeps({ passages: PASSAGES, answer: "Mitochondria produce ATP【1】." });
+  const result = await createRanganService(deps).ask("u1", { question: "ATP?" });
+  assert.equal(result.answer, "Mitochondria produce ATP[1].");
+  assert.deepEqual(result.citations.map((c) => c.n), [1]);
+});
+
+test("an answer that cites nothing has no citations", async () => {
+  const { deps, sent } = fakeDeps({ passages: [], answer: "Your library doesn't cover this. In general…" });
+  const result = await createRanganService(deps).ask("u1", { question: "Who won the 1998 World Cup?" });
+  assert.deepEqual(result.citations, []);
+  assert.match(sent[0].at(-1)?.content ?? "", /library has nothing relevant/);
+});
+
+test("a short follow-up is searched together with the previous question", async () => {
+  const { deps, searches } = fakeDeps();
+  await createRanganService(deps).ask("u1", {
+    question: "Which one makes gametes?",
+    history: [
+      { role: "user", content: "Mitosis vs meiosis?" },
+      { role: "assistant", content: "…" },
+    ],
+  });
+  assert.deepEqual(searches, ["Mitosis vs meiosis? Which one makes gametes?"]);
+});
+
+test("a question is given back when the library search fails", async () => {
+  const { deps, sent } = fakeDeps({ searchFails: true });
+  const rangan = createRanganService(deps);
+  await assert.rejects(rangan.ask("u1", { question: "a" }), /db down/);
+  assert.equal(sent.length, 0);
+  assert.equal((await rangan.getUsage("u1")).used, 0);
 });
 
 test("a client cannot inject a system message or an oversized question", () => {

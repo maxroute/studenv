@@ -273,6 +273,7 @@ function memoryIndex(library: Record<string, { sources: SourceVersion[]; passage
     meaningSearch: async (ownerId) =>
       rows.filter((r) => r.ownerId === ownerId && r.vector).map((r) => ({ id: r.id, similarity: 0.5 })).reverse(),
     loadChunks: async (ownerId, ids) => rows.filter((r) => r.ownerId === ownerId && ids.includes(r.id)),
+    findItemIdsForAssets: async (_ownerId, assetIds) => new Map(assetIds.map((assetId) => [assetId, `item-of-${assetId}`])),
     embed: async (texts) => {
       if (options.embedFails) throw new EmbeddingUnavailableError("http_500");
       calls.embedded += texts.length;
@@ -356,6 +357,7 @@ test("search finds only the signed-in user's passages", async () => {
   assert.deepEqual(results.map((r) => r.title), ["Mine"]);
   assert.deepEqual(results[0].matchedBy, ["keyword", "meaning"]);
   assert.equal(results[0].ref, "note:n1");
+  assert.deepEqual(results[0].open, { kind: "note", noteId: "n1", blockId: null });
 });
 
 test("search falls back to keywords when embeddings are down, and still indexes", async () => {
@@ -384,6 +386,7 @@ test("one long source cannot fill every result", async () => {
   };
   const { results } = await createRanganIndexService(memoryIndex(lib).deps).search("u1", "cell");
   assert.equal(results.filter((r) => r.sourceId === "big").length, 2);
+  assert.deepEqual(results.find((r) => r.sourceId === "big")?.open, { kind: "pdf", assetId: "big", page: 1, itemId: "item-of-big" });
   assert.ok(results.some((r) => r.sourceId === "small"));
 });
 

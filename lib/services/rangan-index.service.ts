@@ -1,4 +1,5 @@
 import type { HashedPassage } from "@/lib/rangan/chunking";
+import { openTarget, type OpenTarget } from "@/lib/rangan/citations";
 import { planSourceSync, type IndexedSource, type SourceVersion } from "@/lib/rangan/index-plan";
 import { buildOrTsQuery, filterMeaningMatches, fuseRankings, passageRef, snippet, type IndexSourceType } from "@/lib/rangan/ranking";
 
@@ -20,6 +21,8 @@ export type RanganIndexDeps = {
     ownerId: string,
     ids: readonly string[],
   ) => Promise<Array<{ id: string; sourceType: string; sourceId: string; anchor: string; title: string; heading: string; content: string }>>;
+  /** Shelf item of each asset that has one, for opening PDF and video citations. */
+  findItemIdsForAssets: (ownerId: string, assetIds: readonly string[]) => Promise<Map<string, string>>;
   /** Throws when embeddings are unavailable; the index then works by keyword only. */
   embed: (texts: readonly string[]) => Promise<number[][]>;
 };
@@ -38,6 +41,8 @@ export type SearchResult = {
   /** The full passage, for building an answer. */
   content: string;
   matchedBy: string[];
+  /** Where the passage opens; null when it has nothing to open. */
+  open: OpenTarget | null;
 };
 
 /** Sources (re)indexed per refresh; the rest wait for the next one. */
@@ -132,7 +137,10 @@ export function createRanganIndexService(deps: RanganIndexDeps) {
       { name: "meaning", ids: meaningMatches ? filterMeaningMatches(meaningMatches) : [], weight: 1.1 },
     ]);
 
-    const chunks = new Map((await deps.loadChunks(ownerId, fused.map((entry) => entry.id))).map((chunk) => [chunk.id, chunk]));
+    const loaded = await deps.loadChunks(ownerId, fused.map((entry) => entry.id));
+    const chunks = new Map(loaded.map((chunk) => [chunk.id, chunk]));
+    const assetIds = [...new Set(loaded.filter((chunk) => chunk.sourceType === "pdf" || chunk.sourceType === "transcript").map((chunk) => chunk.sourceId))];
+    const itemIdByAsset = assetIds.length ? await deps.findItemIdsForAssets(ownerId, assetIds) : new Map<string, string>();
     const perSource = new Map<string, number>();
     const results: SearchResult[] = [];
     for (const entry of fused) {
@@ -152,6 +160,7 @@ export function createRanganIndexService(deps: RanganIndexDeps) {
         snippet: snippet(chunk.content),
         content: chunk.content,
         matchedBy: entry.matchedBy,
+        open: openTarget(chunk.sourceType, chunk.sourceId, chunk.anchor, itemIdByAsset),
       });
       if (results.length >= limit) break;
     }
