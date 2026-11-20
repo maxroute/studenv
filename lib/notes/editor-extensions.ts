@@ -14,8 +14,8 @@ import Suggestion from "@tiptap/suggestion";
 import StarterKit from "@tiptap/starter-kit";
 import { BulletList, ListItem, ListKeymap, OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableKit, TableView } from "@tiptap/extension-table";
-import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
-import { NoteToggle } from "./toggle-behavior";
+import { DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import { NoteDetails, NoteToggle } from "./toggle-behavior";
 import Highlight from "@tiptap/extension-highlight";
 import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
 import { Mathematics } from "@tiptap/extension-mathematics";
@@ -256,7 +256,7 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: false }),
     NoteTable.configure({ resizable: false }),
-    Details.configure({ persist: true, HTMLAttributes: { class: "note-details" } }),
+    NoteDetails.configure({ persist: true, HTMLAttributes: { class: "note-details" } }),
     DetailsSummary,
     DetailsContent,
     NoteToggle,

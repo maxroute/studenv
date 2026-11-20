@@ -153,3 +153,13 @@ test("Backspace at the start of a toggle title turns it back into plain text", a
   assert.ok(!JSON.stringify(editor.getJSON()).includes('"details"'), "no toggle left");
   assert.ok(JSON.stringify(editor.getJSON()).includes("body"), "its content is kept");
 });
+
+test("the arrow button is labelled when it is created, not changed afterwards", async () => {
+  // Changing the button after it is in the page reads to the editor as an edit inside the toggle
+  // and redraws the toggle without end (it froze the page). The label must be there from the start.
+  const editor = toggleEditor([toggleDoc("T", [para("body")], false)]);
+  const button = editor.view.dom.querySelector(".note-details > button");
+  assert.ok(button, "the toggle has an arrow button");
+  assert.equal(button.getAttribute("aria-label"), "Open or close toggle");
+  editor.destroy();
+});

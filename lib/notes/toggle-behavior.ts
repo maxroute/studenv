@@ -8,10 +8,13 @@
 // - Enter in an open or empty toggle's title moves into its body (opening it
 //   first); in a closed toggle that has content it adds a line after the toggle.
 // - Cmd/Ctrl+Enter opens or closes the toggle you are in.
-// - The arrow button gets a label so it can be found without sight of the icon.
+// - The arrow button gets a label so it can be found without sight of the icon
+//   (set when the button is created: changing it afterwards looks like an edit
+//   inside the toggle to ProseMirror, which then redraws it without end).
 
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import { Details } from "@tiptap/extension-details";
+import { TextSelection } from "@tiptap/pm/state";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { EditorState } from "@tiptap/pm/state";
 
@@ -116,24 +119,19 @@ export const NoteToggle = Extension.create({
       },
     };
   },
+});
 
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey("noteToggleLabels"),
-        view: (initialView) => {
-          const label = (root: HTMLElement) => {
-            root.querySelectorAll<HTMLButtonElement>(".note-details > button:not([aria-label])").forEach((button) => {
-              button.setAttribute("aria-label", "Open or close toggle");
-              button.setAttribute("title", "Open or close toggle (Ctrl/Cmd+Enter)");
-            });
-          };
-          label(initialView.dom as HTMLElement);
-          return {
-            update: (view) => label(view.dom as HTMLElement),
-          };
-        },
-      }),
-    ];
+/** The stock toggle with a labelled arrow button. */
+export const NoteDetails = Details.extend({
+  addNodeView() {
+    const stock = this.parent?.();
+    if (!stock) return null;
+    return (props) => {
+      const view = stock(props);
+      const button = (view.dom as HTMLElement).querySelector(":scope > button");
+      button?.setAttribute("aria-label", "Open or close toggle");
+      button?.setAttribute("title", "Open or close toggle (Ctrl/Cmd+Enter)");
+      return view;
+    };
   },
 });
