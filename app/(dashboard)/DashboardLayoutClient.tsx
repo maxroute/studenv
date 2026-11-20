@@ -11,6 +11,15 @@ import {
 import { BrandLockup } from "@/components/ui/brand-logo";
 import { FocusSessionManager } from "@/components/focus/FocusSessionManager";
 import { ReminderManager } from "@/components/focus/ReminderManager";
+import { RanganHost } from "@/components/rangan/rangan-host";
+
+/**
+ * Dashboard areas that already use the bottom-right corner: group chats and
+ * study rooms (composer, call controls) and Focus (its zen button).
+ */
+function hidesRangan(pathname: string | null) {
+  return pathname === null || pathname.startsWith("/dashboard/groups") || pathname.startsWith("/dashboard/focus");
+}
 
 export function DashboardLayoutClient({
   children,
@@ -107,7 +116,8 @@ function DashboardLayoutFrame({
         {/* Main Content */}
         <main
           className="flex min-w-0 flex-1 flex-col bg-[#0e0e0b] min-h-0 overflow-y-auto overscroll-y-contain"
-          style={pathname === "/dashboard" ? { paddingBottom: 112 } : undefined}
+          // Room at the end so the last item can scroll clear of Rangan's floating button.
+          style={pathname === "/dashboard" ? { paddingBottom: 112 } : hidesRangan(pathname) ? undefined : { paddingBottom: 88 }}
         >
           {showTransition ? (
             <DashboardRouteTransition href={pendingHref ?? ""} />
@@ -116,6 +126,7 @@ function DashboardLayoutFrame({
           )}
         </main>
       </div>
+      {hidesRangan(pathname) ? null : <RanganHost />}
     </div>
   );
 }

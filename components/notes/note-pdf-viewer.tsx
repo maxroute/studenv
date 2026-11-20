@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Pin, X } from "lucide-react";
+import { RanganLogo } from "@/components/rangan/rangan-launcher";
+import { useRanganStore } from "@/hooks/use-rangan-store";
 import { loadPdf, renderPdfPage } from "./pdf-render";
 
 type Props = {
@@ -104,6 +106,12 @@ export function NotePdfViewer({ assetId, title, onPin, onClose, initialPage = 1 
     window.setTimeout(() => setPinned((value) => (value === page ? null : value)), 1600);
   };
 
+  // The reader sits above Rangan's panel, so it closes before the summary opens.
+  const summarize = () => {
+    onClose();
+    void useRanganStore.getState().summarize(`asset:${assetId}`, `Summarize “${title}”`);
+  };
+
   return createPortal(
     <div className="note-pdf-viewer" role="dialog" aria-modal="true" aria-label={title}>
       <header className="note-pdf-viewer-bar">
@@ -114,6 +122,9 @@ export function NotePdfViewer({ assetId, title, onPin, onClose, initialPage = 1 
             <Pin size={15} /> {pinned === current ? "Pinned" : `Pin page ${current}`}
           </button>
         ) : null}
+        <button type="button" className="note-pdf-viewer-pin" disabled={!pageCount} onClick={summarize}>
+          <RanganLogo size={15} /> Summarize
+        </button>
         <button type="button" className="note-pdf-viewer-close" onClick={onClose} aria-label="Close PDF">
           <X size={18} />
         </button>
