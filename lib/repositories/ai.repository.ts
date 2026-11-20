@@ -131,3 +131,21 @@ export async function replaceRegenerableFlashcards(
     return { replaced: ids.length, flashcards: await activeCards(tx, analysis.id) };
   }, INTERACTIVE_TRANSACTION_OPTIONS);
 }
+
+/** The user's video asset with its saved transcript, or null when it is not theirs. */
+export async function findOwnedVideoForTranscript(assetId: string, ownerId: string) {
+  const asset = await prisma.mediaAsset.findFirst({
+    where: { id: assetId, ownerId },
+    select: { id: true, kind: true, sourceUrl: true, aiAnalysis: { select: { transcript: true } } },
+  });
+  return asset ? { id: asset.id, kind: asset.kind, sourceUrl: asset.sourceUrl, transcript: asset.aiAnalysis?.transcript ?? null } : null;
+}
+
+/** Saves a video's transcript, keeping any summary or flashcards already made from it. */
+export async function saveTranscript(assetId: string, transcript: string) {
+  await prisma.aiAnalysis.upsert({
+    where: { assetId },
+    update: { transcript },
+    create: { assetId, transcript },
+  });
+}

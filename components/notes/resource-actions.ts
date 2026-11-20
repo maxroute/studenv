@@ -6,6 +6,7 @@ import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
 import { inferUploadAssetKind } from "@/lib/utils/media-assets";
 import { inferItemTypeFromUrl } from "@/lib/utils/item-type";
 import { isYouTubeUrl } from "@/lib/utils/youtube";
+import { requestVideoTranscript } from "@/lib/client/video-transcript";
 import { askText, normalizeWebAddress, pickOne } from "./note-dialogs";
 
 export type ShelfEntry = { id: string; title: string; type: string; url?: string | null; noteId?: string | null };
@@ -65,6 +66,7 @@ export async function embedFromUrl(editor: Editor, onCreated?: () => void) {
     return;
   }
   onCreated?.();
+  if (type === "video") requestVideoTranscript({ itemId: item.id }, href);
   insertEmbed(editor, `item:${item.id}`, at);
 }
 

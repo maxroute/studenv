@@ -29,6 +29,7 @@ import {
   inferUploadAssetKind,
 } from "@/lib/utils/media-assets";
 import { uploadWorkspaceAsset } from "@/lib/utils/multipart-upload";
+import { requestVideoTranscript } from "@/lib/client/video-transcript";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import type { NoteCardNode } from "@/types/workspace";
 import { addNoteCardToBoard } from "./note-card-actions";
@@ -166,6 +167,7 @@ export function AssetDrawer() {
       const assetData = payload.data || payload;
       if (typeof assetData.assetId === "string" && assetData.assetId.trim().length > 0) {
         registerWorkspaceAsset(assetData.assetId);
+        if (assetData.kind === "video") requestVideoTranscript({ assetId: assetData.assetId }, assetData.sourceUrl);
       }
 
       await useWorkspaceStore.getState().saveNow();
