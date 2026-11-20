@@ -5,7 +5,7 @@ import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { Rnd } from "react-rnd";
-import { Lock, X } from "lucide-react";
+import { Lock } from "lucide-react";
 import { ROTATE_CORNERS, ROTATE_ZONE_COARSE_PX, ROTATE_ZONE_PX, getRotateCursor, getRotateZoneBox } from "@/lib/workspace/rotate-handles";
 import { isCanvasPrimitive, isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { groupMoveUpdates, snapshotGroupMove, type GroupMoveSnapshot } from "@/lib/workspace/connector-selection";
@@ -23,7 +23,6 @@ interface StudioItemComponentProps {
   canvasScale?: number;
   disableDragging?: boolean;
   enableResizing?: boolean;
-  showDeleteButton?: boolean;
   passThrough?: boolean;
   showRotateButton?: boolean;
   onRotateChange?: (rotation: number) => void;
@@ -43,7 +42,6 @@ export function StudioItemComponent({
   canvasScale = 1,
   disableDragging,
   enableResizing,
-  showDeleteButton = true,
   passThrough = false,
   showRotateButton = false,
   onRotateChange,
@@ -51,6 +49,11 @@ export function StudioItemComponent({
   onDragStop,
 }: StudioItemComponentProps) {
   const { updateItem } = useWorkspaceStore();
+  // A stroke is hit-tested on its painted path only (DrawingNode). Its box
+  // must not take pointer events, or a big stroke would cover the strokes
+  // drawn under its bounding box and make them unselectable.
+  const isStroke = item.type === "drawing";
+  const boxPointerEvents = isDrawingMode || passThrough || isStroke ? "none" : "auto";
   const [isRotating, setIsRotating] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const rotationStartRef = useRef<{
@@ -205,12 +208,7 @@ export function StudioItemComponent({
     return () => query.removeEventListener?.("change", update);
   }, []);
 
-  /** Delete button size in world units (p-1 + 12px icon at the 14px root font). */
-  const DELETE_BUTTON_SIZE = 18;
   const rotateZoneWorld = (coarsePointer ? ROTATE_ZONE_COARSE_PX : ROTATE_ZONE_PX) / Math.max(canvasScale, 0.01);
-  const deleteButtonOffset = showRotateButton
-    ? { top: -(rotateZoneWorld + DELETE_BUTTON_SIZE), right: -(rotateZoneWorld + DELETE_BUTTON_SIZE) }
-    : { top: -20, right: -20 };
 
   const startRotation = (e: React.PointerEvent<HTMLElement>) => {
     e.stopPropagation();
@@ -363,7 +361,7 @@ export function StudioItemComponent({
       }}
       style={{
         zIndex: item.zIndex,
-        pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
+        pointerEvents: boxPointerEvents,
       }}
       dragHandleClassName="drag-handle"
     >
@@ -385,12 +383,12 @@ export function StudioItemComponent({
           ? "overflow-visible bg-transparent border-0 shadow-none rounded-none"
           : "overflow-hidden bg-white border shadow-md rounded"
           }`}>
-          {!isDrawingMode && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
+          {!isDrawingMode && !isStroke && item.type !== "sticky" && item.type !== "free-text" && item.type !== "shape" && <div className="drag-handle absolute inset-0 cursor-move" />}
           <div
             ref={rotatedContentRef}
             className="relative z-10 w-full h-full"
             style={{
-              pointerEvents: isDrawingMode || passThrough ? "none" : "auto",
+              pointerEvents: boxPointerEvents,
               cursor: isDrawingMode ? "inherit" : undefined,
               transform: `rotate(${item.rotation ?? 0}deg)`,
               transformOrigin: "center",
@@ -455,28 +453,6 @@ export function StudioItemComponent({
           >
             <Lock className="h-2.5 w-2.5" />
           </div>
-        )}
-
-        {!isDrawingMode && showDeleteButton && !isLocked && (
-          <button
-            onPointerDown={(e) => {
-              // Keep delete clicks from reaching canvas/item selection handlers.
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              const selectedIds = useSelectionStore.getState().selectedIds;
-              const idsToRemove = selectedIds.includes(item.id) ? selectedIds : [item.id];
-              useWorkspaceStore.getState().removeItems(idsToRemove);
-              useSelectionStore.getState().deselectAll();
-            }}
-            className="pointer-events-auto absolute z-30 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity shadow-md"
-            // With corner rotate zones shown, sit diagonally just past the
-            // top-right zone so both stay reachable; otherwise keep -20px.
-            style={deleteButtonOffset}
-          >
-            <X className="w-3 h-3 text-white" />
-          </button>
         )}
 
 

@@ -2271,7 +2271,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? false
                         : undefined
                     }
-                    showDeleteButton={!isPanning && selectedIds.includes(item.id)}
                     passThrough={isPanning}
                     showRotateButton={
                       !isPanning && ((item.type === "drawing" && selectedDrawingId === item.id) ||
@@ -2436,6 +2435,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                     {item.type === "drawing" && (
                       <DrawingNode
                         item={item as any}
+                        canvasScale={viewport.zoom}
                         isSelected={selectedIds.length === 1 && selectedIds[0] === item.id}
                         onSelect={() => {
                           if (isPanning) return;
@@ -2466,6 +2466,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
                   interactive={activeTool === "select"}
+                  editingItemId={editingFreeTextId}
                 />
 
                 <ConnectorEditingLayer
@@ -2504,11 +2505,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onStrokeWidthChange={setDrawStrokeWidth}
                 color={drawColor}
                 onColorChange={setDrawColor}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
                 onClearAll={handleClearAll}
-                canUndo={canUndo}
-                canRedo={canRedo}
               />
             )}
 

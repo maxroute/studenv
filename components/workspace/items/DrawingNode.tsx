@@ -7,9 +7,13 @@ interface DrawingNodeProps {
   item: DrawingNodeItem;
   isSelected?: boolean;
   onSelect?: () => void;
+  /** Canvas zoom, so the invisible grab area stays about 12 screen px wide. */
+  canvasScale?: number;
 }
 
-export function DrawingNode({ item, isSelected = false, onSelect }: DrawingNodeProps) {
+const HIT_WIDTH_SCREEN_PX = 12;
+
+export function DrawingNode({ item, isSelected = false, onSelect, canvasScale = 1 }: DrawingNodeProps) {
   const legacyPath = item.props.points && item.props.points.length > 1
     ? `M ${item.props.points[0].x} ${item.props.points[0].y} ${item.props.points.slice(1).map((point) => `L ${point.x} ${point.y}`).join(" ")}`
     : item.props.d;
@@ -20,6 +24,18 @@ export function DrawingNode({ item, isSelected = false, onSelect }: DrawingNodeP
   return (
     <div className="w-full h-full pointer-events-none p-0 m-0">
       <svg viewBox={`0 0 ${item.w} ${item.h}`} className="w-full h-full block p-0 m-0 border-0" preserveAspectRatio="none" style={{ overflow: "visible" }}>
+        {/* Wider invisible grab area so thin strokes are easy to pick and drag. */}
+        <path
+          d={pathData}
+          className="drag-handle cursor-move"
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(item.props.strokeWidth, HIT_WIDTH_SCREEN_PX / Math.max(canvasScale, 0.01))}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="stroke"
+          onPointerDown={() => onSelect?.()}
+        />
         <path
           d={pathData}
           className={`drag-handle ${isSelected ? "cursor-move" : "cursor-move"}`}

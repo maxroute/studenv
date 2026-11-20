@@ -31,6 +31,28 @@ import { NOTE_NODE_TYPES } from "./block-registry";
 import { BlockHandle } from "./block-handle";
 
 /** Node types that carry a permanent block id, straight from the registry. */
+/** Bullet and numbered lists that switch type per line, not per list (see list-behavior.ts). */
+const NoteBulletList = BulletList.extend({
+  addCommands() {
+    const stock = this.parent?.();
+    const toggle = stock?.toggleBulletList;
+    return {
+      ...stock,
+      toggleBulletList: () => (props) => switchListItemsTo(props.state, this.type, props.dispatch) || (toggle ? toggle()(props) : false),
+    };
+  },
+});
+const NoteOrderedList = OrderedList.extend({
+  addCommands() {
+    const stock = this.parent?.();
+    const toggle = stock?.toggleOrderedList;
+    return {
+      ...stock,
+      toggleOrderedList: () => (props) => switchListItemsTo(props.state, this.type, props.dispatch) || (toggle ? toggle()(props) : false),
+    };
+  },
+});
+
 export const ID_NODE_TYPES = Object.entries(NOTE_NODE_TYPES)
   .filter(([, def]) => def.hasId)
   .map(([type]) => type);
@@ -248,10 +270,11 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
       heading: { levels: [1, 2, 3, 4, 5, 6] },
     }),
     NoteLink.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: "noopener noreferrer nofollow", target: null } }),
-    BulletList,
-    OrderedList,
+    NoteBulletList,
+    NoteOrderedList,
     ListItem,
     ListKeymap,
+    ListBehavior,
     TaskList,
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: false }),
