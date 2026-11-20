@@ -20,6 +20,7 @@
     "prisma:seed": "node prisma/seed.mjs",
     "test:security": "tsx --test lib/security/request.test.ts lib/security/sanitize.test.ts lib/services/ai-generate.service.test.ts",
     "test:items": "tsx --test lib/utils/item-patch.test.ts",
+    "test:pdf-text": "tsx --test lib/utils/pdf-text.test.ts",
     "test:refs": "tsx --test lib/refs/refs.test.ts lib/refs/extract/link-rows.test.ts",
     "test:flashcards": "tsx --test lib/flashcards/scheduler.test.ts",
     "test:notes": "tsx --test lib/notes/notes.test.ts lib/notes/note-storage.test.ts lib/notes/editor.test.ts lib/notes/legacy-text.test.ts lib/notes/editor-commands.test.ts components/notes/editor-commands.test.ts lib/notes/block-moves.test.ts lib/notes/note-styles.test.ts",
