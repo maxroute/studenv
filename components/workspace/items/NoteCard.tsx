@@ -73,8 +73,8 @@ function Preview({ blocks, resources }: { blocks: PreviewBlock[]; resources: Pag
             );
           case "bullet":
             return (
-              <p key={index} className="flex items-start gap-1.5">
-                <span className="mt-[1px] shrink-0 text-slate-400">{block.ordered ? "1." : "•"}</span>
+              <p key={index} className="flex items-start gap-1.5" style={block.depth ? { paddingLeft: block.depth * 14 } : undefined}>
+                <span className="mt-[1px] shrink-0 text-slate-400">{block.ordered ? `${block.index ?? 1}.` : block.depth ? "◦" : "•"}</span>
                 <span className="line-clamp-2">{block.text}</span>
               </p>
             );
