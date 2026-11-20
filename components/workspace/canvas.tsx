@@ -2271,7 +2271,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                         ? false
                         : undefined
                     }
-                    showDeleteButton={!isPanning && selectedIds.includes(item.id)}
                     passThrough={isPanning}
                     showRotateButton={
                       !isPanning && ((item.type === "drawing" && selectedDrawingId === item.id) ||
@@ -2504,11 +2503,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 onStrokeWidthChange={setDrawStrokeWidth}
                 color={drawColor}
                 onColorChange={setDrawColor}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
                 onClearAll={handleClearAll}
-                canUndo={canUndo}
-                canRedo={canRedo}
               />
             )}
 
