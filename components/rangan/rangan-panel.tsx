@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Compass, FileText, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, Compass, FileText, Globe, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -13,6 +13,7 @@ import { RanganLogo } from "./rangan-launcher";
 import { RanganExploreCard } from "./rangan-explore-card";
 import { RanganPlanCard } from "./rangan-plan-card";
 import { isExploreRequest } from "@/lib/rangan/discover";
+import { splitBeyond } from "@/lib/rangan/trust";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -26,58 +27,80 @@ const EXAMPLES = [
   "Plan my revision for the next two weeks",
 ];
 
-const SOURCE_LABEL: Record<string, string> = { note: "Page", pdf: "PDF", transcript: "Video", item: "Shelf" };
+const SOURCE_LABEL: Record<string, string> = { note: "Page", pdf: "PDF", transcript: "Video", item: "Shelf", web: "Wikipedia" };
 
 type PdfOpen = { assetId: string; title: string; page: number };
 
 function SourceIcon({ type }: { type: string }) {
   if (type === "pdf") return <FileText size={14} aria-hidden />;
   if (type === "note") return <NotebookText size={14} aria-hidden />;
+  if (type === "web") return <Globe size={14} aria-hidden />;
   return <BookOpen size={14} aria-hidden />;
 }
 
 function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant" }>; onOpen: (citation: RanganCitationView) => void }) {
   const byNumber = new Map(turn.citations.map((citation) => [citation.n, citation]));
+  const numbers = turn.citations.map((citation) => citation.n);
+  const { sourced, beyond } = splitBeyond(turn.content);
+  const fromWeb = turn.citations.some((citation) => citation.sourceType === "web");
+  const markdown = (text: string) => (
+    <ReactMarkdown
+      disallowedElements={["img"]}
+      components={{
+        a: ({ href, children }) => {
+          if (href?.startsWith(CITATION_HREF_PREFIX)) {
+            const citation = byNumber.get(Number(href.slice(CITATION_HREF_PREFIX.length)));
+            if (!citation) return <>{children}</>;
+            return (
+              <button
+                type="button"
+                className={`rangan-cite${citation.sourceType === "web" ? " web" : ""}`}
+                title={`${citation.title}${citation.heading ? ` › ${citation.heading}` : ""}`}
+                onClick={() => onOpen(citation)}
+                disabled={!citation.open}
+              >
+                {citation.n}
+              </button>
+            );
+          }
+          const safe = href && /^https?:\/\//i.test(href);
+          return safe ? (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          ) : (
+            <>{children}</>
+          );
+        },
+      }}
+    >
+      {linkCitations(text, numbers)}
+    </ReactMarkdown>
+  );
   return (
     <div className="rangan-answer">
-      <ReactMarkdown
-        disallowedElements={["img"]}
-        components={{
-          a: ({ href, children }) => {
-            if (href?.startsWith(CITATION_HREF_PREFIX)) {
-              const citation = byNumber.get(Number(href.slice(CITATION_HREF_PREFIX.length)));
-              if (!citation) return <>{children}</>;
-              return (
-                <button
-                  type="button"
-                  className="rangan-cite"
-                  title={`${citation.title}${citation.heading ? ` › ${citation.heading}` : ""}`}
-                  onClick={() => onOpen(citation)}
-                  disabled={!citation.open}
-                >
-                  {citation.n}
-                </button>
-              );
-            }
-            const safe = href && /^https?:\/\//i.test(href);
-            return safe ? (
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {children}
-              </a>
-            ) : (
-              <>{children}</>
-            );
-          },
-        }}
-      >
-        {linkCitations(turn.content, turn.citations.map((citation) => citation.n))}
-      </ReactMarkdown>
+      {sourced.trim() ? markdown(sourced) : null}
+      {beyond ? (
+        <div className="rangan-beyond" role="note">
+          <div className="rangan-beyond-label">Beyond your sources · not checked, so verify this</div>
+          {markdown(beyond)}
+        </div>
+      ) : null}
       {turn.partial ? (
         <p className="rangan-partial">This is long, so Rangan summarized evenly spaced parts of it.</p>
       ) : null}
+      {turn.support && turn.support.removed > 0 ? (
+        <p className="rangan-partial">
+          Rangan checked its sources and took off {turn.support.removed} citation{turn.support.removed === 1 ? "" : "s"} the source didn&apos;t
+          support. Treat those sentences as unchecked.
+        </p>
+      ) : null}
+      {turn.support && !turn.support.checked ? (
+        <p className="rangan-partial">Rangan couldn&apos;t double-check its citations this time. Open the sources to confirm.</p>
+      ) : null}
       {turn.citations.length > 0 ? (
         <div className="rangan-sources" aria-label="Sources">
-          <div className="rangan-sources-label">From your library</div>
+          <div className="rangan-sources-label">{fromWeb ? "Sources" : "From your library"}</div>
           {turn.citations.map((citation) => (
             <button
               key={citation.n}
@@ -160,6 +183,10 @@ export function RanganPanel() {
       }
       if (isNarrow()) close();
       router.push(`/notes/${encodeURIComponent(target.noteId)}${target.blockId ? `#${target.blockId}` : ""}`);
+      return;
+    }
+    if (target.kind === "web") {
+      window.open(target.url, "_blank", "noopener,noreferrer");
       return;
     }
     const href = `/shelf/${encodeURIComponent(target.itemId)}`;
@@ -339,8 +366,8 @@ export function RanganPanel() {
             </button>
           </div>
           <p className="rangan-privacy">
-            To answer, the relevant parts of your library and your question are sent to Groq or Cloudflare. Answers can be wrong, so
-            check the sources.
+            To answer, the relevant parts of your library and your question are sent to Groq or Cloudflare. When your library has
+            little on a question, the question is also looked up on Wikipedia. Answers can be wrong, so check the sources.
           </p>
         </form>
       </aside>

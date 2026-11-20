@@ -28,7 +28,15 @@ export type RanganRequest =
 
 export type RanganTurn =
   | { id: string; role: "user"; content: string; quote?: string }
-  | { id: string; role: "assistant"; content: string; citations: RanganCitationView[]; partial?: boolean }
+  | {
+      id: string;
+      role: "assistant";
+      content: string;
+      citations: RanganCitationView[];
+      partial?: boolean;
+      /** The check of cited sentences against their sources; absent on answers from before it existed. */
+      support?: { checked: boolean; removed: number };
+    }
   | { id: string; role: "error"; content: string; retry: RanganRequest | null }
   /** A study plan shown as a card; `saved` is how many sessions were added to the planner. */
   | { id: string; role: "plan"; plan: StudyPlanResult; saved: number | null }
@@ -168,7 +176,8 @@ export const useRanganStore = create<RanganState>((set, get) => {
         }));
         return;
       }
-      const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown };
+      const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown; support?: unknown };
+      const support = answer.support as { checked?: unknown; removed?: unknown } | undefined;
       set((state) => ({
         turns: [
           ...state.turns,
@@ -178,6 +187,9 @@ export const useRanganStore = create<RanganState>((set, get) => {
             content: typeof answer.answer === "string" ? answer.answer : "",
             citations: Array.isArray(answer.citations) ? (answer.citations as RanganCitationView[]) : [],
             ...(answer.partial === true ? { partial: true } : {}),
+            ...(support && typeof support.checked === "boolean" && typeof support.removed === "number"
+              ? { support: { checked: support.checked, removed: support.removed } }
+              : {}),
           },
         ],
       }));
