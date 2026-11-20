@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
 import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { StudyMaker } from "./study-maker";
 
 type Card = {
   id: string;
@@ -41,12 +42,14 @@ function sourceLink(sourceRef: string | null) {
   if (!sourceRef) return null;
   const note = /^note:([^#]+)(#(.+))?$/.exec(sourceRef);
   if (note) return { href: `/notes/${note[1]}${note[3] ? `#${note[3]}` : ""}`, label: "From a page" };
+  const page = /^asset:[^#]+#page(\d+)$/.exec(sourceRef);
+  if (page) return { href: null, label: `From a PDF, p. ${page[1]}` };
   if (sourceRef.startsWith("asset:")) return { href: null, label: "From a resource" };
   return null;
 }
 
 export function FlashcardsApp() {
-  const [tab, setTab] = useState<"review" | "all">("review");
+  const [tab, setTab] = useState<"review" | "all" | "make">("review");
   return (
     <div className="flashcards-app">
       <div className="flashcards-head">
@@ -54,9 +57,10 @@ export function FlashcardsApp() {
         <div className="flashcards-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === "review"} className={tab === "review" ? "active" : ""} onClick={() => setTab("review")}>Review</button>
           <button type="button" role="tab" aria-selected={tab === "all"} className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>All cards</button>
+          <button type="button" role="tab" aria-selected={tab === "make"} className={tab === "make" ? "active" : ""} onClick={() => setTab("make")}>Make from library</button>
         </div>
       </div>
-      {tab === "review" ? <ReviewQueue /> : <CardList />}
+      {tab === "review" ? <ReviewQueue /> : tab === "all" ? <CardList /> : <StudyMaker onReview={() => setTab("review")} />}
     </div>
   );
 }
@@ -79,7 +83,7 @@ function ReviewQueue() {
     return (
       <div className="notes-empty">
         <h2>All caught up</h2>
-        <p className="notes-muted">No cards are due. Add cards from the All cards tab or from a page (select text, then the flashcard button).</p>
+        <p className="notes-muted">No cards are due. Make cards from a page, PDF or video in the Make from library tab, add your own in All cards, or select text on a page and use the flashcard button.</p>
       </div>
     );
   }
