@@ -172,3 +172,248 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Make from library: flashcards and quizzes from a page, PDF or video */
+
+.study-maker,
+.study-result,
+.study-quiz {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.study-search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 16px; /* 16px keeps iOS Safari from zooming in on focus */
+}
+
+.study-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.study-sources li + li {
+  border-top: 1px solid var(--border);
+}
+
+.study-sources button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.study-sources button:hover {
+  background: var(--surface2);
+}
+
+.study-sources button.selected {
+  background: var(--surface3);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.study-source-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study-source-kind {
+  font-size: 11px;
+  color: var(--muted2);
+}
+
+.study-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.study-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.study-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+
+.study-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.study-secondary-btn:disabled,
+.study-actions > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.study-failure {
+  margin: 0;
+  color: var(--red);
+}
+
+.study-result-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.study-card-preview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.study-card-preview li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.study-source-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+span.study-source-link {
+  text-decoration: none;
+  cursor: default;
+}
+
+.study-quiz-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.study-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.study-options button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.study-options button:disabled {
+  cursor: default;
+}
+
+.study-options button.right {
+  border-color: var(--green);
+}
+
+.study-options button.wrong {
+  border-color: var(--red);
+}
+
+.study-options button.dim {
+  opacity: 0.55;
+}
+
+.study-option-letter {
+  flex: none;
+  width: 22px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.study-explanation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border2);
+  line-height: 1.5;
+}
+
+.study-right {
+  color: var(--green);
+}
+
+.study-wrong {
+  color: var(--red);
+}
+
+@media (max-width: 520px) {
+  .flashcards-tabs {
+    width: 100%;
+  }
+
+  .flashcards-tabs button {
+    flex: 1;
+    padding: 7px 8px;
+  }
+}
+
+.study-selected {
+  flex-basis: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
