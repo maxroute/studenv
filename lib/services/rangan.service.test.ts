@@ -399,3 +399,88 @@ test("an empty reply or a model failure gives the question back", async () => {
     assert.equal([...counts.values()][0], 0);
   }
 });
+
+// ── Trusted answers: support check and Wikipedia ───────────────────────────
+
+const WIKI: LibraryPassage = {
+  ref: "https://en.wikipedia.org/wiki/ATP",
+  sourceType: "web",
+  title: "Adenosine triphosphate",
+  heading: "Wikipedia",
+  snippet: "ATP is the energy currency of the cell.",
+  content: "ATP is the energy currency of the cell.",
+  open: { kind: "web", url: "https://en.wikipedia.org/wiki/ATP" },
+};
+
+/** A model that answers with `answer`, then checks claims with `verdict` (or fails the check). */
+function twoStepDeps(options: { answer: string; verdict?: string; checkFails?: boolean; passages?: LibraryPassage[]; web?: LibraryPassage[] }) {
+  const fake = fakeDeps({ passages: options.passages ?? PASSAGES });
+  let calls = 0;
+  const webQueries: string[] = [];
+  fake.deps.complete = async (messages) => {
+    fake.sent.push(messages);
+    calls += 1;
+    if (calls === 1) return { text: options.answer, provider: "groq-large", model: "m" };
+    if (options.checkFails) throw new AiUnavailableError([]);
+    return { text: options.verdict ?? "[]", provider: "groq-large", model: "m" };
+  };
+  fake.deps.searchWeb = async (query) => {
+    webQueries.push(query);
+    return options.web ?? [];
+  };
+  return { ...fake, webQueries };
+}
+
+test("a citation its passage doesn't support is removed, and the answer says how many", async () => {
+  const { deps, sent, counts } = twoStepDeps({
+    answer: "Mitochondria make ATP [1]. ATP is made only at night [2].",
+    verdict: '[{"claim": 1, "supported": true}, {"claim": 2, "supported": false}]',
+  });
+  const result = await createRanganService(deps).ask("u1", { question: "Where is ATP made?" });
+  assert.equal(result.answer, "Mitochondria make ATP [1]. ATP is made only at night.");
+  assert.deepEqual(result.support, { checked: true, removed: 1 });
+  assert.deepEqual(result.citations.map((citation) => citation.n), [1], "the removed citation is not listed as a source");
+  assert.equal(sent.length, 2);
+  assert.match(sent[1].at(-1)?.content ?? "", /Claim 2 \(cites \[2\]\): ATP is made only at night\./);
+  assert.equal([...counts.values()][0], 1, "the check uses no extra question");
+});
+
+test("when the check can't run, the answer is kept and marked unchecked", async () => {
+  const { deps } = twoStepDeps({ answer: "Mitochondria make ATP [1].", checkFails: true });
+  const result = await createRanganService(deps).ask("u1", { question: "Where is ATP made?" });
+  assert.equal(result.answer, "Mitochondria make ATP [1].");
+  assert.deepEqual(result.support, { checked: false, removed: 0 });
+});
+
+test("an answer without citations needs no check", async () => {
+  const { deps, sent } = twoStepDeps({ answer: "### Beyond your sources\nATP is energy." });
+  const result = await createRanganService(deps).ask("u1", { question: "What is ATP?" });
+  assert.deepEqual(result.support, { checked: true, removed: 0 });
+  assert.equal(sent.length, 1);
+});
+
+test("Wikipedia is searched only when the library has little on the question", async () => {
+  const rich = twoStepDeps({ answer: "A.", web: [WIKI] });
+  await createRanganService(rich.deps).ask("u1", { question: "Where is ATP made?" });
+  assert.deepEqual(rich.webQueries, [], "two library passages are enough");
+
+  const thin = twoStepDeps({ answer: "ATP is the energy currency [2].", verdict: '[{"claim":1,"supported":true}]', passages: [PASSAGES[0]], web: [WIKI] });
+  const result = await createRanganService(thin.deps).ask("u1", { question: "What is ATP?" });
+  assert.deepEqual(thin.webQueries, ["What is ATP?"]);
+  assert.match(thin.sent[0].at(-1)?.content ?? "", /\[2\] Adenosine triphosphate › Wikipedia/);
+  assert.deepEqual(result.citations.map((citation) => [citation.n, citation.sourceType]), [[2, "web"]]);
+});
+
+test("a Wikipedia failure still answers from the library", async () => {
+  const { deps } = twoStepDeps({ answer: "Only notes.", passages: [PASSAGES[0]] });
+  deps.searchWeb = async () => {
+    throw new Error("offline");
+  };
+  const result = await createRanganService(deps).ask("u1", { question: "What is ATP?" });
+  assert.equal(result.answer, "Only notes.");
+});
+
+test("Rangan is told to keep general knowledge under its own heading", () => {
+  assert.match(RANGAN_SYSTEM_PROMPT, /### Beyond your sources/);
+  assert.match(RANGAN_SYSTEM_PROMPT, /Never mix general knowledge into a cited sentence/);
+});

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Compass, FilePlus2, Loader2, MessageCircleQuestion, Sparkles } from "lucide-react";
+import { Check, Compass, FilePlus2, Globe, Loader2, MessageCircleQuestion, Sparkles } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import type { RanganTurn } from "@/hooks/use-rangan-store";
 import type { RanganPassageLink } from "@/lib/services/rangan.service";
+import type { WikiArticle } from "@/lib/web/wikipedia";
 
 /** Where a passage is, in a few words: "Textbook, p. 4" or "Cell biology". */
 function linkLabel(link: RanganPassageLink) {
@@ -29,6 +30,23 @@ export function RanganExploreCard({ turn, onOpen, onAsk, onBoard, onNavigate }: 
   const { explore } = turn;
   const [creating, setCreating] = useState<string | null>(null);
   const [created, setCreated] = useState<Record<string, string>>({});
+  /** Wikipedia lookups per gap: loading, the articles found, or a message. */
+  const [wiki, setWiki] = useState<Record<string, "loading" | WikiArticle[] | string>>({});
+
+  /** Looks a gap up on Wikipedia. Only the gap's name is sent; no Rangan question is used. */
+  const lookUp = async (concept: string) => {
+    if (wiki[concept] === "loading") return;
+    setWiki((current) => ({ ...current, [concept]: "loading" }));
+    try {
+      const response = await fetch(`/api/rangan/wikipedia?q=${encodeURIComponent(concept)}`);
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(json?.data)) throw new Error(json?.error ?? "Wikipedia couldn't be reached.");
+      const articles = json.data as WikiArticle[];
+      setWiki((current) => ({ ...current, [concept]: articles.length ? articles.slice(0, 1) : "Wikipedia has no article on this." }));
+    } catch (error) {
+      setWiki((current) => ({ ...current, [concept]: error instanceof Error ? error.message : "Wikipedia couldn't be reached." }));
+    }
+  };
   const pageId = explore.pageRef.startsWith("note:") ? explore.pageRef.slice(5) : null;
 
   /** A new page for a gap, under the page explored from. */
@@ -88,6 +106,11 @@ export function RanganExploreCard({ turn, onOpen, onAsk, onBoard, onNavigate }: 
                   <button type="button" className="rangan-chip" onClick={() => onAsk(`Explain ${gap.concept}`)}>
                     <Sparkles size={13} aria-hidden /> Explain
                   </button>
+                  {!gap.covered && wiki[gap.concept] === undefined ? (
+                    <button type="button" className="rangan-chip" onClick={() => void lookUp(gap.concept)}>
+                      <Globe size={13} aria-hidden /> Wikipedia
+                    </button>
+                  ) : null}
                   {!gap.covered ? (
                     created[gap.concept] ? (
                       <button type="button" className="rangan-chip" onClick={() => openPage(created[gap.concept])}>
@@ -100,6 +123,7 @@ export function RanganExploreCard({ turn, onOpen, onAsk, onBoard, onNavigate }: 
                     )
                   ) : null}
                 </span>
+                <WikiResult state={wiki[gap.concept]} />
               </li>
             ))}
           </ul>
@@ -135,5 +159,31 @@ export function RanganExploreCard({ turn, onOpen, onAsk, onBoard, onNavigate }: 
         </section>
       ) : null}
     </div>
+  );
+}
+
+/** A gap's Wikipedia lookup: loading, the article's opening summary with a link, or why there is none. */
+function WikiResult({ state }: { state: "loading" | WikiArticle[] | string | undefined }) {
+  if (state === undefined) return null;
+  if (state === "loading") {
+    return (
+      <span className="rangan-wiki-note">
+        <Loader2 size={12} className="rangan-spin" aria-hidden /> Looking it up on Wikipedia…
+      </span>
+    );
+  }
+  if (typeof state === "string") return <span className="rangan-wiki-note">{state}</span>;
+  return (
+    <>
+      {state.map((article) => (
+        <div key={article.url} className="rangan-wiki">
+          <a className="rangan-wiki-title" href={article.url} target="_blank" rel="noopener noreferrer">
+            {article.title} · Wikipedia
+          </a>
+          <span className="rangan-wiki-extract">{article.extract}</span>
+          <span className="rangan-wiki-note">From Wikipedia, not your library. Open it to read more and check its sources.</span>
+        </div>
+      ))}
+    </>
   );
 }

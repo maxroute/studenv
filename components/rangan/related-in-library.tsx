@@ -60,6 +60,10 @@ export function RelatedInLibrary({ noteId, title, embedded = false }: { noteId: 
       else router.push(`/notes/${encodeURIComponent(target.noteId)}${target.blockId ? `#${target.blockId}` : ""}`);
       return;
     }
+    if (target.kind === "web") {
+      window.open(target.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     const href = `/shelf/${encodeURIComponent(target.itemId)}`;
     if (embedded) window.open(href, "_blank", "noopener");
     else router.push(href);
