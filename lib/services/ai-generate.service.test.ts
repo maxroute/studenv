@@ -12,8 +12,10 @@ const OTHER = "user-other";
 const ASSET = "c" + "a".repeat(24);
 
 /** In-memory stand-ins for the database and the model, recording every call. */
-function fakeDeps(options: { cards?: unknown } = {}) {
+function fakeDeps(options: { cards?: unknown; spent?: boolean; failModel?: boolean } = {}) {
   const calls: string[] = [];
+  /** Daily questions taken and given back, kept apart from `calls` so call-order checks are unaffected. */
+  const questions = { taken: 0, refunded: 0 };
   const store = {
     summary: null as string | null,
     flashcards: [] as GeneratedFlashcard[],
@@ -63,10 +65,21 @@ function fakeDeps(options: { cards?: unknown } = {}) {
     },
     chatWithDocument: async () => {
       calls.push("chatWithDocument");
+      if (options.failModel) throw Object.assign(new Error("busy"), { status: 503 });
       return "an answer";
     },
+    withQuestion: async (_userId, run) => {
+      if (options.spent) throw Object.assign(new Error("spent"), { status: 429 });
+      questions.taken += 1;
+      try {
+        return await run();
+      } catch (error) {
+        questions.refunded += 1;
+        throw error;
+      }
+    },
   };
-  return { deps, calls, store };
+  return { deps, calls, store, questions };
 }
 
 const MODEL_OR_WRITE = ["generateSummary", "generateFlashcards", "saveSummary", "saveFlashcardsIfNone", "replaceRegenerableFlashcards"];
@@ -160,4 +173,36 @@ test("regenerating replaces only cards without reviews or edits, and checks owne
     ["Reviewed", "New"],
     "the reviewed card is kept and the untouched one replaced",
   );
+});
+
+// ── Daily allowance (these tools share Rangan's models and allowance) ───────
+
+test("each model call uses one question; returning saved flashcards uses none", async () => {
+  const { deps, questions } = fakeDeps();
+  const run = createAiGenerateService(deps);
+  await run(OWNER, { action: "summary", text: "Cells" });
+  await run(OWNER, { action: "quiz", text: "Cells" });
+  await run(OWNER, { action: "chat", text: "Cells", userMessage: "Why?", history: [] });
+  await run(OWNER, { action: "flashcards", text: "Cells", assetId: ASSET });
+  assert.equal(questions.taken, 4);
+  await run(OWNER, { action: "flashcards", text: "Cells", assetId: ASSET });
+  assert.equal(questions.taken, 4, "the saved set comes back without a model call");
+});
+
+test("a foreign asset is refused before a question is used", async () => {
+  const { deps, questions } = fakeDeps();
+  const run = createAiGenerateService(deps);
+  await assert.rejects(run(OTHER, { action: "summary", text: "Cells", assetId: ASSET }), { status: 404 });
+  await assert.rejects(run(OTHER, { action: "flashcards", text: "Cells", assetId: ASSET, regenerate: true }), { status: 404 });
+  assert.equal(questions.taken, 0);
+});
+
+test("a spent allowance stops the model call, and a failed call gives the question back", async () => {
+  const spent = fakeDeps({ spent: true });
+  await assert.rejects(createAiGenerateService(spent.deps)(OWNER, { action: "summary", text: "Cells" }), { status: 429 });
+  assert.equal(spent.calls.includes("generateSummary"), false);
+
+  const failing = fakeDeps({ failModel: true });
+  await assert.rejects(createAiGenerateService(failing.deps)(OWNER, { action: "chat", text: "Cells", userMessage: "Why?", history: [] }), { status: 503 });
+  assert.deepEqual(failing.questions, { taken: 1, refunded: 1 });
 });

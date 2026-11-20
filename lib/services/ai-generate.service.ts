@@ -29,6 +29,8 @@ export type AiGenerateDeps = {
     userMessage: string,
     history: Array<{ role: string; content: string }>,
   ) => Promise<string>;
+  /** Uses one daily Rangan question for a model call, and gives it back if the call fails. */
+  withQuestion: <T>(userId: string, run: () => Promise<T>) => Promise<T>;
 };
 
 export type AiGenerateResult =
@@ -57,40 +59,39 @@ export function createAiGenerateService(deps: AiGenerateDeps) {
         // Ownership is checked before the model is called, so a foreign asset
         // costs nothing and reveals nothing.
         if (input.assetId && !(await deps.isAssetOwnedBy(input.assetId, userId))) throw notFound();
-        const summary = await deps.generateSummary(input.text);
+        const summary = await deps.withQuestion(userId, () => deps.generateSummary(input.text));
         if (input.assetId) await deps.saveSummary(input.assetId, summary, input.text);
         return { summary };
       }
 
       case "flashcards": {
-        if (!input.assetId) {
-          return { flashcards: normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text)) };
-        }
+        const generate = () => deps.withQuestion(userId, async () => normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text)));
+        if (!input.assetId) return { flashcards: await generate() };
         if (!(await deps.isAssetOwnedBy(input.assetId, userId))) throw notFound();
 
         // Regenerating replaces only cards with no review history that were
         // never edited; reviewed and edited cards are kept (§9 Q4).
         if (input.regenerate) {
-          const cards = normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text));
+          const cards = await generate();
           const result = await deps.replaceRegenerableFlashcards(userId, input.assetId, input.text, cards);
           return { flashcards: result.flashcards };
         }
 
         // Otherwise cards are saved once per asset: generating again returns
-        // the saved set instead of appending another one.
+        // the saved set (using no question) instead of appending another one.
         const saved = await deps.findSavedFlashcards(input.assetId);
         if (saved.length > 0) return { flashcards: saved };
 
-        const cards = normalizeGeneratedFlashcards(await deps.generateFlashcards(input.text));
+        const cards = await generate();
         const result = await deps.saveFlashcardsIfNone(userId, input.assetId, input.text, cards);
         return { flashcards: result.flashcards };
       }
 
       case "quiz":
-        return { quiz: await deps.generateQuiz(input.text) };
+        return { quiz: await deps.withQuestion(userId, () => deps.generateQuiz(input.text)) };
 
       case "chat":
-        return { response: await deps.chatWithDocument(input.text, input.userMessage, input.history) };
+        return { response: await deps.withQuestion(userId, () => deps.chatWithDocument(input.text, input.userMessage, input.history)) };
     }
   };
 }
