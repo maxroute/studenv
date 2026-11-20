@@ -108,10 +108,28 @@ export function removeCitations(answer: string, pieces: ReadonlySet<number>): st
  * and the general-knowledge part (without the heading), or null when there
  * is none.
  */
+/**
+ * "### Beyond your sources", "## **Beyond your sources:**", and with words
+ * after it ("### Beyond your sources – visualizing the OS"). Only a heading
+ * that starts with the phrase counts.
+ */
+const BEYOND_PATTERN = /^\s{0,3}#{1,6}\s*\**\s*Beyond your sources\b[^\n]*$/im;
+
 export function splitBeyond(answer: string): { sourced: string; beyond: string | null } {
-  // "### Beyond your sources", "## **Beyond your sources:**", "#### Beyond your sources:"
-  const match = /^\s{0,3}#{1,6}\s*\**\s*Beyond your sources\s*:?\s*\**\s*:?\s*$/im.exec(answer);
+  const match = BEYOND_PATTERN.exec(answer);
   if (!match) return { sourced: answer, beyond: null };
   const beyond = answer.slice(match.index + match[0].length).trim();
   return { sourced: answer.slice(0, match.index).trimEnd(), beyond: beyond || null };
+}
+
+/**
+ * The answer with any citation marks removed from its "Beyond your sources"
+ * part. That part is general knowledge, so nothing in it may look backed by
+ * a source, even when the model put a mark there.
+ */
+export function withoutBeyondCitations(answer: string): string {
+  const match = BEYOND_PATTERN.exec(answer);
+  if (!match) return answer;
+  const end = match.index + match[0].length;
+  return answer.slice(0, end) + answer.slice(end).replace(/\s*\[\d+\]/g, "");
 }

@@ -188,9 +188,8 @@ export async function completeWithFallback(
 
 const processCooldowns = new Map<ProviderId, number>();
 
-/** The real chain, reading keys from the server environment. */
-export function complete(messages: ChatMessage[], options: CompletionOptions = {}) {
-  return completeWithFallback(messages, options, {
+function serverDeps(): FallbackDeps {
+  return {
     fetch: (input, init) => fetch(input, init),
     env: {
       GROQ_API_KEY: process.env.GROQ_API_KEY,
@@ -199,5 +198,18 @@ export function complete(messages: ChatMessage[], options: CompletionOptions = {
     },
     now: Date.now,
     cooldowns: processCooldowns,
-  });
+  };
+}
+
+/** The real chain, reading keys from the server environment. */
+export function complete(messages: ChatMessage[], options: CompletionOptions = {}) {
+  return completeWithFallback(messages, options, serverDeps());
+}
+
+/** The chain without the big model, for short helper steps (reading a request) that don't need it. */
+export const QUICK_CHAIN: readonly ProviderSpec[] = PROVIDER_CHAIN.filter((spec) => spec.id !== "groq-large");
+
+/** A quick helper call on the smaller models, so it doesn't spend the big model's rate limit. */
+export function completeQuick(messages: ChatMessage[], options: CompletionOptions = {}) {
+  return completeWithFallback(messages, options, serverDeps(), QUICK_CHAIN);
 }

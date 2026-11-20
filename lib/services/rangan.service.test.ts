@@ -484,3 +484,88 @@ test("Rangan is told to keep general knowledge under its own heading", () => {
   assert.match(RANGAN_SYSTEM_PROMPT, /### Beyond your sources/);
   assert.match(RANGAN_SYSTEM_PROMPT, /Never mix general knowledge into a cited sentence/);
 });
+
+// ── Reading the request: search the subject, not the whole message ─────────
+
+const VOCABULARY: LibraryPassage = {
+  ref: "asset:vocab#page94",
+  sourceType: "pdf",
+  title: "Word Power Made Easy",
+  heading: "Page 94",
+  snippet: "A note on time schedules.",
+  content: "A note on time schedules: make learning and revision a daily process so it is easy.",
+  open: { kind: "pdf", assetId: "vocab", page: 94, itemId: null },
+};
+const OS_NOTE: LibraryPassage = {
+  ref: "note:os#b_AAAAAAAAAA",
+  sourceType: "note",
+  title: "CS notes",
+  heading: "Kernel",
+  snippet: "The kernel schedules processes.",
+  content: "The kernel schedules processes on the CPU.",
+  open: { kind: "note", noteId: "os", blockId: "b_AAAAAAAAAA" },
+};
+const OS_REQUEST =
+  "create a new note on operating system and also make a proper understanding so that it is easy so i urge you to take it to the board too so that i can visualize the learning i want make the visualization map of the os to teach me and for my revision too";
+
+function readingDeps(options: { reading?: string | Error; library?: LibraryPassage[]; answer?: string }) {
+  const fake = fakeDeps({ passages: options.library ?? [VOCABULARY, OS_NOTE], answer: options.answer ?? "The kernel schedules processes [1]." });
+  const quick: ChatMessage[][] = [];
+  const webQueries: string[] = [];
+  fake.deps.completeQuick = async (messages) => {
+    quick.push(messages);
+    if (options.reading instanceof Error) throw options.reading;
+    return { text: options.reading ?? "", provider: "groq-small", model: "m" };
+  };
+  fake.deps.searchWeb = async (query) => {
+    webQueries.push(query);
+    return [];
+  };
+  return { ...fake, quick, webQueries };
+}
+
+const OS_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel processes", names: ["operating system", "OS"], terms: ["kernel", "process", "scheduler"], actions: ["page", "board"] });
+
+test("the subject is searched, not the whole message, and an unrelated book is left out", async () => {
+  const { deps, searches, sent, quick } = readingDeps({ reading: OS_READING });
+  const result = await createRanganService(deps).ask("u1", { question: OS_REQUEST });
+  assert.equal(quick.length, 1, "one quick reading call");
+  assert.match(quick[0][1].content, /create a new note on operating system/);
+  assert.deepEqual(searches, ["operating system kernel processes"]);
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.doesNotMatch(prompt, /Word Power Made Easy/, "the vocabulary book is not given to the model");
+  assert.match(prompt, /\[1\] CS notes › Kernel/);
+  assert.match(prompt, /You can't create pages or boards yet/);
+  assert.deepEqual(result.citations.map((citation) => citation.title), ["CS notes"]);
+});
+
+test("with nothing on the subject in the library, Wikipedia is searched for the subject", async () => {
+  const { deps, webQueries, sent } = readingDeps({ reading: OS_READING, library: [VOCABULARY] });
+  await createRanganService(deps).ask("u1", { question: OS_REQUEST });
+  assert.deepEqual(webQueries, ["operating systems"]);
+  assert.doesNotMatch(sent[0].at(-1)?.content ?? "", /Word Power Made Easy/);
+});
+
+test("if the reading fails, the message is searched as before", async () => {
+  const { deps, searches } = readingDeps({ reading: new Error("busy") });
+  await createRanganService(deps).ask("u1", { question: "What does the kernel do?" });
+  assert.deepEqual(searches, ["What does the kernel do?"]);
+});
+
+test("Explain this skips the reading and searches the selected text", async () => {
+  const { deps, quick, searches } = readingDeps({ reading: OS_READING });
+  await createRanganService(deps).ask("u1", { question: "Explain this", focus: { text: "The kernel schedules processes." } });
+  assert.equal(quick.length, 0);
+  assert.match(searches[0], /^The kernel schedules processes\./);
+});
+
+test("a citation inside the general-knowledge part is removed and not listed as a source", async () => {
+  const { deps } = readingDeps({
+    reading: OS_READING,
+    answer: "The kernel schedules processes [1].\n\n### Beyond your sources\nStudy in 30-minute chunks [2].",
+    library: [OS_NOTE, { ...OS_NOTE, ref: "note:os#b_BBBBBBBBBB", content: "The kernel also handles interrupts.", heading: "Interrupts" }],
+  });
+  const result = await createRanganService(deps).ask("u1", { question: "What does the OS kernel do?" });
+  assert.equal(result.answer, "The kernel schedules processes [1].\n\n### Beyond your sources\nStudy in 30-minute chunks.");
+  assert.deepEqual(result.citations.map((citation) => citation.n), [1]);
+});
