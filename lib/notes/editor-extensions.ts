@@ -15,7 +15,8 @@ import StarterKit from "@tiptap/starter-kit";
 import { BulletList, ListItem, ListKeymap, OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableKit, TableView } from "@tiptap/extension-table";
 import { ListBehavior, switchListItemsTo } from "./list-behavior";
-import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import { DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import { NoteDetails, NoteToggle } from "./toggle-behavior";
 import Highlight from "@tiptap/extension-highlight";
 import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
 import { Mathematics } from "@tiptap/extension-mathematics";
@@ -279,9 +280,10 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: false }),
     NoteTable.configure({ resizable: false }),
-    Details.configure({ persist: true, HTMLAttributes: { class: "note-details" } }),
+    NoteDetails.configure({ persist: true, HTMLAttributes: { class: "note-details" } }),
     DetailsSummary,
     DetailsContent,
+    NoteToggle,
     Highlight,
     // Colour and font live on the textStyle mark (values from text-styles.ts).
     TextStyle,
@@ -315,7 +317,7 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
     ...(options.blockHandle ? [BlockHandle] : []),
     Placeholder.configure({
       placeholder: ({ node }) =>
-        node.type.name === "heading" ? "Heading" : options.placeholder ?? "Type / for blocks, @ to link a page, resource or workspace",
+        node.type.name === "heading" ? "Heading" : node.type.name === "detailsSummary" ? "Toggle title" : options.placeholder ?? "Type / for blocks, @ to link a page, resource or workspace",
     }),
   ];
 }

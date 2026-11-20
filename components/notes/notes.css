@@ -647,27 +647,61 @@
   background: #f5a6231a;
 }
 
+/* Toggle: an arrow, a plain title, and a body that opens under it (like Notion). */
 .note-details {
   display: flex;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  align-items: flex-start;
+  gap: 2px;
+  margin: 0.2em 0;
 }
 
 .note-details > button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 1.75em;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
 }
 
+.note-details > button::before {
+  content: "";
+  border-left: 6px solid currentColor;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  transition: transform 0.12s ease;
+}
+
+.note-details.is-open > button::before {
+  transform: rotate(90deg);
+}
+
+.note-details > button:hover {
+  background: var(--surface2);
+}
+
 .note-details > div {
   flex: 1;
+  min-width: 0;
 }
 
 .note-details summary {
-  font-weight: 600;
+  list-style: none;
+}
+
+.note-details summary::-webkit-details-marker {
+  display: none;
+}
+
+/* An open toggle with nothing in it says what to do. */
+.note-details [data-type="detailsContent"] > p:only-child:not(.is-empty):has(> br.ProseMirror-trailingBreak:only-child)::before {
+  content: "Empty toggle. Click or press Enter in the title to add inside.";
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .note-embed,
