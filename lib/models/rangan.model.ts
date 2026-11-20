@@ -30,3 +30,11 @@ export type RanganUsageSummary = {
   /** Next UTC midnight, ISO string. */
   resetAt: string;
 };
+
+/** Query of `GET /api/rangan/search`. */
+export const ranganSearchSchema = z
+  .object({
+    q: z.string().trim().min(1, "Type something to search for.").max(500),
+    limit: z.coerce.number().int().min(1).max(20).optional(),
+  })
+  .strict();
