@@ -1,0 +1,14 @@
+import { complete } from "@/lib/ai/providers";
+import { RANGAN_DAILY_LIMIT } from "@/lib/models/rangan.model";
+import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
+import { createRanganService } from "@/lib/services/rangan.service";
+
+/** Rangan wired to the database and the real model chain. */
+export const rangan = createRanganService({
+  dailyLimit: RANGAN_DAILY_LIMIT,
+  now: () => new Date(),
+  getUsedCount: usageRepository.getUsedCount,
+  consumeQuestion: usageRepository.consumeQuestion,
+  refundQuestion: usageRepository.refundQuestion,
+  complete,
+});
