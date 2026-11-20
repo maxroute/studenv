@@ -4,8 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import {
   Pen,
   Eraser,
-  Undo2,
-  Redo2,
   Trash2,
   Minus,
   Plus,
@@ -22,11 +20,7 @@ interface DrawingToolbarProps {
   onStrokeWidthChange: (w: number) => void;
   color: string;
   onColorChange: (c: string) => void;
-  onUndo: () => void;
-  onRedo: () => void;
   onClearAll: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
 }
 
 const PRESET_COLORS = [
@@ -52,11 +46,7 @@ export function DrawingToolbar({
   onStrokeWidthChange,
   color,
   onColorChange,
-  onUndo,
-  onRedo,
   onClearAll,
-  canUndo,
-  canRedo,
 }: DrawingToolbarProps) {
   const [showThickness, setShowThickness] = useState(false);
   const [showColors, setShowColors] = useState(false);
@@ -573,22 +563,6 @@ export function DrawingToolbar({
 
       {/* Actions */}
       <div className="dt-btn-group">
-        <button
-          className="dt-btn"
-          onClick={onUndo}
-          disabled={!canUndo}
-          title="Undo"
-        >
-          <Undo2 size={16} />
-        </button>
-        <button
-          className="dt-btn"
-          onClick={onRedo}
-          disabled={!canRedo}
-          title="Redo"
-        >
-          <Redo2 size={16} />
-        </button>
         <button
           className="dt-btn"
           onClick={onClearAll}
