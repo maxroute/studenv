@@ -16,6 +16,7 @@ import { createNoteExtensions, type NoteMentionItem } from "@/lib/notes/editor-e
 import { parseNoteDoc } from "@/lib/notes/note-format";
 import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
 import { AppearsIn } from "@/components/refs/appears-in";
+import { RelatedInLibrary } from "@/components/rangan/related-in-library";
 import { createMentionSuggestion } from "./mention-suggestion";
 import { createSlashSuggestion, slashCommands } from "./slash-commands";
 import { NoteBubbleMenu } from "./note-bubble-menu";
@@ -545,6 +546,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
       {!note ? <p className="notes-muted">Loading…</p> : null}
       <EditorContent editor={editor} className="note-editor" />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
+      {note ? <RelatedInLibrary noteId={noteId} title={title} embedded={embedded} /> : null}
 
       {addToWorkspaceOpen ? <AddToWorkspaceDialog noteId={noteId} onClose={() => setAddToWorkspaceOpen(false)} /> : null}
       {moveOpen && currentEntry ? <MoveDialog note={currentEntry} notes={notes} onClose={() => setMoveOpen(false)} onMoved={onSaved} /> : null}

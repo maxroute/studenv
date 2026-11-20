@@ -59,3 +59,8 @@ export const ranganSearchSchema = z
     limit: z.coerce.number().int().min(1).max(20).optional(),
   })
   .strict();
+
+/** Body of `POST /api/rangan/explore`: the page to explore from; without one, the most recently edited page. */
+export const ranganExploreSchema = z.object({ ref: z.string().trim().min(1).max(420).optional() }).strict();
+
+export type RanganExploreInput = z.infer<typeof ranganExploreSchema>;

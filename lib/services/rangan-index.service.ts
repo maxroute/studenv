@@ -1,5 +1,6 @@
 import type { HashedPassage } from "@/lib/rangan/chunking";
 import { openTarget, type OpenTarget } from "@/lib/rangan/citations";
+import { rankRelated } from "@/lib/rangan/discover";
 import { planSourceSync, type IndexedSource, type SourceVersion } from "@/lib/rangan/index-plan";
 import { buildOrTsQuery, filterMeaningMatches, fuseRankings, passageRef, snippet, type IndexSourceType } from "@/lib/rangan/ranking";
 
@@ -24,6 +25,10 @@ export type RanganIndexDeps = {
   findSourceTitle: (ownerId: string, type: IndexSourceType, id: string) => Promise<string | null>;
   /** Shelf item of each asset that has one, for opening PDF and video citations. */
   findItemIdsForAssets: (ownerId: string, assetIds: readonly string[]) => Promise<Map<string, string>>;
+  /** Other sources' passages closest in meaning to a source, best first. */
+  relatedChunks: (ownerId: string, type: IndexSourceType, id: string, limit: number) => Promise<Array<{ id: string; similarity: number }>>;
+  /** What a source links to and what links to it, as "type:id" keys. */
+  linkedRefKeys: (ownerId: string, ref: { type: string; id: string }) => Promise<Set<string>>;
   /** Throws when embeddings are unavailable; the index then works by keyword only. */
   embed: (texts: readonly string[]) => Promise<number[][]>;
 };
@@ -52,6 +57,8 @@ export const SYNC_MAX_SOURCES = 25;
 export const SYNC_MAX_EMBEDDINGS = 128;
 const CANDIDATES_PER_SEARCH = 24;
 const MAX_RESULTS_PER_SOURCE = 2;
+/** Passages considered when finding related sources; enough for several per source. */
+const RELATED_CANDIDATES = 60;
 
 /** Text a passage is embedded from: where it sits, then what it says. */
 export const embeddingText = (row: { title: string; heading: string; content: string }) =>
@@ -191,5 +198,39 @@ export function createRanganIndexService(deps: RanganIndexDeps) {
     };
   }
 
-  return { sync, search, loadSource };
+  /**
+   * "Related in your library": the user's other notes, PDFs, videos and
+   * articles closest in meaning to a page (or a PDF or video), each with its
+   * closest passage. Sources the page already links to, or that link to it,
+   * are left out. Uses saved meaning vectors only, so no model is asked.
+   */
+  async function related(ownerId: string, ref: { type: "note" | "asset"; id: string }) {
+    await sync(ownerId);
+    const types: IndexSourceType[] = ref.type === "note" ? ["note"] : ["pdf", "transcript"];
+    const [matches, linked] = await Promise.all([
+      Promise.all(types.map((type) => deps.relatedChunks(ownerId, type, ref.id, RELATED_CANDIDATES))).then((lists) => lists.flat()),
+      deps.linkedRefKeys(ownerId, ref),
+    ]);
+    const chunks = new Map((await deps.loadChunks(ownerId, matches.map((match) => match.id))).map((chunk) => [chunk.id, chunk]));
+    const ranked = rankRelated(
+      matches.flatMap((match) => {
+        const chunk = chunks.get(match.id);
+        return chunk ? [{ chunk, similarity: match.similarity }] : [];
+      }),
+      { self: `${ref.type}:${ref.id}`, linked },
+    );
+    const assetIds = ranked.filter(({ chunk }) => chunk.sourceType === "pdf" || chunk.sourceType === "transcript").map(({ chunk }) => chunk.sourceId);
+    const itemIdByAsset = assetIds.length ? await deps.findItemIdsForAssets(ownerId, assetIds) : new Map<string, string>();
+    return ranked.map(({ chunk, similarity }) => ({
+      ref: passageRef(chunk.sourceType, chunk.sourceId, chunk.anchor),
+      sourceType: chunk.sourceType,
+      title: chunk.title,
+      heading: chunk.heading,
+      snippet: snippet(chunk.content),
+      similarity: Math.round(similarity * 100) / 100,
+      open: openTarget(chunk.sourceType, chunk.sourceId, chunk.anchor, itemIdByAsset),
+    }));
+  }
+
+  return { sync, search, loadSource, related };
 }

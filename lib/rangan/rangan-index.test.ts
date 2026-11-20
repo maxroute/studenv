@@ -256,6 +256,8 @@ function memoryIndex(library: Record<string, { sources: SourceVersion[]; passage
         if (at >= 0) indexed.splice(at, 1);
       }
     },
+    relatedChunks: async () => [],
+    linkedRefKeys: async () => new Set<string>(),
     listPendingEmbeddings: async (ownerId, limit) => rows.filter((r) => r.ownerId === ownerId && !r.vector).slice(0, limit),
     countPendingEmbeddings: async (ownerId) => rows.filter((r) => r.ownerId === ownerId && !r.vector).length,
     saveEmbeddings: async (ownerId, saved) => {

@@ -694,3 +694,82 @@ body:has(.note-keyboard-bar) .rangan-fab {
   color: var(--green, #6fcf8b);
   font-size: 13px;
 }
+
+/* "What should I explore next?" */
+.rangan-explore-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.rangan-explore-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rangan-explore-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rangan-explore-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+.rangan-explore-concept {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.rangan-explore-where {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  color: var(--blue, #7fb2ff);
+  font-size: 12.5px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.rangan-explore-where:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.rangan-explore-missing {
+  color: var(--amber);
+  font-size: 12.5px;
+}
+
+.rangan-explore-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rangan-explore-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rangan-explore-questions .rangan-example {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}

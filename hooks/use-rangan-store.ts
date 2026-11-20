@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { OpenTarget } from "@/lib/rangan/citations";
 import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
+import type { RanganExplore } from "@/lib/services/rangan.service";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { isPlanRequest } from "@/lib/study/plan-intent";
 
@@ -21,14 +22,18 @@ export type RanganCitationView = {
 export type RanganRequest =
   | { kind: "ask"; question: string; focus?: { text: string; title?: string } }
   | { kind: "summarize"; ref: string; label: string }
-  | { kind: "plan"; request: string };
+  | { kind: "plan"; request: string }
+  /** "What should I explore next?" from a page (`note:<id>`), or from the latest page when none is open. */
+  | { kind: "explore"; ref?: string; label: string };
 
 export type RanganTurn =
   | { id: string; role: "user"; content: string; quote?: string }
   | { id: string; role: "assistant"; content: string; citations: RanganCitationView[]; partial?: boolean }
   | { id: string; role: "error"; content: string; retry: RanganRequest | null }
   /** A study plan shown as a card; `saved` is how many sessions were added to the planner. */
-  | { id: string; role: "plan"; plan: StudyPlanResult; saved: number | null };
+  | { id: string; role: "plan"; plan: StudyPlanResult; saved: number | null }
+  /** Gaps, connections and next questions, shown as a card. */
+  | { id: string; role: "explore"; explore: RanganExplore };
 
 type RanganState = {
   open: boolean;
@@ -47,6 +52,8 @@ type RanganState = {
   summarize: (ref: string, label: string) => Promise<void>;
   /** Sends a failed request again, in place of the failed attempt. */
   retry: (request: RanganRequest) => Promise<void>;
+  /** Opens the panel and suggests what to explore next from a page (`note:<id>`), or from the latest page. */
+  explore: (ref?: string, label?: string) => Promise<void>;
   /** Records that a plan card's sessions were added to the planner. */
   markPlanSaved: (turnId: string, count: number) => void;
 };
@@ -98,16 +105,27 @@ export const useRanganStore = create<RanganState>((set, get) => {
         ? { id: newId(), role: "user", content: request.label }
         : request.kind === "plan"
           ? { id: newId(), role: "user", content: request.request }
-          : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
+          : request.kind === "explore"
+            ? { id: newId(), role: "user", content: request.label }
+            : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
     set((state) => ({ pending: true, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
 
-    const url = request.kind === "summarize" ? "/api/rangan/summarize" : request.kind === "plan" ? "/api/study/plan" : "/api/rangan/ask";
+    const url =
+      request.kind === "summarize"
+        ? "/api/rangan/summarize"
+        : request.kind === "plan"
+          ? "/api/study/plan"
+          : request.kind === "explore"
+            ? "/api/rangan/explore"
+            : "/api/rangan/ask";
     const payload =
       request.kind === "summarize"
         ? { ref: request.ref }
         : request.kind === "plan"
           ? { request: request.request, today: localDay() }
-          : { question: request.question, ...(history.length ? { history } : {}), ...(request.focus ? { focus: request.focus } : {}) };
+          : request.kind === "explore"
+            ? (request.ref ? { ref: request.ref } : {})
+            : { question: request.question, ...(history.length ? { history } : {}), ...(request.focus ? { focus: request.focus } : {}) };
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -124,6 +142,18 @@ export const useRanganStore = create<RanganState>((set, get) => {
             ? "Rangan couldn't find notes about that in your library. Name the subject, or choose the material yourself in Planner → Plan with Rangan."
             : errorMessage(response.status, body);
         set((state) => ({ turns: [...state.turns, { id: newId(), role: "error", content, retry }] }));
+        return;
+      }
+      if (request.kind === "explore") {
+        const explore = body as RanganExplore | null;
+        set((state) => ({
+          turns: [
+            ...state.turns,
+            explore && Array.isArray(explore.gaps)
+              ? { id: newId(), role: "explore", explore }
+              : { id: newId(), role: "error", content: "Rangan couldn't suggest anything right now. Please try again.", retry: request },
+          ],
+        }));
         return;
       }
       if (request.kind === "plan") {
@@ -201,6 +231,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
     summarize: async (ref, label) => {
       get().openPanel();
       await run({ kind: "summarize", ref, label });
+    },
+    explore: async (ref, label) => {
+      get().openPanel();
+      await run({ kind: "explore", ...(ref ? { ref } : {}), label: label?.trim().slice(0, 300) || "What should I explore next?" });
     },
     markPlanSaved: (turnId, count) =>
       set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "plan" ? { ...turn, saved: count } : turn)) })),
