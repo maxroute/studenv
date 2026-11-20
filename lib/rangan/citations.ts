@@ -6,7 +6,9 @@
 export type OpenTarget =
   | { kind: "note"; noteId: string; blockId: string | null }
   | { kind: "pdf"; assetId: string; page: number; itemId: string | null }
-  | { kind: "item"; itemId: string };
+  | { kind: "item"; itemId: string }
+  /** An outside reference (Wikipedia), opened in a new tab. */
+  | { kind: "web"; url: string };
 
 export type CitablePassage = {
   title: string;
