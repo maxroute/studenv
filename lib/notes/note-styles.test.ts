@@ -117,3 +117,20 @@ test("the card preview keeps the page's first blocks in order and shape", () => 
     { type: "resource", ref: "item:pdf_1" },
   ]);
 });
+
+test("the card preview numbers ordered lists, indents nested lists and keeps unknown blocks", () => {
+  const para = (id: string, text: string) => ({ type: "paragraph", attrs: { id }, content: [{ type: "text", text }] });
+  const item = (id: string, text: string, extra: unknown[] = []) => ({ type: "listItem", attrs: { id }, content: [para(`${id}p`, text), ...extra] });
+  const parsed = parseNoteDoc(
+    envelope([
+      { type: "orderedList", attrs: { start: 3 }, content: [item("b_l000000011", "three"), item("b_l000000012", "four", [{ type: "bulletList", content: [item("b_l000000013", "inner")] }])] },
+      { type: "blockMath", attrs: { id: "b_m000000001", latex: "x^2" } },
+    ]),
+  );
+  assert.deepEqual(summarizeNoteDoc(parsed.envelope.doc).preview, [
+    { type: "bullet", text: "three", ordered: true, index: 3 },
+    { type: "bullet", text: "four", ordered: true, index: 4 },
+    { type: "bullet", text: "inner", ordered: false, depth: 1 },
+    { type: "text", text: "x^2" },
+  ]);
+});

@@ -14,7 +14,7 @@ import { inlineText, noteDocToPlainText } from "./plain-text";
 export type PreviewBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "text"; text: string }
-  | { type: "bullet"; text: string; ordered: boolean }
+  | { type: "bullet"; text: string; ordered: boolean; index?: number; depth?: number }
   | { type: "todo"; text: string; checked: boolean }
   | { type: "quote"; text: string }
   | { type: "callout"; text: string }
@@ -79,6 +79,40 @@ const clip = (text: string) => {
 const innerText = (node: NoteNode): string =>
   (node.content ?? []).map((child) => (child.type === "text" || !child.content ? inlineText([child]) : innerText(child))).join(" ");
 
+const LIST_TYPES = new Set(["bulletList", "orderedList"]);
+const MAX_LIST_DEPTH = 3;
+
+/** Text of a list item's own blocks, leaving nested lists to be listed on their own lines. */
+const itemOwnText = (item: NoteNode): string =>
+  (item.content ?? []).filter((child) => !LIST_TYPES.has(child.type)).map((child) => (child.type === "text" || !child.content ? inlineText([child]) : innerText(child))).join(" ");
+
+/** Every text run under a node, for block types the preview has no special look for. */
+const deepText = (node: NoteNode): string => {
+  if (node.type === "text") return node.text ?? "";
+  if (node.type === "citation" && typeof node.attrs?.quote === "string") return node.attrs.quote;
+  if (node.type === "blockMath" && typeof node.attrs?.latex === "string") return node.attrs.latex;
+  const inline = inlineText([node]);
+  const children = (node.content ?? []).map(deepText).filter((part) => part.trim());
+  return [inline, ...children].filter(Boolean).join(" ");
+};
+
+/** A list as lines: numbered lists carry their number, nested lists follow their parent indented. */
+function listLines(list: NoteNode, depth: number, push: (block: PreviewBlock) => void) {
+  const ordered = list.type === "orderedList";
+  const start = Number(list.attrs?.start);
+  let number = Number.isInteger(start) ? start : 1;
+  for (const item of list.content ?? []) {
+    const text = clip(itemOwnText(item));
+    if (text) {
+      push({ type: "bullet", text, ordered, ...(ordered ? { index: number } : {}), ...(depth > 0 ? { depth } : {}) });
+    }
+    if (ordered) number += 1;
+    if (depth < MAX_LIST_DEPTH) {
+      for (const child of item.content ?? []) if (LIST_TYPES.has(child.type)) listLines(child, depth + 1, push);
+    }
+  }
+}
+
 /** The first blocks as they read on the page: headings, text, lists, to-dos, resources. */
 export function previewBlocks(nodes: readonly NoteNode[], limit = PREVIEW_BLOCKS): PreviewBlock[] {
   const out: PreviewBlock[] = [];
@@ -100,10 +134,7 @@ export function previewBlocks(nodes: readonly NoteNode[], limit = PREVIEW_BLOCKS
       }
       case "bulletList":
       case "orderedList":
-        for (const item of node.content ?? []) {
-          const text = clip(innerText(item));
-          if (text) push({ type: "bullet", text, ordered: node.type === "orderedList" });
-        }
+        listLines(node, 0, push);
         break;
       case "taskList":
         for (const item of node.content ?? []) {
@@ -145,8 +176,12 @@ export function previewBlocks(nodes: readonly NoteNode[], limit = PREVIEW_BLOCKS
       case "horizontalRule":
         push({ type: "divider" });
         break;
-      default:
+      default: {
+        // Tables, citations, math, columns, unknown blocks: show their text rather than skip them.
+        const text = clip(deepText(node));
+        if (text) push({ type: "text", text });
         break;
+      }
     }
   }
   return out;
