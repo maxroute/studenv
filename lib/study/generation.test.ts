@@ -93,6 +93,7 @@ function setup(options: { reply?: string; allowed?: boolean; found?: LoadedStudy
     refundQuestion: async () => {
       calls.refunded += 1;
     },
+    findSources: async () => [],
     loadSource: async (userId, ref) => (userId === "u1" && ref.type === "asset" && ref.id === "asset1" ? (options.found === undefined ? source : options.found) : null),
     complete: async (messages) => {
       calls.prompts.push(messages.map((m) => m.content).join("\n"));

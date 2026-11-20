@@ -33,6 +33,13 @@ const baseTaskSchema = z.object({
 
 export const createTaskSchema = baseTaskSchema.strict();
 
+/** Most tasks added in one request: a 90-day study plan fits well within it. */
+export const MAX_BATCH_TASKS = 200;
+
+export const createTasksSchema = z.object({
+  tasks: z.array(createTaskSchema).min(1).max(MAX_BATCH_TASKS),
+}).strict();
+
 export const updateTaskSchema = baseTaskSchema
   .partial()
   .strict()

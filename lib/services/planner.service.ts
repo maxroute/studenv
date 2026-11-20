@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import type { CreateTaskInput } from "@/lib/models/planner.model";
 
 function calculateNextDueDate(currentDate: Date, repeat: string): Date {
   const next = new Date(currentDate);
@@ -42,6 +43,17 @@ export async function createTask(userId: string, data: any) {
     const maxOrder = await tx.task.aggregate({ where: { userId }, _max: { order: true } });
     return tx.task.create({
       data: { ...data, userId, order: (maxOrder._max.order ?? -1) + 1 },
+    });
+  });
+}
+
+/** Adds tasks in the given order after the user's existing ones, all or none. */
+export async function createTasks(userId: string, tasks: CreateTaskInput[]) {
+  return prisma.$transaction(async (tx) => {
+    const maxOrder = await tx.task.aggregate({ where: { userId }, _max: { order: true } });
+    const first = (maxOrder._max.order ?? -1) + 1;
+    return tx.task.createManyAndReturn({
+      data: tasks.map((task, index) => ({ ...task, userId, order: first + index })),
     });
   });
 }

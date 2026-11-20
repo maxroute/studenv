@@ -10,6 +10,7 @@ import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
 import { RanganLogo } from "./rangan-launcher";
+import { RanganPlanCard } from "./rangan-plan-card";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -20,6 +21,7 @@ const EXAMPLES = [
   "What did I write about this topic?",
   "Connect my notes on two subjects",
   "Summarize what I know so far",
+  "Plan my revision for the next two weeks",
 ];
 
 const SOURCE_LABEL: Record<string, string> = { note: "Page", pdf: "PDF", transcript: "Video", item: "Shelf" };
@@ -216,6 +218,15 @@ export function RanganPanel() {
             </div>
           ) : turn.role === "assistant" ? (
             <Answer key={turn.id} turn={turn} onOpen={openCitation} />
+          ) : turn.role === "plan" ? (
+            <RanganPlanCard
+              key={turn.id}
+              turn={turn}
+              onNavigate={() => {
+                // The planner page replaces what's in front; on phones the panel would cover it.
+                if (isNarrow() || onBoard) close();
+              }}
+            />
           ) : (
             <div key={turn.id} className="rangan-error" role="alert">
               <span>{turn.content}</span>

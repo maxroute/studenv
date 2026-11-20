@@ -587,3 +587,110 @@ body:has(.note-keyboard-bar) .rangan-fab {
   border-radius: 50%;
 }
 
+
+/* A study plan in the chat */
+.rangan-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 12px;
+}
+
+.rangan-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--amber);
+}
+
+.rangan-plan-goal {
+  min-width: 0;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rangan-plan-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.rangan-plan-note {
+  margin: 0;
+  color: var(--amber);
+  font-size: 12.5px;
+}
+
+.rangan-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rangan-plan-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.rangan-plan-day {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rangan-plan-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rangan-plan-min {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rangan-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rangan-plan-add {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  padding: 0 14px;
+  color: #0e0e0e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rangan-plan-add:disabled {
+  opacity: 0.5;
+}
+
+.rangan-plan-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green, #6fcf8b);
+  font-size: 13px;
+}
