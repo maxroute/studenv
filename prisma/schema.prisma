@@ -80,6 +80,7 @@ model User {
   flashcards          Flashcard[]
   flashcardReviews    FlashcardReview[]
   flashcardReviewLogs FlashcardReviewLog[]
+  ranganUsage         RanganUsage[]
 }
 
 model Session {
@@ -749,4 +750,16 @@ model ContentLink {
   @@unique([sourceType, sourceId, sourceAnchor, targetType, targetId, targetAnchor, kind])
   @@index([ownerId, targetType, targetId, targetAnchor])
   @@index([sourceType, sourceId])
+}
+
+/// Rangan questions asked per user per UTC day; enforces the daily allowance.
+model RanganUsage {
+  userId    String
+  day       DateTime @db.Date
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
 }
