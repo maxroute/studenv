@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Menu, Plus, Search } from "lucide-react";
 import toast from "react-hot-toast";
-import { RanganButton } from "@/components/rangan/rangan-button";
 import { BrandLockup } from "@/components/ui/brand-logo";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useUser } from "@/hooks/useUser";
@@ -177,8 +176,6 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
             <span className="topbar-action-label">Home</span>
           </button>
         ) : null}
-
-        <RanganButton className="rangan-topbar-btn" labelClassName="topbar-action-label" iconClassName="topbar-action-icon" />
 
         <button
           aria-label="New page"

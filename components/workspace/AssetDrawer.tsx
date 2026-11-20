@@ -472,6 +472,7 @@ export function AssetDrawer() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            data-asset-drawer="true"
             initial={{ x: 300, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}

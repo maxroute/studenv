@@ -1,42 +1,87 @@
 /* Rangan: the toolbar button and the side panel (full screen on phones). */
 
-.rangan-topbar-btn {
+.rangan-fab {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + var(--rangan-fab-lift, 0px));
+  /* Above pages and boards; below dialogs (900), drawers (950, 1001), the
+     video player (1100) and side panels (12000+), which cover it when open. */
+  z-index: 850;
   display: flex;
+  width: 58px;
+  height: 58px;
   align-items: center;
-  gap: 5px;
-  height: 32px;
-  border: 1px solid var(--amber-dim);
-  border-radius: 5px;
-  background: var(--amber-glow);
-  padding: 0 12px;
-  color: var(--amber);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  justify-content: center;
+  border-radius: 50%;
+  background: #0e0e0e;
+  padding: 0;
+  box-shadow:
+    0 0 0 2px var(--amber-dim),
+    0 10px 28px rgb(0 0 0 / 35%);
+  touch-action: manipulation;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, bottom 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.rangan-topbar-btn:hover,
-.rangan-topbar-btn[aria-expanded="true"] {
-  border-color: var(--amber);
-  background: var(--amber-dim);
+.rangan-fab:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 0 0 2px var(--amber),
+    0 14px 32px rgb(0 0 0 / 40%);
 }
 
-@media (max-width: 1023px) {
-  .rangan-topbar-btn {
-    width: 34px;
-    height: 34px;
-    justify-content: center;
-    padding: 0;
-    border-radius: 6px;
+.rangan-fab:active {
+  transform: scale(0.96);
+}
+
+.rangan-fab:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
+/* The board's resource drawer lives inside the board's own stacking layer,
+   so no z-index can lift it above this button; step aside while it is open. */
+/* Same for the phone sidebar drawer (90) and its backdrop (85), which sit
+   below this button's layer. */
+body:has([data-asset-drawer]) .rangan-fab,
+body:has(.sidebar.mobile-open) .rangan-fab {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rangan-fab-logo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+@media (max-width: 639px) {
+  .rangan-fab {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--rangan-fab-lift, 0px));
+    width: 54px;
+    height: 54px;
   }
 }
 
-@media (max-width: 561px) {
-  .rangan-topbar-btn {
-    width: 32px;
-    height: 32px;
+@media (prefers-reduced-motion: reduce) {
+  .rangan-fab {
+    transition: none;
   }
+
+  .rangan-fab:hover,
+  .rangan-fab:active {
+    transform: none;
+  }
+}
+
+.rangan-header-logo {
+  border-radius: 50%;
+}
+
+.rangan-empty-logo {
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--amber-dim);
 }
 
 .rangan-panel {

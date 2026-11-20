@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, FileText, Loader2, NotebookText, RotateCcw, Send, Sparkles, Trash2, X } from "lucide-react";
+import { BookOpen, FileText, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
+import { RanganLogo } from "./rangan-launcher";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -177,7 +178,7 @@ export function RanganPanel() {
   if (turns.length === 0 && !pending) {
     body = (
       <div className="rangan-empty">
-        <Sparkles size={22} aria-hidden />
+        <RanganLogo size={64} className="rangan-empty-logo" />
         <p className="rangan-empty-title">Ask about anything in your library</p>
         <p className="rangan-empty-text">Rangan reads your pages, PDFs and videos and answers with links to where it found things.</p>
         <div className="rangan-examples">
@@ -232,7 +233,7 @@ export function RanganPanel() {
       <aside className="rangan-panel" aria-label="Rangan" data-workspace-overlay="true">
         <header className="rangan-header">
           <div className="rangan-heading">
-            <Sparkles size={17} aria-hidden />
+            <RanganLogo size={28} className="rangan-header-logo" />
             <span className="rangan-name">Rangan</span>
             {usage ? (
               <span className={`rangan-usage${usage.remaining <= 3 ? " low" : ""}`} title="Resets at midnight UTC">
