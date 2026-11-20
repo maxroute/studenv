@@ -81,6 +81,8 @@ model User {
   flashcardReviews    FlashcardReview[]
   flashcardReviewLogs FlashcardReviewLog[]
   ranganUsage         RanganUsage[]
+  ranganSources       RanganSource[]
+  ranganChunks        RanganChunk[]
 }
 
 model Session {
@@ -762,4 +764,52 @@ model RanganUsage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, day])
+}
+
+// ---------------------------------------------------------------------------
+// Rangan library index: passages of a user's notes, PDFs, transcripts and
+// articles, searchable by keyword (search_vector) and by meaning (embedding).
+// Derived data, rebuilt from the sources at any time.
+// ---------------------------------------------------------------------------
+
+/// One indexed source; `version` says which state of it the passages reflect.
+model RanganSource {
+  sourceType String   @db.VarChar(16)
+  sourceId   String   @db.VarChar(128)
+  ownerId    String
+  title      String   @db.VarChar(500)
+  version    String   @db.VarChar(128)
+  indexedAt  DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([sourceType, sourceId])
+  @@index([ownerId])
+}
+
+/// A passage of a source. `search_vector` is kept by a trigger; `embedding` is
+/// filled after the row is written and stays null when embeddings are unavailable.
+model RanganChunk {
+  id           String                       @id @default(cuid())
+  ownerId      String
+  sourceType   String                       @db.VarChar(16)
+  sourceId     String                       @db.VarChar(128)
+  ordinal      Int
+  /// Note block id, PDF page anchor (`page3`) or "" for the whole source.
+  anchor       String                       @default("") @db.VarChar(256)
+  title        String                       @db.VarChar(500)
+  heading      String                       @default("") @db.VarChar(500)
+  content      String                       @db.Text
+  contentHash  String                       @db.VarChar(64)
+  searchVector Unsupported("tsvector")?     @map("search_vector")
+  embedding    Unsupported("vector(1024)")?
+  embeddedAt   DateTime?
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([sourceType, sourceId])
+  @@index([ownerId, embeddedAt])
 }
