@@ -18,6 +18,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { RanganLogo } from "@/components/rangan/rangan-launcher";
+import { useStudyPlanDraft } from "@/hooks/use-study-plan-draft";
+import type { StudyPlanResult } from "@/lib/services/study.service";
+import { StudyPlanDialog } from "./StudyPlanDialog";
 import { TaskDialog } from "./TaskDialog";
 import styles from "./planner.module.css";
 
@@ -99,6 +103,15 @@ export default function PlannerPage() {
   const [sortBy, setSortBy] = useState("manual");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPlanOpen, setIsPlanOpen] = useState(false);
+  const [draftPlan, setDraftPlan] = useState<StudyPlanResult | null>(null);
+  // A plan from the Rangan chat that the student chose to adjust here.
+  const pendingDraft = useStudyPlanDraft((state) => state.draft);
+  useEffect(() => {
+    if (!pendingDraft) return;
+    setDraftPlan(useStudyPlanDraft.getState().take());
+    setIsPlanOpen(true);
+  }, [pendingDraft]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
@@ -449,6 +462,10 @@ export default function PlannerPage() {
 
           <div className={styles.headerActions}>
             <div className={styles.dateChip}>{todayLabel}</div>
+            <button className={styles.secondaryButton} onClick={() => setIsPlanOpen(true)}>
+              <RanganLogo size={20} className={styles.ranganIcon} />
+              Plan with Rangan
+            </button>
             <button className={styles.primaryButton} onClick={openCreateDialog}>
               <Plus className={styles.buttonIcon} />
               Add task
@@ -729,6 +746,16 @@ export default function PlannerPage() {
         }}
         onSave={() => void mutateTasks()}
         task={editingTask}
+      />
+
+      <StudyPlanDialog
+        open={isPlanOpen}
+        initialPlan={draftPlan}
+        onClose={() => {
+          setIsPlanOpen(false);
+          setDraftPlan(null);
+        }}
+        onSaved={() => void mutateTasks()}
       />
     </div>
   );

@@ -2,7 +2,10 @@
 
 import { create } from "zustand";
 import type { OpenTarget } from "@/lib/rangan/citations";
+import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
+import type { StudyPlanResult } from "@/lib/services/study.service";
+import { isPlanRequest } from "@/lib/study/plan-intent";
 
 export type RanganCitationView = {
   n: number;
@@ -17,12 +20,15 @@ export type RanganCitationView = {
 /** What a turn asked for, so a failed one can be sent again exactly. */
 export type RanganRequest =
   | { kind: "ask"; question: string; focus?: { text: string; title?: string } }
-  | { kind: "summarize"; ref: string; label: string };
+  | { kind: "summarize"; ref: string; label: string }
+  | { kind: "plan"; request: string };
 
 export type RanganTurn =
   | { id: string; role: "user"; content: string; quote?: string }
   | { id: string; role: "assistant"; content: string; citations: RanganCitationView[]; partial?: boolean }
-  | { id: string; role: "error"; content: string; retry: RanganRequest | null };
+  | { id: string; role: "error"; content: string; retry: RanganRequest | null }
+  /** A study plan shown as a card; `saved` is how many sessions were added to the planner. */
+  | { id: string; role: "plan"; plan: StudyPlanResult; saved: number | null };
 
 type RanganState = {
   open: boolean;
@@ -41,6 +47,8 @@ type RanganState = {
   summarize: (ref: string, label: string) => Promise<void>;
   /** Sends a failed request again, in place of the failed attempt. */
   retry: (request: RanganRequest) => Promise<void>;
+  /** Records that a plan card's sessions were added to the planner. */
+  markPlanSaved: (turnId: string, count: number) => void;
 };
 
 /** Turns sent back as context, newest last; the API accepts at most 10. */
@@ -62,7 +70,9 @@ function usageFrom(body: unknown): RanganUsageSummary | null {
   if (typeof body !== "object" || body === null) return null;
   const direct = (body as { usage?: unknown }).usage;
   const nested = (body as { details?: { usage?: unknown } }).details?.usage;
-  const usage = direct ?? nested;
+  // Study routes wrap their result as { ok, data }.
+  const wrapped = (body as { data?: { usage?: unknown } }).data?.usage;
+  const usage = direct ?? nested ?? wrapped;
   return typeof usage === "object" && usage !== null && typeof (usage as RanganUsageSummary).remaining === "number"
     ? (usage as RanganUsageSummary)
     : null;
@@ -80,20 +90,24 @@ export const useRanganStore = create<RanganState>((set, get) => {
   async function run(request: RanganRequest) {
     if (get().pending) return;
     const history = get()
-      .turns.filter((turn): turn is Extract<RanganTurn, { role: "user" | "assistant" }> => turn.role !== "error")
+      .turns.filter((turn): turn is Extract<RanganTurn, { role: "user" | "assistant" }> => turn.role === "user" || turn.role === "assistant")
       .slice(-HISTORY_TURNS)
       .map((turn) => ({ role: turn.role, content: turn.content.slice(0, HISTORY_CHARS) }));
     const userTurn: RanganTurn =
       request.kind === "summarize"
         ? { id: newId(), role: "user", content: request.label }
-        : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
+        : request.kind === "plan"
+          ? { id: newId(), role: "user", content: request.request }
+          : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
     set((state) => ({ pending: true, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
 
-    const url = request.kind === "summarize" ? "/api/rangan/summarize" : "/api/rangan/ask";
+    const url = request.kind === "summarize" ? "/api/rangan/summarize" : request.kind === "plan" ? "/api/study/plan" : "/api/rangan/ask";
     const payload =
       request.kind === "summarize"
         ? { ref: request.ref }
-        : { question: request.question, ...(history.length ? { history } : {}), ...(request.focus ? { focus: request.focus } : {}) };
+        : request.kind === "plan"
+          ? { request: request.request, today: localDay() }
+          : { question: request.question, ...(history.length ? { history } : {}), ...(request.focus ? { focus: request.focus } : {}) };
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -105,7 +119,23 @@ export const useRanganStore = create<RanganState>((set, get) => {
       if (usage) set({ usage });
       if (!response.ok) {
         const retry = NOT_RETRYABLE.has(response.status) ? null : request;
-        set((state) => ({ turns: [...state.turns, { id: newId(), role: "error", content: errorMessage(response.status, body), retry }] }));
+        const content =
+          request.kind === "plan" && response.status === 404
+            ? "Rangan couldn't find notes about that in your library. Name the subject, or choose the material yourself in Planner → Plan with Rangan."
+            : errorMessage(response.status, body);
+        set((state) => ({ turns: [...state.turns, { id: newId(), role: "error", content, retry }] }));
+        return;
+      }
+      if (request.kind === "plan") {
+        const plan = (body as { data?: StudyPlanResult } | null)?.data;
+        set((state) => ({
+          turns: [
+            ...state.turns,
+            plan
+              ? { id: newId(), role: "plan", plan, saved: null }
+              : { id: newId(), role: "error", content: "Rangan couldn't plan that. Please try again.", retry: request },
+          ],
+        }));
         return;
       }
       const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown };
@@ -156,7 +186,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
     },
     ask: async (raw) => {
       const question = raw.trim();
-      if (question) await run({ kind: "ask", question: question.slice(0, 2_000) });
+      if (!question) return;
+      // "Plan my biology test for Dec 4": answered with a plan card instead of text.
+      if (isPlanRequest(question)) await run({ kind: "plan", request: question.slice(0, 500) });
+      else await run({ kind: "ask", question: question.slice(0, 2_000) });
     },
     explain: async (raw, title) => {
       const text = raw.trim().slice(0, 4_000);
@@ -169,6 +202,8 @@ export const useRanganStore = create<RanganState>((set, get) => {
       get().openPanel();
       await run({ kind: "summarize", ref, label });
     },
+    markPlanSaved: (turnId, count) =>
+      set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "plan" ? { ...turn, saved: count } : turn)) })),
     retry: async (request) => {
       set((state) => {
         const turns = state.turns.filter((turn) => turn.role !== "error");

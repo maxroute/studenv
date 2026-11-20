@@ -103,6 +103,33 @@
   font-weight: 500;
 }
 
+.secondaryButton {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px 0 10px;
+  border: 2px solid #292a29;
+  border-radius: 10px;
+  background: #181918;
+  color: #e4dfcf;
+  font-size: 14px;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.secondaryButton:hover {
+  border-color: rgba(250, 169, 31, 0.45);
+  background: #1e1f1d;
+}
+
+.ranganIcon {
+  border-radius: 999px;
+}
+
 .buttonIcon,
 .quickIcon {
   width: 16px;
@@ -811,9 +838,19 @@
     padding-top: 0;
   }
 
+  .headerActions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .dateChip,
-  .primaryButton {
+  .primaryButton,
+  .secondaryButton {
     flex: 1;
+  }
+
+  .dateChip {
+    flex-basis: 100%;
   }
 
   .statsGrid {
