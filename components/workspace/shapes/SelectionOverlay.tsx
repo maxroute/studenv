@@ -9,6 +9,7 @@ import { useSelectionStore } from "@/lib/workspace/selection-engine";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import type { ResizeHandle, Bounds } from "@/lib/workspace/transform-engine";
 import { computeResize, computeRotation, shouldLockAspectRatioOnResize } from "@/lib/workspace/transform-engine";
+import { computeFreeTextResize, isCornerHandle, isScaleResizableType, scaleStrokeGeometry } from "@/lib/workspace/primitive-resize";
 import { getShapePath } from "@/lib/workspace/shape-paths";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { getEffectiveRotation, getSelectionFrame, usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
@@ -20,6 +21,8 @@ interface SelectionOverlayProps {
   screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
   hoveredItemId?: string | null;
   interactive?: boolean;
+  /** Free text being typed into: its resize handles stay hidden meanwhile. */
+  editingItemId?: string | null;
 }
 
 interface TransformState {
@@ -27,6 +30,7 @@ interface TransformState {
   handle?: ResizeHandle;
   startBounds: Map<string, Bounds>; // itemId -> starting bounds
   startRotations: Map<string, number>; // itemId -> starting rotation
+  startProps: Map<string, Record<string, unknown>>; // itemId -> props when the gesture began
   startPointer: { x: number; y: number };
 }
 
@@ -51,7 +55,7 @@ function getRotatedCursor(handle: ResizeHandle, rotation: number): string {
   }
 }
 
-export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, interactive = true }: SelectionOverlayProps) {
+export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, interactive = true, editingItemId = null }: SelectionOverlayProps) {
   const { selectedIds, rotationPreviews, draggingIds } = useSelectionStore();
   const { items, updateItem, batchUpdateItems } = useWorkspaceStore();
   const [transformState, setTransformState] = useState<TransformState | null>(null);
@@ -188,9 +192,11 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
     const startPointer = screenToWorld(e.clientX, e.clientY);
     const startBounds = new Map<string, Bounds>();
     const startRotations = new Map<string, number>();
+    const startProps = new Map<string, Record<string, unknown>>();
     targets.forEach((item) => {
       startBounds.set(item.id, { x: item.x, y: item.y, w: item.w, h: item.h });
       startRotations.set(item.id, item.rotation ?? 0);
+      startProps.set(item.id, item.props as Record<string, unknown>);
     });
 
     setTransformState({
@@ -198,6 +204,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       handle,
       startBounds,
       startRotations,
+      startProps,
       startPointer,
     });
   };
@@ -223,6 +230,7 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
       type,
       startBounds,
       startRotations: new Map([[itemId, item.rotation]]),
+      startProps: new Map([[itemId, item.props as Record<string, unknown>]]),
       startPointer,
     });
   };
@@ -275,6 +283,18 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
           const nextItemW = Math.max(1, bounds.w * scaleX);
           const nextItemH = Math.max(1, bounds.h * scaleY);
           const props = { ...item.props } as Record<string, unknown>;
+          // Ink and text carry their size in the stored path / font size.
+          const startItemProps = transformState.startProps.get(itemId);
+          if (item.type === "drawing" && startItemProps && typeof startItemProps.d === "string") {
+            const scaled = scaleStrokeGeometry(
+              { d: startItemProps.d, points: startItemProps.points as { x: number; y: number }[] | undefined },
+              scaleX,
+              scaleY,
+            );
+            if (scaled) Object.assign(props, scaled);
+          } else if (item.type === "free-text" && startItemProps && typeof startItemProps.fontSize === "number") {
+            props.fontSize = Math.min(400, Math.max(8, startItemProps.fontSize * ((scaleX + scaleY) / 2)));
+          }
           const startPoint = props.startPoint as { x: number; y: number } | undefined;
           const endPoint = props.endPoint as { x: number; y: number } | undefined;
           if (startPoint) props.startPoint = { x: anchorX + (startPoint.x - anchorX) * scaleX, y: anchorY + (startPoint.y - anchorY) * scaleY };
@@ -289,6 +309,25 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
         transformState.startBounds.forEach((startBounds, itemId) => {
           const item = items.find((i) => i.id === itemId);
           if (!item) return;
+          const startItemProps = transformState.startProps.get(itemId);
+          if (item.type === "free-text" && startItemProps && typeof startItemProps.fontSize === "number") {
+            const next = computeFreeTextResize(
+              transformState.handle!,
+              startBounds,
+              startItemProps.fontSize,
+              deltaX,
+              deltaY,
+              transformState.startRotations.get(itemId) ?? 0,
+            );
+            if (next) {
+              updates.push({
+                id: itemId,
+                changes: { x: next.bounds.x, y: next.bounds.y, w: next.bounds.w, h: next.bounds.h },
+                props: { fontSize: next.fontSize },
+              });
+            }
+            return;
+          }
           const isAspectLocked = shouldLockAspectRatioOnResize(
             item.type,
             item.props as Record<string, unknown>,
@@ -302,9 +341,17 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
             isAspectLocked,
             transformState.startRotations.get(itemId) ?? 0
           );
+          const scaledStroke = item.type === "drawing" && startItemProps && typeof startItemProps.d === "string"
+            ? scaleStrokeGeometry(
+                { d: startItemProps.d, points: startItemProps.points as { x: number; y: number }[] | undefined },
+                newBounds.w / Math.max(1, startBounds.w),
+                newBounds.h / Math.max(1, startBounds.h),
+              )
+            : null;
           updates.push({
             id: itemId,
             changes: { x: newBounds.x, y: newBounds.y, w: newBounds.w, h: newBounds.h },
+            ...(scaledStroke ? { props: scaledStroke } : {}),
           });
         });
       }
@@ -650,6 +697,53 @@ export function SelectionOverlay({ canvasScale, screenToWorld, hoveredItemId, in
               ))}
 
 
+          </div>
+        );
+      })}
+      {/* Resize handles for ink and free text. They keep their own react-rnd drag
+          and outline; only the handles live here, on the stored frame. Free text
+          scales its font from the corners; strokes scale their path from any handle. */}
+      {interactive && draggingIds.length === 0 && selectedIds.length === 1 && allSelectedItems.map((item) => {
+        if (item.type === "connector" || !isScaleResizableType(item.type)) return null;
+        if ((item.props as { locked?: boolean }).locked === true || item.id === editingItemId) return null;
+        const frame = getSelectionFrame(item, getEffectiveRotation(item, rotationPreviews));
+        const handles = item.type === "free-text" ? baseHandles.filter(isCornerHandle) : baseHandles;
+        return (
+          <div
+            key={`scale-handles-${item.id}`}
+            style={{
+              position: "absolute",
+              left: frame.left,
+              top: frame.top,
+              width: frame.width,
+              height: frame.height,
+              pointerEvents: "none",
+              transform: `rotate(${frame.rotation}deg)`,
+              transformOrigin: "center",
+            }}
+          >
+            {handles.map((hType) => (
+              <div
+                key={hType}
+                data-no-canvas-gesture="true"
+                data-scale-handle={hType}
+                className="absolute bg-white border border-[#f5a623] rounded-full shadow-sm pointer-events-auto hover:bg-[#f5a623]/10 hover:scale-125 transition-all duration-100"
+                style={{
+                  width: handleSize,
+                  height: handleSize,
+                  cursor: getRotatedCursor(hType, frame.rotation),
+                  zIndex: 10,
+                  touchAction: "none",
+                  borderWidth: Math.max(1, 1.5 / canvasScale),
+                  ...handleStyles[hType],
+                }}
+                onPointerDown={(e) => handleResizeStart(e, item.id, hType)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+                onLostPointerCapture={handlePointerCancel}
+              />
+            ))}
           </div>
         );
       })}

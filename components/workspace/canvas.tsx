@@ -2466,6 +2466,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   screenToWorld={screenToWorld}
                   hoveredItemId={hoveredItemId}
                   interactive={activeTool === "select"}
+                  editingItemId={editingFreeTextId}
                 />
 
                 <ConnectorEditingLayer
