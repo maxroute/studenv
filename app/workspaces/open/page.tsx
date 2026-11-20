@@ -2,32 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { mutate } from "swr";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { takeNoteBoardRequest } from "@/lib/client/note-board-request";
 
 function getWorkspacePreloadKey(workspaceId: string) {
   return `workspace-preload:${workspaceId}`;
-}
-
-type OpenedBoard = { workspaceId: string; preload: Record<string, unknown>; nextUrl: string };
-
-/**
- * A page's board in one request: the board (created on first use), its scene,
- * and the page's card. The card's preview is put in the cache its card reads.
- */
-async function openNoteBoard(noteId: string): Promise<OpenedBoard> {
-  const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}/board`, { method: "POST" });
-  const json = await res.json().catch(() => null);
-  const data = json?.data;
-  if (!res.ok || typeof data?.workspaceId !== "string" || !data.workspace) {
-    throw new Error(typeof json?.error === "string" ? json.error : "The board could not be opened.");
-  }
-  if (data.card) void mutate(`/api/notes/${encodeURIComponent(noteId)}/card`, data.card, { revalidate: false });
-  return {
-    workspaceId: data.workspaceId,
-    preload: { ...data.workspace, noteCard: data.note ?? null, preloadedAt: Date.now() },
-    nextUrl: `/workspaces/${encodeURIComponent(data.workspaceId)}?addNote=${encodeURIComponent(noteId)}`,
-  };
 }
 
 function advanceProgress(
@@ -93,7 +72,7 @@ export default function OpenWorkspacePage() {
         setError(null);
         advanceProgress(setProgress, 16);
         const canvasCode = import("@/components/workspace/canvas");
-        const board = await openNoteBoard(id);
+        const board = await takeNoteBoardRequest(id);
         if (!active) return;
         advanceProgress(setProgress, 80);
         try {

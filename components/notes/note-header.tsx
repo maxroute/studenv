@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import toast from "react-hot-toast";
-import { Check, ChevronDown, LayoutDashboard, MoreHorizontal, Plus, X } from "lucide-react";
+import { Check, ChevronDown, LayoutDashboard, Loader2, MoreHorizontal, Plus, X } from "lucide-react";
+import { startOpeningNoteBoard } from "@/lib/client/note-board-request";
 import { useItem } from "@/hooks/useItems";
 import { useCollections } from "@/hooks/useCollections";
 import { buildItemUpdatePayload } from "@/lib/utils/item-patch";
@@ -28,8 +29,15 @@ export const noteBoardUrl = (noteId: string) => `/workspaces/open?note=${encodeU
  * screen at once; it fetches the board in one request.
  */
 export async function openNoteBoard(noteId: string, push: (url: string) => void) {
+  // The board request goes out now, alongside the navigation, instead of after it.
+  void startOpeningNoteBoard(noteId);
   push(noteBoardUrl(noteId));
 }
+
+/** Starts loading the canvas code before it is needed (hover, focus, touch). */
+const warmCanvas = () => {
+  void import("@/components/workspace/canvas");
+};
 
 /** A menu under a button, portalled and kept on screen (and above the phone keyboard). */
 function Popover({ anchor, onClose, children, label }: { anchor: HTMLElement; onClose: () => void; children: ReactNode; label: string }) {
@@ -115,7 +123,15 @@ export function NoteTopline({
   const router = useRouter();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Shown at once on click: the navigation to the loading screen can take a moment.
+  const [openingBoard, setOpeningBoard] = useState(false);
   const { item, mutate } = useItem(itemId);
+  // If the navigation never happens (offline, cancelled), do not stay stuck on "Opening…".
+  useEffect(() => {
+    if (!openingBoard) return;
+    const timer = window.setTimeout(() => setOpeningBoard(false), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [openingBoard]);
 
   const run = (action: () => void) => () => {
     setMenuOpen(false);
@@ -158,8 +174,23 @@ export function NoteTopline({
       {status}
       {!embedded ? (
         // A link, so a tap works even before the page's code has finished loading.
-        <Link href={noteBoardUrl(noteId)} prefetch={false} className="note-chip-button" title="Open this page's board">
-          <LayoutDashboard size={14} /> Board
+        <Link
+          href={noteBoardUrl(noteId)}
+          prefetch={false}
+          className="note-chip-button"
+          title="Open this page's board"
+          aria-busy={openingBoard}
+          onPointerEnter={warmCanvas}
+          onFocus={warmCanvas}
+          onTouchStart={warmCanvas}
+          onClick={(event) => {
+            // A new-tab click leaves this page alone; only a plain click opens the board here.
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            setOpeningBoard(true);
+            void startOpeningNoteBoard(noteId);
+          }}
+        >
+          {openingBoard ? <Loader2 size={14} className="animate-spin" /> : <LayoutDashboard size={14} />} {openingBoard ? "Opening…" : "Board"}
         </Link>
       ) : null}
       <button
