@@ -20,6 +20,26 @@ Object.assign(globalThis, {
   cancelAnimationFrame: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
 });
 
+// A toggle made open shows its body one tick later. JSDOM has no layout (every element reports no
+// offsetParent, which the toggle reads as "hidden") and its MutationObserver re-renders that open
+// toggle without end, so a test that makes a toggle would never finish. The editor only watches the
+// DOM for typing, which these tests never do; treat an element as visible unless it is inside [hidden].
+class NoMutationObserver {
+  observe() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+Object.assign(globalThis, { MutationObserver: NoMutationObserver, Event: dom.window.Event });
+Object.assign(dom.window, { MutationObserver: NoMutationObserver });
+Object.defineProperty(dom.window.HTMLElement.prototype, "offsetParent", {
+  configurable: true,
+  get(this: HTMLElement) {
+    return this.closest("[hidden]") ? null : this.parentElement ?? dom.window.document.body;
+  },
+});
+
 /** Types `value` into the open in-app dialog (equations ask for LaTeX) and submits it. */
 async function answerDialog(value: string) {
   await new Promise((resolve) => setTimeout(resolve, 0));
