@@ -5,7 +5,9 @@ import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
 import * as workspaceRepository from "@/lib/repositories/workspace.repository";
 import { ranganIndex } from "@/lib/services/rangan-index.server";
 import { createRanganService } from "@/lib/services/rangan.service";
-import { searchWikipedia } from "@/lib/web/wikipedia";
+import { findCommonsImage } from "@/lib/web/wikimedia-images";
+import { searchWikipedia, wikiLanguage } from "@/lib/web/wikipedia";
+import { findYouTubeVideo } from "@/lib/web/youtube-search";
 
 /** Rangan wired to the database and the real model chain. */
 export const rangan = createRanganService({
@@ -19,6 +21,8 @@ export const rangan = createRanganService({
   loadSource: (userId, type, id) => ranganIndex.loadSource(userId, type, id),
   recentNoteIds: indexRepository.recentNoteIds,
   completeQuick,
+  findImage: (query) => findCommonsImage(query),
+  findVideo: (query, subject) => findYouTubeVideo(query, subject, { apiKey: process.env.YOUTUBE_API_KEY, language: wikiLanguage(subject) }),
   ownsBoard: async (userId, boardId) => Boolean(await workspaceRepository.findWorkspaceById(boardId, userId)),
   searchWeb: async (query) =>
     (await searchWikipedia(query, { limit: 2 })).map((article) => ({
