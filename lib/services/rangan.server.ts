@@ -2,6 +2,7 @@ import { complete, completeQuick } from "@/lib/ai/providers";
 import { RANGAN_DAILY_LIMIT } from "@/lib/models/rangan.model";
 import * as indexRepository from "@/lib/repositories/rangan-index.repository";
 import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
+import * as workspaceRepository from "@/lib/repositories/workspace.repository";
 import { ranganIndex } from "@/lib/services/rangan-index.server";
 import { createRanganService } from "@/lib/services/rangan.service";
 import { searchWikipedia } from "@/lib/web/wikipedia";
@@ -18,6 +19,7 @@ export const rangan = createRanganService({
   loadSource: (userId, type, id) => ranganIndex.loadSource(userId, type, id),
   recentNoteIds: indexRepository.recentNoteIds,
   completeQuick,
+  ownsBoard: async (userId, boardId) => Boolean(await workspaceRepository.findWorkspaceById(boardId, userId)),
   searchWeb: async (query) =>
     (await searchWikipedia(query, { limit: 2 })).map((article) => ({
       ref: article.url,
