@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { studyPlanRequestSchema } from "@/lib/models/study.model";
-import { isPlanRequest } from "./plan-intent";
+import { isPlanRequest, refersToOpen } from "./plan-intent";
 import { createStudyService, type LoadedStudySource, type StudyDeps } from "@/lib/services/study.service";
 import {
   buildPlanSessions,
@@ -352,6 +352,9 @@ test("a chat message asks for a plan only when it names one or opens by asking f
     "I need a study schedule for the history test",
     "Could you make a schedule for my biology exam?",
     "Schedule my reading for this week",
+    "i want to plan this for my exam on friday",
+    "help me study this before my exam next week",
+    "I need to revise these notes by Sunday",
   ]) {
     assert.equal(isPlanRequest(message), true, message);
   }
@@ -362,6 +365,9 @@ test("a chat message asks for a plan only when it names one or opens by asking f
     "What did I write about the five-year plan?",
     "Make flashcards about mitosis",
     "planets in the solar system",
+    "What should I study before my exam?",
+    "how do I prepare for interviews",
+    "make flashcards to revise for my test",
     "",
   ]) {
     assert.equal(isPlanRequest(message), false, message);
@@ -388,4 +394,13 @@ test("a plan studies from the best match, plus others only when they match by ke
   );
   assert.deepEqual(pickPlanSources([result("pdf", "only", "keyword")]), [{ type: "asset", id: "only" }], "the best match is always used");
   assert.deepEqual(pickPlanSources([]), []);
+});
+
+test("a plan about \"this\" means what is open", () => {
+  for (const message of ["create a study plan for this page", "plan these notes for Friday", "help me finish it by Sunday", "plan the current chapter"]) {
+    assert.equal(refersToOpen(message), true, message);
+  }
+  for (const message of ["plan my biology test for Dec 4", "make me a study plan for chemistry", "Schedule my reading for this week", "revise for my exam these days"]) {
+    assert.equal(refersToOpen(message), false, message);
+  }
 });

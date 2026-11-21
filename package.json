@@ -18,7 +18,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.mjs",
-    "test:security": "tsx --test lib/security/request.test.ts lib/security/sanitize.test.ts lib/services/ai-generate.service.test.ts lib/auth/signed-in-redirect.test.ts",
+    "test:security": "tsx --test lib/security/request.test.ts lib/security/sanitize.test.ts lib/services/ai-generate.service.test.ts lib/auth/signed-in-redirect.test.ts lib/security/auth-limits.test.ts",
     "test:items": "tsx --test lib/utils/item-patch.test.ts lib/library/shelf-files.test.ts lib/client/navigation-progress.test.ts lib/client/load-state.test.ts lib/db/connection.test.ts",
     "test:pdf-text": "tsx --test lib/utils/pdf-text.test.ts",
     "test:refs": "tsx --test lib/refs/refs.test.ts lib/refs/extract/link-rows.test.ts",

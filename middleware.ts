@@ -7,9 +7,12 @@ import {
 } from "@/lib/security/headers";
 import {
   apiRateLimiter,
-  authRateLimiter,
   checkRateLimit,
+  resetPasswordIpLimiter,
+  signupIpLimiter,
+  verifyEmailIpLimiter,
 } from "@/lib/security/rateLimit";
+import { authIpBucket, retryMessage, type AuthIpBucket } from "@/lib/security/auth-limits";
 import { getRateLimitIdentifier } from "@/lib/security/request";
 import { signedInRedirect } from "@/lib/auth/signed-in-redirect";
 
@@ -47,19 +50,12 @@ async function readSessionToken(request: NextRequest) {
   });
 }
 
-function shouldUseAuthRateLimiter(pathname: string, method: string) {
-  if (pathname === "/api/auth/signup") return true;
-  if (pathname === "/api/auth/forgot-password") return true;
-  if (pathname === "/api/auth/reset-password") return true;
-  if (pathname === "/api/user/change-password") return true;
-  if (pathname.startsWith("/api/auth/session")) return false;
-  if (pathname.startsWith("/api/auth/providers")) return false;
-  if (pathname.startsWith("/api/auth/error")) return false;
-  if (pathname.startsWith("/api/auth/csrf")) return false;
-  if (pathname.startsWith("/api/auth/callback")) return false;
-  if (pathname.startsWith("/api/auth/signin")) return false;
-  return method === "POST" && pathname.startsWith("/api/auth/");
-}
+/** Auth steps with their own limit per network address; the rest share the general API limit. */
+const AUTH_IP_LIMITERS: Record<AuthIpBucket, typeof apiRateLimiter> = {
+  signup: signupIpLimiter,
+  "verify-email": verifyEmailIpLimiter,
+  "reset-password": resetPasswordIpLimiter,
+};
 
 function getRateLimitStatus(error: unknown) {
   if (!error || typeof error !== "object" || !("status" in error)) {
@@ -111,9 +107,8 @@ export default async function middleware(request: NextRequest) {
       );
     }
 
-    const limiter = shouldUseAuthRateLimiter(pathname, request.method)
-      ? authRateLimiter
-      : apiRateLimiter;
+    const bucket = authIpBucket(pathname, request.method);
+    const limiter = bucket ? AUTH_IP_LIMITERS[bucket] : apiRateLimiter;
 
     try {
       await checkRateLimit(
@@ -126,7 +121,10 @@ export default async function middleware(request: NextRequest) {
     } catch (error) {
       if (getRateLimitStatus(error) === 429) {
         const retryAfter = getRetryAfterSeconds(error);
-        const response = apiError("Too many requests. Please try again later.", 429);
+        const response = apiError(
+          retryAfter !== null ? retryMessage(Date.now() + retryAfter * 1000, Date.now(), bucket ? "attempts" : "requests") : "Too many requests. Please try again shortly.",
+          429,
+        );
         if (retryAfter !== null) {
           response.headers.set("Retry-After", String(retryAfter));
         }

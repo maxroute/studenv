@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { forgotPasswordSchema } from "@/lib/models/user.model";
 import { apiError, apiSuccess } from "@/lib/security/headers";
-import { passwordResetLimiter, checkRateLimit } from "@/lib/security/rateLimit";
+import { checkRateLimit, passwordResetEmailLimiter, passwordResetIpLimiter } from "@/lib/security/rateLimit";
+import { emailLimitKey } from "@/lib/security/email-key";
 import {
   getErrorResponse,
   getRateLimitIdentifier,
@@ -13,8 +14,10 @@ import * as authService from "@/lib/services/auth.service";
 export async function POST(request: NextRequest) {
   try {
     await requireJsonContentType(request);
-    await checkRateLimit(passwordResetLimiter, getRateLimitIdentifier(request));
+    await checkRateLimit(passwordResetIpLimiter, getRateLimitIdentifier(request));
     const body = await validateBody(request, forgotPasswordSchema);
+    // The same limit for any address, so a refusal says nothing about whether it has an account.
+    await checkRateLimit(passwordResetEmailLimiter, emailLimitKey(body.email));
     const result = await authService.requestPasswordReset(
       body.email,
       getRequestContext(request),
