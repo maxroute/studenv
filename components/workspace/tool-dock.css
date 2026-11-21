@@ -1,0 +1,52 @@
+/* The phone tool dock (canvas.tsx): collapsed to the active tool, or open as a
+   strip of tools. Sizes come from the shared scale in globals.css, and the
+   container's corners are concentric with the tool buttons inside it. */
+
+.td {
+  --td-btn: var(--ui-size);
+  --td-pad: clamp(3px, calc(var(--td-btn) * 0.12), 5px);
+  --td-radius: calc(var(--td-btn) * 0.3);
+  /* A tool button's corner plus the gap around it (padding and the 1px border)
+     is the container's corner, so the two curves run parallel. */
+  --td-outer: calc(var(--td-radius) + var(--td-pad) + 1px);
+  top: 5rem;
+  left: calc(var(--ui-edge) + env(safe-area-inset-left, 0px));
+}
+
+.td-closed {
+  width: var(--td-btn);
+  height: var(--td-btn);
+}
+
+.td-open {
+  box-sizing: border-box;
+  /* Exactly one button wide inside the padding and border, so a selected
+     tool's highlight is never clipped at the sides. */
+  width: calc(var(--td-btn) + var(--td-pad) * 2 + 2px);
+  padding: var(--td-pad);
+  border-radius: var(--td-outer);
+}
+
+.td-btn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--td-btn, var(--ui-size, 36px));
+  height: var(--td-btn, var(--ui-size, 36px));
+  padding: 0;
+  border-radius: var(--td-radius, 10px);
+}
+
+.td-btn > svg {
+  width: calc(var(--td-btn) * 0.56);
+  height: calc(var(--td-btn) * 0.56);
+}
+
+.td-rule {
+  flex: none;
+  width: calc(var(--td-btn) * 0.66);
+  height: 1px;
+  margin: 2px 0;
+  background: #f1f5f9;
+}

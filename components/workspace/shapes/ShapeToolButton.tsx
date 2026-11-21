@@ -203,14 +203,14 @@ export function ShapeToolButton({
   ];
 
   return (
-    <div ref={containerRef} className={`relative flex items-center justify-center select-none ${compact ? "h-9 w-9 shrink-0" : ""}`}>
+    <div ref={containerRef} className={`relative flex items-center justify-center select-none ${compact ? "td-btn shrink-0" : ""}`}>
       <button
         ref={buttonRef}
         type="button"
         onClick={handleButtonClick}
         aria-label={`Choose shape: ${SHAPE_LABELS[activeShapeKind]}`}
         aria-expanded={isOpen}
-        className={`${compact ? "flex h-9 w-9 items-center justify-center rounded-lg p-0" : "rounded-md p-2.5"} transition-colors ${
+        className={`${compact ? "td-btn" : "rounded-md p-2.5"} transition-colors ${
           isActive || isOpen ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-400"
         }`}
         title={`Shapes — ${SHAPE_LABELS[activeShapeKind]}`}

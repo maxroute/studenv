@@ -509,10 +509,10 @@ export function AssetDrawer() {
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-20 right-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border bg-white p-0 text-slate-600 shadow-lg transition-all hover:bg-indigo-50 hover:text-indigo-600 group"
+        className="fixed top-20 z-[1000] flex h-[var(--ui-size,36px)] w-[var(--ui-size,36px)] items-center justify-center rounded-full border bg-white p-0 text-slate-600 shadow-lg transition-all hover:bg-indigo-50 hover:text-indigo-600 group [right:calc(var(--ui-edge,12px)+env(safe-area-inset-right,0px))]"
         title="Asset Library"
       >
-        <Library className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        <Library className="group-hover:scale-110 transition-transform" style={{ width: "calc(var(--ui-size, 36px) * 0.56)", height: "calc(var(--ui-size, 36px) * 0.56)" }} />
       </button>
 
       {/* Drawer */}
