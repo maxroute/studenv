@@ -3,6 +3,8 @@
 import { mutate } from "swr";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { buildPlanSessions, planSessionTask, type PlanSettings } from "@/lib/study/plan";
+import { reportUsage } from "@/lib/client/usage-bus";
+import { taskPayload, type RanganTaskDraft } from "@/lib/rangan/task";
 
 // Shared by the Planner's "Plan with Rangan" dialog and the plan card in the
 // Rangan chat.
@@ -59,6 +61,7 @@ async function call<T>(url: string, body: unknown): Promise<ApiResult<T>> {
   try {
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const json = await response.json().catch(() => null);
+    reportUsage(json);
     return { ok: response.ok && Boolean(json?.ok), status: response.status, data: json?.data, error: json?.error, details: json?.details };
   } catch {
     return { ok: false, status: 0, error: "You seem to be offline. Check your connection and try again." };
@@ -77,6 +80,16 @@ export async function requestStudyPlan(body: PlanRequestBody) {
   else if (result.status === 400 || result.status === 404 || result.status === 429) message = result.error ?? "That did not work.";
   else message = "Rangan couldn't plan that right now, so your question was given back. Please try again in a minute.";
   return { ok: false as const, status: result.status, message, needSources };
+}
+
+/** Adds tasks Rangan drafted to the planner, all or none. */
+export async function saveDraftTasks(tasks: readonly RanganTaskDraft[]) {
+  const result = await call<unknown[]>("/api/planner/tasks/batch", { tasks: tasks.map(taskPayload) });
+  if (!result.ok) {
+    return { ok: false as const, message: result.status === 0 ? result.error ?? "You seem to be offline." : result.error ?? "The tasks could not be added. Please try again." };
+  }
+  void mutate(TASKS_KEY);
+  return { ok: true as const };
 }
 
 /** Adds the sessions to the planner as ordinary tasks, all or none. */

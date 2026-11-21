@@ -8,6 +8,7 @@ import { NotePdfViewer } from "@/components/notes/note-pdf-viewer";
 import type { StudySource } from "@/lib/models/study.model";
 import type { OpenTarget } from "@/lib/rangan/citations";
 import type { FlashcardsResult, QuizResult, StudySourceLink } from "@/lib/services/study.service";
+import { reportUsage } from "@/lib/client/usage-bus";
 
 // "Make from library": pick a page, PDF or video, then make flashcards (added
 // to the deck) or take a quiz on it. Each uses one daily Rangan question.
@@ -17,6 +18,7 @@ type Response<T> = { ok: boolean; status: number; data?: T; error?: string };
 async function call<T>(url: string, init?: RequestInit): Promise<Response<T>> {
   const response = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   const json = await response.json().catch(() => null);
+  reportUsage(json);
   return { ok: response.ok && Boolean(json?.ok), status: response.status, data: json?.data, error: json?.error };
 }
 

@@ -10,22 +10,30 @@ export async function getUsedCount(userId: string, day: Date): Promise<number> {
   return row?.count ?? 0;
 }
 
-async function incrementBelow(userId: string, day: Date, limit: number) {
-  const updated = await prisma.ranganUsage.updateMany({
-    where: { userId, day, count: { lt: limit } },
-    data: { count: { increment: 1 } },
-  });
-  return updated.count === 1;
+/**
+ * Adds one to the day's count if it is still below `limit` and returns the new
+ * count, or null when it is already at the limit (or there is no row yet). One
+ * statement, so the count returned is the one this request made: a parallel
+ * request can neither overspend the allowance nor change the number reported.
+ * The day is passed as plain text ("2026-11-21"), so no time zone can shift it.
+ */
+async function incrementBelow(userId: string, day: Date, limit: number): Promise<number | null> {
+  const date = day.toISOString().slice(0, 10);
+  const rows = await prisma.$queryRaw<Array<{ count: number }>>`
+    UPDATE "RanganUsage"
+    SET "count" = "count" + 1, "updatedAt" = NOW()
+    WHERE "userId" = ${userId} AND "day" = ${date}::date AND "count" < ${limit}
+    RETURNING "count"`;
+  return rows[0]?.count ?? null;
 }
 
 /**
- * Takes one question from the day's allowance. The check and the increment
- * are a single conditional UPDATE, so parallel requests cannot overspend it.
+ * Takes one question from the day's allowance, and says how many the day has
+ * used with it.
  */
 export async function consumeQuestion(userId: string, day: Date, limit: number): Promise<{ allowed: boolean; used: number }> {
-  if (await incrementBelow(userId, day, limit)) {
-    return { allowed: true, used: await getUsedCount(userId, day) };
-  }
+  const taken = await incrementBelow(userId, day, limit);
+  if (taken !== null) return { allowed: true, used: taken };
   const existing = await getUsedCount(userId, day);
   if (existing > 0 || limit < 1) return { allowed: false, used: existing };
   try {
@@ -34,8 +42,8 @@ export async function consumeQuestion(userId: string, day: Date, limit: number):
   } catch (error) {
     // Another request created the day's row first; count against it instead.
     if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
-    const allowed = await incrementBelow(userId, day, limit);
-    return { allowed, used: await getUsedCount(userId, day) };
+    const second = await incrementBelow(userId, day, limit);
+    return second !== null ? { allowed: true, used: second } : { allowed: false, used: await getUsedCount(userId, day) };
   }
 }
 

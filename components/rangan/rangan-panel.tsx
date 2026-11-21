@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Compass, FileText, Globe, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, Compass, FileText, Globe, History, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, SquarePen, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -14,8 +14,12 @@ import { RanganExploreCard } from "./rangan-explore-card";
 import { RanganBoardEditCard, RanganMapCard } from "./rangan-map-card";
 import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
+import { RanganTaskCard } from "./rangan-task-card";
+import { RanganHistory } from "./rangan-history";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
+import { resetLabel } from "@/lib/rangan/usage";
+import type { RanganUsageSummary } from "@/lib/models/rangan.model";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -150,6 +154,41 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
   );
 }
 
+/**
+ * How many of today's questions are left, and when that resets in the
+ * reader's own time. A change shows for a moment ("Used 1", "1 given back"),
+ * so it is clear what each request cost.
+ */
+function UsagePill({ usage }: { usage: RanganUsageSummary }) {
+  const previous = useRef<{ used: number; resetAt: string } | null>(null);
+  const [change, setChange] = useState<string | null>(null);
+
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = { used: usage.used, resetAt: usage.resetAt };
+    // Only a change within the same day; a new day's reset is not "given back".
+    if (!before || before.resetAt !== usage.resetAt || before.used === usage.used) return;
+    const delta = usage.used - before.used;
+    setChange(delta > 0 ? `Used ${delta}` : `${-delta} given back`);
+    const timer = window.setTimeout(() => setChange(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [usage.used, usage.resetAt]);
+
+  const reset = resetLabel(usage.resetAt);
+  return (
+    <span className={`rangan-usage${usage.remaining <= 3 ? " low" : ""}`} title={reset ? `Resets at ${reset} your time (midnight UTC)` : "Resets at midnight UTC"}>
+      {usage.remaining} of {usage.limit} left today
+      {usage.remaining <= 3 && reset ? <span className="rangan-usage-reset"> · resets {reset}</span> : null}
+      {change ? (
+        <span className="rangan-usage-change" role="status">
+          {" "}
+          · {change}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 /** Rangan's side panel: ask about your library, get answers that cite it. */
 export function RanganPanel() {
   const router = useRouter();
@@ -160,6 +199,8 @@ export function RanganPanel() {
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const loadingConversation = useRanganStore((state) => state.loadingConversation);
   const onBoard = pathname?.startsWith("/workspaces/") ?? false;
   const spent = usage !== null && usage.remaining <= 0;
   // The page in front of the student: the open page, or the page in the board's side panel.
@@ -226,6 +267,7 @@ export function RanganPanel() {
     const question = draft.trim();
     if (!question || pending || spent) return;
     setDraft("");
+    setShowHistory(false);
     // "What should I explore next?" gets a card built from the page in front of the student.
     if (isExploreRequest(question)) void explore(currentNoteId ? `note:${currentNoteId}` : undefined, question);
     else void ask(question);
@@ -239,7 +281,15 @@ export function RanganPanel() {
   };
 
   let body: ReactNode;
-  if (turns.length === 0 && !pending) {
+  if (showHistory) {
+    body = <RanganHistory onDone={() => setShowHistory(false)} />;
+  } else if (loadingConversation) {
+    body = (
+      <div className="rangan-thinking" aria-live="polite">
+        <Loader2 size={15} className="rangan-spin" aria-hidden /> Opening your chat…
+      </div>
+    );
+  } else if (turns.length === 0 && !pending) {
     body = (
       <div className="rangan-empty">
         <RanganLogo size={64} className="rangan-empty-logo" />
@@ -305,6 +355,14 @@ export function RanganPanel() {
                 if (isNarrow() && !onBoard) close();
               }}
             />
+          ) : turn.role === "task" ? (
+            <RanganTaskCard
+              key={turn.id}
+              turn={turn}
+              onNavigate={() => {
+                if (isNarrow() || onBoard) close();
+              }}
+            />
           ) : turn.role === "plan" ? (
             <RanganPlanCard
               key={turn.id}
@@ -341,18 +399,24 @@ export function RanganPanel() {
           <div className="rangan-heading">
             <RanganLogo size={28} className="rangan-header-logo" />
             <span className="rangan-name">Rangan</span>
-            {usage ? (
-              <span className={`rangan-usage${usage.remaining <= 3 ? " low" : ""}`} title="Resets at midnight UTC">
-                {usage.remaining} of {usage.limit} left today
-              </span>
-            ) : null}
+            {usage ? <UsagePill usage={usage} /> : null}
           </div>
           <div className="rangan-header-actions">
-            {turns.length > 0 ? (
-              <button type="button" className="rangan-icon-btn" onClick={clear} aria-label="New conversation" title="New conversation" disabled={pending}>
-                <Trash2 size={16} />
+            {turns.length > 0 && !showHistory ? (
+              <button type="button" className="rangan-icon-btn" onClick={clear} aria-label="New chat" title="New chat (this one stays in your chats)" disabled={pending}>
+                <SquarePen size={16} />
               </button>
             ) : null}
+            <button
+              type="button"
+              className={`rangan-icon-btn${showHistory ? " on" : ""}`}
+              onClick={() => setShowHistory((shown) => !shown)}
+              aria-label={showHistory ? "Back to the chat" : "Your chats"}
+              aria-pressed={showHistory}
+              title="Your chats"
+            >
+              <History size={17} />
+            </button>
             <button type="button" className="rangan-icon-btn" onClick={close} aria-label="Close Rangan" title="Close (Esc)">
               <X size={18} />
             </button>

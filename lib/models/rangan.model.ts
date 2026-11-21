@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { APP_AREAS } from "@/lib/rangan/task";
+import { CONVERSATION_TITLE_MAX, MAX_SAVED_TURNS, MAX_TURNS_PER_SAVE, SAVED_TURN_ROLES, TURN_ID, type StoredTurn } from "@/lib/rangan/conversation";
 
 /** Questions each student may ask Rangan per UTC day. */
 export const RANGAN_DAILY_LIMIT = 25;
@@ -56,6 +58,17 @@ export const ranganAskSchema = z
       })
       .strict()
       .optional(),
+    /** The part of the app the student asked from; it only settles unclear requests. */
+    where: z.enum(APP_AREAS).optional(),
+    /** The student's own day and time, so "before midnight" means their midnight. */
+    clock: z
+      .object({
+        today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        timeZone: z.string().trim().max(64).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -76,6 +89,8 @@ export type RanganUsageSummary = {
   remaining: number;
   /** Next UTC midnight, ISO string. */
   resetAt: string;
+  /** When this count was true, ISO string: a screen ignores a summary older than the one it shows. */
+  asOf: string;
 };
 
 /** Query of `GET /api/rangan/search`. */
@@ -90,3 +105,39 @@ export const ranganSearchSchema = z
 export const ranganExploreSchema = z.object({ ref: z.string().trim().min(1).max(420).optional() }).strict();
 
 export type RanganExploreInput = z.infer<typeof ranganExploreSchema>;
+
+// --- Saved chats ----------------------------------------------------------------
+
+/** Body of `POST /api/rangan/conversations` and `PATCH /api/rangan/conversations/[id]`. */
+export const ranganConversationTitleSchema = z
+  .object({ title: z.string().trim().min(1, "Give the chat a name.").max(CONVERSATION_TITLE_MAX) })
+  .strict();
+
+/** Body of `POST /api/rangan/conversations/[id]/turns`: new turns, or turns whose card changed. */
+export const ranganTurnsSchema = z
+  .object({
+    turns: z
+      .array(
+        z
+          .object({
+            clientId: z.string().regex(TURN_ID),
+            position: z.number().int().min(0).max(MAX_SAVED_TURNS - 1),
+            role: z.enum(SAVED_TURN_ROLES),
+            data: z.record(z.unknown()),
+          })
+          .strict(),
+      )
+      .max(MAX_TURNS_PER_SAVE),
+    /** Turns no longer in the chat (a question sent again after an error), by the panel's id. */
+    remove: z.array(z.string().regex(TURN_ID)).max(MAX_TURNS_PER_SAVE).optional(),
+  })
+  .strict()
+  .refine((body) => body.turns.length > 0 || (body.remove?.length ?? 0) > 0, "Nothing to save.");
+
+export type RanganTurnsInput = z.infer<typeof ranganTurnsSchema>;
+
+/** A saved chat in the history list. */
+export type RanganConversationSummary = { id: string; title: string; updatedAt: string };
+
+/** A saved chat with its turns, oldest first. */
+export type RanganConversationRecord = RanganConversationSummary & { turns: StoredTurn[] };

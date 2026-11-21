@@ -240,6 +240,7 @@ function setup(options: { reply?: string; failModel?: boolean; allowed?: boolean
       calls.consumed += 1;
       return { allowed: options.allowed ?? true, used: 3 };
     },
+    getUsedCount: async () => 3,
     refundQuestion: async () => {
       calls.refunded += 1;
     },

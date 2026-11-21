@@ -54,7 +54,7 @@ export function DashboardClient() {
     setNav,
   } = useAppStore();
   const debouncedQuery = useSearch(filters.q ?? "", 180);
-  const { data: loadedItems, items, isLoading, mutate, updateItem } = useItems({});
+  const { data: loadedItems, items, isLoading, error: itemsError, mutate, updateItem } = useItems({});
   const { collections } = useCollections();
   const activeCollectionId = filters.nav?.startsWith("collection:")
     ? filters.nav.slice("collection:".length)
@@ -341,8 +341,10 @@ export function DashboardClient() {
             <div className="main-title-row">
               <div className="main-title">{titleContent}</div>
               <span className="item-count">
-                {isLoading
-                  ? "Loading..."
+                {isLoading || !loadedItems
+                  ? itemsError
+                    ? "Connecting..."
+                    : "Loading..."
                   : `${visibleItems.length} ${visibleItems.length === 1 ? "entry" : "entries"}`}
               </span>
             </div>
@@ -451,7 +453,9 @@ export function DashboardClient() {
             items={visibleItems}
             selectedId={selectedId}
             view={filters.view ?? "grid"}
-            isLoading={isLoading}
+            isLoading={isLoading || (!loadedItems && !itemsError)}
+            failed={!loadedItems && Boolean(itemsError)}
+            onRetry={() => void mutate()}
             onSelect={(id) => {
               // Every item opens as a page; its details (status, tags, collections) live there.
               const picked = items.find((entry) => entry.id === id);

@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth/auth.config";
+import { ensureDatabaseReady } from "@/lib/db/prisma";
 
 export async function getServerSession() {
   return auth();
@@ -12,6 +13,10 @@ export async function requireAuth() {
     Object.assign(error, { status: 401 });
     throw error;
   }
+
+  // The session is a signed cookie and needs no database, so a cold database
+  // would otherwise fail the first query of the page. Wake it here, once.
+  await ensureDatabaseReady();
 
   return {
     ...session.user,

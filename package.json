@@ -19,7 +19,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.mjs",
     "test:security": "tsx --test lib/security/request.test.ts lib/security/sanitize.test.ts lib/services/ai-generate.service.test.ts lib/auth/signed-in-redirect.test.ts",
-    "test:items": "tsx --test lib/utils/item-patch.test.ts lib/library/shelf-files.test.ts lib/client/navigation-progress.test.ts",
+    "test:items": "tsx --test lib/utils/item-patch.test.ts lib/library/shelf-files.test.ts lib/client/navigation-progress.test.ts lib/client/load-state.test.ts lib/db/connection.test.ts",
     "test:pdf-text": "tsx --test lib/utils/pdf-text.test.ts",
     "test:refs": "tsx --test lib/refs/refs.test.ts lib/refs/extract/link-rows.test.ts",
     "test:flashcards": "tsx --test lib/flashcards/scheduler.test.ts",
@@ -38,7 +38,7 @@
     "test:workspace-boards": "tsx --test lib/workspace/mind-map.test.ts lib/workspace/board-edit.test.ts",
     "test:ink": "tsx --test lib/ink/ink.test.ts",
     "test:study": "tsx --test lib/study/generation.test.ts lib/study/plan.test.ts",
-    "test:rangan": "tsx --test lib/ai/providers.test.ts lib/rangan/citations.test.ts lib/rangan/rangan-index.test.ts lib/rangan/discover.test.ts lib/rangan/trust.test.ts lib/rangan/request.test.ts lib/rangan/page.test.ts lib/services/rangan.service.test.ts lib/services/rangan-board.service.test.ts lib/web/wikipedia.test.ts lib/web/wikimedia-images.test.ts lib/web/youtube-search.test.ts lib/rangan/board-text.test.ts lib/rangan/open-source.test.ts",
+    "test:rangan": "tsx --test lib/ai/providers.test.ts lib/rangan/citations.test.ts lib/rangan/rangan-index.test.ts lib/rangan/discover.test.ts lib/rangan/trust.test.ts lib/rangan/request.test.ts lib/rangan/page.test.ts lib/services/rangan.service.test.ts lib/services/rangan-board.service.test.ts lib/web/wikipedia.test.ts lib/web/wikimedia-images.test.ts lib/web/youtube-search.test.ts lib/rangan/board-text.test.ts lib/rangan/open-source.test.ts lib/rangan/usage.test.ts lib/rangan/task.test.ts lib/rangan/conversation.test.ts",
     "test:workspace": "npm run test:workspace-pointer && npm run test:workspace-drawing && npm run test:workspace-image && npm run test:workspace-image-resize && npm run test:workspace-connectors && npm run test:workspace-history && npm run test:workspace-context-menu && npm run test:workspace-lock && npm run test:workspace-resource-card && npm run test:workspace-forward-compat && npm run test:workspace-boards && npm run test:ink"
   },
   "prisma": {

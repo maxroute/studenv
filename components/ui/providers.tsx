@@ -7,6 +7,7 @@ import type { Session } from "next-auth";
 import { SWRConfig } from "swr";
 import { useRouter } from "next/navigation";
 import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
+import { retryDelay, shouldRetry } from "@/lib/client/load-state";
 
 function AuthCrossTabSync() {
   const router = useRouter();
@@ -104,6 +105,11 @@ export function Providers({ children, session }: PropsWithChildren<{ session?: S
           revalidateOnReconnect: false,
           refreshInterval: 0,
           dedupingInterval: 10000,
+          // Retry sooner than SWR's 5 to 10 s, and never repeat a request the server refused.
+          onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
+            if (!shouldRetry(error, retryCount)) return;
+            window.setTimeout(() => void revalidate({ retryCount }), retryDelay(retryCount));
+          },
         }}
       >
         {children}

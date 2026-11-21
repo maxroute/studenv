@@ -3387,6 +3387,21 @@ textarea {
   font-size: 18px;
 }
 
+.empty-retry {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.empty-retry:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .detail {
   border-left: 1px solid var(--border);
   background: var(--surface);

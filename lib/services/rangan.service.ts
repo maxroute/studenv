@@ -12,8 +12,10 @@ import {
   type OpenTarget,
 } from "@/lib/rangan/citations";
 import { snippet } from "@/lib/rangan/ranking";
+import { spendQuestion, usageSummary, utcDayStart } from "@/lib/rangan/usage";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
+import { asksForTask, clockOrUtc, parseTaskDrafts, TASK_SYSTEM_PROMPT, taskInstruction, type RanganTaskDraft } from "@/lib/rangan/task";
 import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
 import { openBoardPassages, openPagePassages, pickOpenPassages, type PassageOrigin } from "@/lib/rangan/open-source";
 import { extractJsonObject } from "@/lib/study/plan";
@@ -145,7 +147,15 @@ export type RanganPageEdit = Omit<RanganAnswer, "answer" | "kind"> & {
   changes: PageChange[];
 };
 
-export type RanganReply = RanganAnswer | RanganPageDraft | RanganPageEdit | RanganMapDraft | RanganBoardEdit;
+/** Tasks Rangan drafted for the planner, for the student to look over and add. Nothing is saved yet. */
+export type RanganTaskReply = Omit<RanganAnswer, "answer" | "kind"> & {
+  kind: "task";
+  /** Task drafts have no chat answer. */
+  answer?: undefined;
+  tasks: RanganTaskDraft[];
+};
+
+export type RanganReply = RanganAnswer | RanganPageDraft | RanganPageEdit | RanganMapDraft | RanganBoardEdit | RanganTaskReply;
 
 export type RanganSummary = RanganAnswer & {
   title: string;
@@ -228,20 +238,7 @@ function onSubject(text: string, reading: RequestReading | null): boolean {
   return (mentionsAny(text, reading.names) && terms >= 1) || terms >= 2;
 }
 
-/** The UTC midnight that starts the day containing `date`. */
-export function utcDayStart(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function usageSummary(limit: number, used: number, day: Date): RanganUsageSummary {
-  const clamped = Math.min(Math.max(used, 0), limit);
-  return {
-    limit,
-    used: clamped,
-    remaining: limit - clamped,
-    resetAt: new Date(day.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-  };
-}
+export { utcDayStart } from "@/lib/rangan/usage";
 
 function notFound() {
   return Object.assign(new Error("That page or file wasn't found, or it has no text to summarize yet."), { status: 404 });
@@ -300,14 +297,14 @@ export function createRanganService(deps: RanganDeps) {
    * model call that uses no daily question. Null when it can't be read; the
    * question is then searched as before.
    */
-  async function readRequest(question: string, history: RanganAskInput["history"], openPage?: string, openBoard?: string): Promise<RequestReading | null> {
+  async function readRequest(question: string, history: RanganAskInput["history"], openPage?: string, openBoard?: string, area?: RanganAskInput["where"]): Promise<RequestReading | null> {
     if (!deps.completeQuick) return null;
     const previous = [...(history ?? [])].reverse().find((turn) => turn.role === "user")?.content;
     try {
       const result = await deps.completeQuick(
         [
           { role: "system", content: READING_SYSTEM_PROMPT },
-          { role: "user", content: readingInstruction(question, previous, openPage, openBoard) },
+          { role: "user", content: readingInstruction(question, previous, openPage, openBoard, area) },
         ],
         { maxTokens: 300, temperature: 0 },
       );
@@ -371,23 +368,15 @@ export function createRanganService(deps: RanganDeps) {
 
   async function getUsage(userId: string): Promise<RanganUsageSummary> {
     const day = utcDayStart(deps.now());
-    return usageSummary(deps.dailyLimit, await deps.getUsedCount(userId, day), day);
+    return usageSummary(deps.dailyLimit, await deps.getUsedCount(userId, day), day, deps.now());
   }
 
   /**
    * Takes a question from today's allowance, runs `work`, and gives the
    * question back if `work` fails, so a student is never charged for an error.
    */
-  async function withQuestion<T>(userId: string, work: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
-    const day = utcDayStart(deps.now());
-    const taken = await deps.consumeQuestion(userId, day, deps.dailyLimit);
-    if (!taken.allowed) throw allowanceSpent(usageSummary(deps.dailyLimit, taken.used, day));
-    try {
-      return await work(usageSummary(deps.dailyLimit, taken.used, day));
-    } catch (error) {
-      await deps.refundQuestion(userId, day);
-      throw error;
-    }
+  function withQuestion<T>(userId: string, work: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
+    return spendQuestion(deps, userId, work, allowanceSpent);
   }
 
   /** A new teaching page on the request's subject, cited from the library or Wikipedia. Nothing is saved. */
@@ -414,6 +403,21 @@ export function createRanganService(deps: RanganDeps) {
       citations: citationsFor(markdown, passages),
       support,
     };
+  }
+
+  /** Planner tasks for what the student said they want to do, on their own clock. Nothing is saved. */
+  async function draftTasks(input: RanganAskInput, usage: RanganUsageSummary): Promise<RanganTaskReply> {
+    const clock = clockOrUtc(input.clock, deps.now());
+    const result = await deps.complete(
+      [
+        { role: "system", content: TASK_SYSTEM_PROMPT },
+        { role: "user", content: taskInstruction(input.question, clock) },
+      ],
+      { maxTokens: 800, temperature: 0 },
+    );
+    const tasks = parseTaskDrafts(result.text, clock);
+    if (!tasks.length) throw Object.assign(new Error("Rangan couldn't work out the task. Try saying what to do and by when."), { status: 502 });
+    return { kind: "task", tasks, provider: result.provider, usage, citations: [], support: { checked: true, removed: 0 } };
   }
 
   /** A change to the open page as the student described it. Nothing is applied: the student sees it first. */
@@ -506,7 +510,12 @@ export function createRanganService(deps: RanganDeps) {
     return withQuestion(userId, async (usage) => {
       // "Explain this": the selected text steers the search and is quoted to the model.
       // Otherwise the request is read first, so only its subject is searched.
-      const reading = input.focus ? null : await readRequest(input.question, input.history, input.page?.title, input.board?.title);
+      const reading = input.focus ? null : await readRequest(input.question, input.history, input.page?.title, input.board?.title, input.where);
+      // Something to do goes to the planner, from anywhere in the app. Asked for
+      // outright ("add a task", "remind me", "in the planner"), it is a task even
+      // if the reading missed it; asked for a page or board, it never is.
+      const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
+      if (!input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)
         : (reading?.search ?? retrievalQuery(input.question, input.history));

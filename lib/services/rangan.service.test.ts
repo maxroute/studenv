@@ -81,7 +81,7 @@ test("an answer reports how many questions are left today", async () => {
   const result = await createRanganService(deps).ask("u1", { question: "Hi" });
   assert.equal(result.answer, "An answer.");
   assert.equal(result.provider, "groq-large");
-  assert.deepEqual(result.usage, { limit: 3, used: 1, remaining: 2, resetAt: "2026-11-21T00:00:00.000Z" });
+  assert.deepEqual(result.usage, { limit: 3, used: 1, remaining: 2, resetAt: "2026-11-21T00:00:00.000Z", asOf: "2026-11-20T15:30:00.000Z" });
 });
 
 test("the allowance runs out after the daily limit and nothing more is sent to a model", async () => {
@@ -128,6 +128,7 @@ test("usage for a new day starts full", async () => {
     used: 0,
     remaining: 25,
     resetAt: "2026-11-21T00:00:00.000Z",
+    asOf: "2026-11-20T15:30:00.000Z",
   });
 });
 
@@ -883,4 +884,48 @@ test("a Wikipedia article that only shares the subject's name is left out, and t
   const prompt = sent[0].at(-1)?.content ?? "";
   assert.match(prompt, /\(Wikipedia\) › Aurora/);
   assert.doesNotMatch(prompt, /Pullman|hockey/);
+});
+
+// --- Planner tasks -------------------------------------------------------------
+
+const DSA_REQUEST = "make a work that i want to solve 5 dsa problems before 12 am in the planner";
+const DSA_TASK = JSON.stringify({ tasks: [{ title: "Solve 5 DSA problems", day: "2026-11-21", time: "00:00", priority: "medium", category: "Study", minutes: null, notes: null }] });
+
+test("something to do becomes a planner task on the student's clock, not a page", async () => {
+  const reading = JSON.stringify({ subject: "DSA problems", search: "data structures algorithms problems", names: ["DSA"], terms: ["array"], actions: ["task"] });
+  const { deps, sent, searches, quick } = readingDeps({ reading, answer: DSA_TASK });
+  const result = await createRanganService(deps).ask("u1", { question: DSA_REQUEST, where: "shelf", clock: { today: "2026-11-20", time: "21:05", timeZone: "Asia/Kolkata" } });
+  assert.equal(result.kind, "task");
+  assert.ok(result.kind === "task");
+  assert.deepEqual(result.tasks, [{ title: "Solve 5 DSA problems", day: "2026-11-20", time: "23:59", priority: "medium", category: "Study", minutes: null, notes: null }]);
+  assert.match(quick[0][1].content, /The student is on the Shelf/);
+  assert.match(sent[0][1].content, /Friday 2026-11-20.*21:05 \(Asia\/Kolkata\)/);
+  assert.deepEqual(searches, [], "a task needs no library search");
+  assert.equal(result.usage.used, 1, "a task uses one question");
+});
+
+test("asked for outright, a task is made even when the reading is missing or says page", async () => {
+  for (const reading of [new Error("busy"), JSON.stringify({ subject: "DSA", search: "DSA", names: [], terms: [], actions: ["page"] })]) {
+    const { deps } = readingDeps({ reading, answer: DSA_TASK });
+    const result = await createRanganService(deps).ask("u1", { question: DSA_REQUEST });
+    assert.equal(result.kind, "task");
+  }
+});
+
+test("a page asked for with a task word is still a page", async () => {
+  const reading = JSON.stringify({ subject: "planner apps", search: "planner apps", names: ["planner app"], terms: ["calendar", "task"], actions: ["page", "task"] });
+  const { deps } = readingDeps({ reading, answer: "# Planner apps\n\nThey hold tasks." });
+  const result = await createRanganService(deps).ask("u1", { question: "write a page about planner apps and how tasks work" });
+  assert.equal(result.kind, "page");
+});
+
+test("a task reply that can't be read gives the question back", async () => {
+  const reading = JSON.stringify({ subject: null, search: "solve problems", names: [], terms: [], actions: ["task"] });
+  const { deps } = readingDeps({ reading, answer: "Sure, I'll remember that." });
+  const service = createRanganService(deps);
+  await assert.rejects(service.ask("u1", { question: DSA_REQUEST }), (error: { status?: number; usage?: { used: number } }) => {
+    assert.equal(error.status, 502);
+    assert.equal(error.usage?.used, 0);
+    return true;
+  });
 });

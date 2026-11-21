@@ -1512,6 +1512,11 @@
   }
 }
 
+/* The page side panel is narrow at any screen size: keep room for the grip. */
+.note-side-panel .note-editor {
+  padding-left: 24px;
+}
+
 /* Touch screens: a bigger target. */
 @media (pointer: coarse) {
 

@@ -1,3 +1,4 @@
+import { WarmUp } from "@/components/ui/warm-up";
 import { ApprovedHomepage } from "@/components/layout/approved-homepage";
 import { createPublicPageMetadata } from "@/lib/seo/page-metadata";
 import { getPublicSiteUrl } from "@/lib/seo/site-url";
@@ -23,6 +24,7 @@ export const metadata = createPublicPageMetadata({
 export default function HomePage() {
   return (
     <>
+      <WarmUp />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

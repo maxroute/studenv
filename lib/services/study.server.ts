@@ -12,6 +12,7 @@ export const study = createStudyService({
   now: () => new Date(),
   consumeQuestion: usageRepository.consumeQuestion,
   refundQuestion: usageRepository.refundQuestion,
+  getUsedCount: usageRepository.getUsedCount,
   findSources: async (userId, query) => pickPlanSources((await ranganIndex.search(userId, query, 12)).results),
   loadSource: studyRepository.loadStudySource,
   complete,

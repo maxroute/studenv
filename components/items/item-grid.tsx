@@ -8,6 +8,9 @@ type ItemGridProps = {
   view: "grid" | "list";
   selectedId: string | null;
   isLoading: boolean;
+  /** The first request failed and nothing has loaded yet. */
+  failed?: boolean;
+  onRetry?: () => void;
   onSelect: (id: string) => void;
   onToggleStar: (item: ItemRecord) => void;
 };
@@ -41,9 +44,28 @@ export function ItemGrid({
   view,
   selectedId,
   isLoading,
+  failed = false,
+  onRetry,
   onSelect,
   onToggleStar,
 }: ItemGridProps) {
+  if (failed) {
+    return (
+      <div className={`cards-grid ${view === "list" ? "list-view" : ""}`}>
+        <div className="empty-state" role="status">
+          <div className="empty-icon">◈</div>
+          <div className="empty-title">Still connecting…</div>
+          <div className="empty-sub">Your library is taking longer than usual. Trying again.</div>
+          {onRetry ? (
+            <button type="button" className="empty-retry" onClick={onRetry}>
+              Retry now
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className={`cards-grid ${view === "list" ? "list-view" : ""}`}>
