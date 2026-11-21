@@ -117,6 +117,8 @@ export const verificationResendIpLimiter = createLimiter("resend-ip", 10, "15 m"
 export const verificationResendEmailLimiter = createLimiter("resend-email", 3, "15 m");
 export const passwordResetIpLimiter = createLimiter("forgot-ip", 10, "1 h");
 export const passwordResetEmailLimiter = createLimiter("forgot-email", 3, "1 h");
+/** Voice typing, per signed-in user: plenty for talking, not for bulk transcription. */
+export const transcribeLimiter = createLimiter("transcribe", 40, "15 m");
 /** Per signed-in user. */
 export const changePasswordLimiter = createLimiter("change-password", 5, "15 m");
 

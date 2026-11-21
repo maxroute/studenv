@@ -658,6 +658,121 @@ body:has(.note-keyboard-bar) .rangan-fab {
   opacity: 0.4;
 }
 
+/* Voice: the mic beside Send, and the voice-mode bar */
+.rangan-mic {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  transition: box-shadow 80ms linear, color 120ms;
+}
+
+@media (hover: hover) {
+  .rangan-mic:hover:not(:disabled) {
+    border-color: var(--amber-dim);
+    color: var(--amber);
+  }
+}
+
+.rangan-mic.on {
+  border-color: #c0504d;
+  background: rgba(224, 108, 106, 0.12);
+  color: #e06c6a;
+}
+
+.rangan-mic:disabled {
+  opacity: 0.4;
+}
+
+.rangan-voice-bar {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rangan-voice-dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--amber);
+  transition: transform 80ms linear;
+}
+
+.rangan-voice-dot.listening {
+  background: #e06c6a;
+}
+
+.rangan-voice-dot.transcribing,
+.rangan-voice-dot.thinking {
+  animation: rangan-voice-pulse 1s ease-in-out infinite;
+}
+
+.rangan-voice-dot.speaking {
+  background: var(--green, #6fcf8b);
+  animation: rangan-voice-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes rangan-voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rangan-voice-dot {
+    animation: none !important;
+    transition: none;
+  }
+}
+
+.rangan-voice-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rangan-voice-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rangan-voice-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--amber);
+  font-size: 12.5px;
+}
+
+.rangan-voice-dismiss {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+@media (pointer: coarse) {
+  .rangan-mic {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .rangan-privacy {
   margin: 8px 2px 0;
   color: var(--muted2);

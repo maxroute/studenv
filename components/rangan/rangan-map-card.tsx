@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Network, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { useVoiceAction } from "@/hooks/use-voice-action";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import type { RanganMap } from "@/lib/services/rangan.service";
 import { describeBoardChange } from "@/lib/workspace/board-edit";
@@ -88,23 +89,40 @@ function MapExtras({ map }: { map: RanganMap }) {
 }
 
 /** "Create board", then "Open board": shared by map cards and page cards that came with a map. */
-export function CreateBoardButton({ turnId, map, boardId, pageNoteId, onNavigate }: { turnId: string; map: RanganMap; boardId: string | null; pageNoteId?: string | null; onNavigate: () => void }) {
+export function CreateBoardButton({
+  turnId,
+  map,
+  boardId,
+  pageNoteId,
+  onNavigate,
+  voice = false,
+}: {
+  turnId: string;
+  map: RanganMap;
+  boardId: string | null;
+  pageNoteId?: string | null;
+  onNavigate: () => void;
+  /** Saying yes in voice mode creates the board (for a map on its own, not one that comes with a page). */
+  voice?: boolean;
+}) {
   const router = useRouter();
   const markBoardCreated = useRanganStore((state) => state.markBoardCreated);
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     const result = await createMapBoard(map, pageNoteId);
     setBusy(false);
     if (!result.ok) {
       toast.error(result.message);
-      return;
+      return false;
     }
     markBoardCreated(turnId, result.workspaceId);
     toast.success(`Created the board "${map.draft.title}".`);
+    return true;
   };
+  useVoiceAction(turnId, voice && !boardId ? create : null);
 
   if (boardId) {
     return (
@@ -126,7 +144,7 @@ export function CreateBoardButton({ turnId, map, boardId, pageNoteId, onNavigate
     );
   }
   return (
-    <button type="button" className="rangan-plan-add" onClick={create} disabled={busy}>
+    <button type="button" className="rangan-plan-add" onClick={() => void create()} disabled={busy}>
       {busy ? <Loader2 size={15} className="rangan-spin" aria-hidden /> : <Network size={15} aria-hidden />} Create board
     </button>
   );
@@ -147,7 +165,7 @@ export function RanganMapCard({ turn, onNavigate }: { turn: Extract<RanganTurn, 
       <MapOutline map={map} />
       {map.sources.length ? <p className="rangan-plan-meta">Cards for {map.sources.map((source) => source.title).join(" · ")}</p> : null}
       <div className="rangan-plan-actions">
-        <CreateBoardButton turnId={turn.id} map={map} boardId={turn.boardId} onNavigate={onNavigate} />
+        <CreateBoardButton turnId={turn.id} map={map} boardId={turn.boardId} onNavigate={onNavigate} voice />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, Check, ListTodo, Loader2, X } from "lucide-react";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
+import { useVoiceAction } from "@/hooks/use-voice-action";
 import { dayLabel, localDay, saveDraftTasks } from "@/lib/client/study-plan";
 import { TASK_PRIORITIES, type RanganTaskDraft } from "@/lib/rangan/task";
 
@@ -43,7 +44,7 @@ export function RanganTaskCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
   };
 
   const add = async () => {
-    if (saving || saved || ready.length === 0) return;
+    if (saving || saved || ready.length === 0) return false;
     setSaving(true);
     setFailure(null);
     const cleaned = ready.map((task) => ({ ...task, title: task.title.trim().slice(0, 200) }));
@@ -51,7 +52,9 @@ export function RanganTaskCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
     setSaving(false);
     if (result.ok) markTasksSaved(turn.id, cleaned);
     else setFailure(result.message);
+    return result.ok;
   };
+  useVoiceAction(turn.id, saved ? null : add);
 
   const openPlanner = () => {
     onNavigate();
@@ -134,7 +137,7 @@ export function RanganTaskCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
         </div>
       ) : (
         <div className="rangan-plan-actions">
-          <button type="button" className="rangan-plan-add" onClick={add} disabled={saving || ready.length === 0 || editing !== null}>
+          <button type="button" className="rangan-plan-add" onClick={() => void add()} disabled={saving || ready.length === 0 || editing !== null}>
             {saving ? <Loader2 size={15} className="rangan-spin" aria-hidden /> : <Check size={15} aria-hidden />}
             Add to planner
           </button>

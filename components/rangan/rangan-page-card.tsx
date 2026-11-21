@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { Check, ChevronDown, ChevronUp, FilePlus2, Layers, Loader2, PencilLine, Undo2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
+import { useVoiceAction } from "@/hooks/use-voice-action";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { citationLabel, type PageChange } from "@/lib/rangan/page";
 import { applyPageEdit, createPageFromDraft, flashcardsFromPage } from "./page-actions";
@@ -52,17 +53,19 @@ export function RanganPageDraftCard({ turn, onBoard, onNavigate }: { turn: Extra
   const [showAll, setShowAll] = useState(false);
 
   const create = async () => {
-    if (busy) return;
+    if (busy) return false;
     setBusy("create");
     const result = await createPageFromDraft(draft);
     setBusy(null);
     if (!result.ok || !result.noteId) {
       toast.error(result.ok ? "The page could not be created." : result.message);
-      return;
+      return false;
     }
     markPageCreated(turn.id, result.noteId);
     toast.success(`Created "${draft.title}".`);
+    return true;
   };
+  useVoiceAction(turn.id, turn.noteId ? null : create);
 
   const open = (noteId: string) => {
     if (onBoard) useNotePanelStore.getState().open(noteId);
