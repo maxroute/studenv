@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Compass, FileText, Globe, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, Compass, FileText, Globe, History, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, SquarePen, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -14,6 +14,8 @@ import { RanganExploreCard } from "./rangan-explore-card";
 import { RanganBoardEditCard, RanganMapCard } from "./rangan-map-card";
 import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
+import { RanganTaskCard } from "./rangan-task-card";
+import { RanganHistory } from "./rangan-history";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
 import { resetLabel } from "@/lib/rangan/usage";
@@ -197,6 +199,8 @@ export function RanganPanel() {
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const loadingConversation = useRanganStore((state) => state.loadingConversation);
   const onBoard = pathname?.startsWith("/workspaces/") ?? false;
   const spent = usage !== null && usage.remaining <= 0;
   // The page in front of the student: the open page, or the page in the board's side panel.
@@ -263,6 +267,7 @@ export function RanganPanel() {
     const question = draft.trim();
     if (!question || pending || spent) return;
     setDraft("");
+    setShowHistory(false);
     // "What should I explore next?" gets a card built from the page in front of the student.
     if (isExploreRequest(question)) void explore(currentNoteId ? `note:${currentNoteId}` : undefined, question);
     else void ask(question);
@@ -276,7 +281,15 @@ export function RanganPanel() {
   };
 
   let body: ReactNode;
-  if (turns.length === 0 && !pending) {
+  if (showHistory) {
+    body = <RanganHistory onDone={() => setShowHistory(false)} />;
+  } else if (loadingConversation) {
+    body = (
+      <div className="rangan-thinking" aria-live="polite">
+        <Loader2 size={15} className="rangan-spin" aria-hidden /> Opening your chat…
+      </div>
+    );
+  } else if (turns.length === 0 && !pending) {
     body = (
       <div className="rangan-empty">
         <RanganLogo size={64} className="rangan-empty-logo" />
@@ -342,6 +355,14 @@ export function RanganPanel() {
                 if (isNarrow() && !onBoard) close();
               }}
             />
+          ) : turn.role === "task" ? (
+            <RanganTaskCard
+              key={turn.id}
+              turn={turn}
+              onNavigate={() => {
+                if (isNarrow() || onBoard) close();
+              }}
+            />
           ) : turn.role === "plan" ? (
             <RanganPlanCard
               key={turn.id}
@@ -381,11 +402,21 @@ export function RanganPanel() {
             {usage ? <UsagePill usage={usage} /> : null}
           </div>
           <div className="rangan-header-actions">
-            {turns.length > 0 ? (
-              <button type="button" className="rangan-icon-btn" onClick={clear} aria-label="New conversation" title="New conversation" disabled={pending}>
-                <Trash2 size={16} />
+            {turns.length > 0 && !showHistory ? (
+              <button type="button" className="rangan-icon-btn" onClick={clear} aria-label="New chat" title="New chat (this one stays in your chats)" disabled={pending}>
+                <SquarePen size={16} />
               </button>
             ) : null}
+            <button
+              type="button"
+              className={`rangan-icon-btn${showHistory ? " on" : ""}`}
+              onClick={() => setShowHistory((shown) => !shown)}
+              aria-label={showHistory ? "Back to the chat" : "Your chats"}
+              aria-pressed={showHistory}
+              title="Your chats"
+            >
+              <History size={17} />
+            </button>
             <button type="button" className="rangan-icon-btn" onClick={close} aria-label="Close Rangan" title="Close (Esc)">
               <X size={18} />
             </button>
