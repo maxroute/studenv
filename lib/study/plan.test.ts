@@ -326,6 +326,24 @@ test("no matching material, a missing source, an empty range or a bad ref costs 
   assert.equal(empty.calls.consumed, 0);
 });
 
+test("a library with nothing on the subject is said plainly, not as a failure, and costs nothing", async () => {
+  // The model read the material and found nothing about the request: no topics.
+  const nothing = JSON.stringify({ goal: "Data structures exam", finish: null, minutesPerDay: null, days: null, topics: [] });
+  const found = setup({ reply: nothing });
+  await assert.rejects(found.service.makePlan("u1", { request: "plan data structures for my exam next week", today: "2026-11-22" }), (error: { status?: number; details?: { needSources?: boolean }; message?: string }) => {
+    assert.equal(error.status, 404, "not a server failure, so the screen never says Rangan is busy");
+    assert.equal(error.details?.needSources, true);
+    assert.match(error.message ?? "", /library doesn't have material on that/);
+    return true;
+  });
+  assert.deepEqual([found.calls.consumed, found.calls.refunded], [1, 1], "the question is given back");
+
+  // Chosen material that doesn't cover the request asks for other material.
+  const chosen = setup({ reply: nothing });
+  await assert.rejects(chosen.service.makePlan("u1", { request: "plan data structures", today: "2026-11-22", refs: ["note:note1"] }), { status: 422 });
+  assert.deepEqual([chosen.calls.consumed, chosen.calls.refunded], [1, 1]);
+});
+
 test("an unusable reply or a model failure gives the question back", async () => {
   const unusable = setup({ reply: "sorry" });
   await assert.rejects(unusable.service.makePlan("u1", request), { status: 502 });

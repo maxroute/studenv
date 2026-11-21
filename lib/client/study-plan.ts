@@ -77,7 +77,7 @@ export async function requestStudyPlan(body: PlanRequestBody) {
   if (result.ok && result.data) return { ok: true as const, plan: result.data };
   let message: string;
   if (result.status === 0) message = result.error ?? "You seem to be offline.";
-  else if (result.status === 400 || result.status === 404 || result.status === 429) message = result.error ?? "That did not work.";
+  else if (result.status === 400 || result.status === 404 || result.status === 422 || result.status === 429) message = result.error ?? "That did not work.";
   else message = "Rangan couldn't plan that right now, so your question was given back. Please try again in a minute.";
   return { ok: false as const, status: result.status, message, needSources };
 }

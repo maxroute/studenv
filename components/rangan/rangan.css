@@ -681,9 +681,57 @@ body:has(.note-keyboard-bar) .rangan-fab {
 }
 
 .rangan-mic.on {
-  border-color: #c0504d;
-  background: rgba(224, 108, 106, 0.12);
-  color: #e06c6a;
+  border-color: #e0504d;
+  background: #e0504d;
+  color: #fff;
+}
+
+/* While recording: live level bars beside a stop mark. */
+.rangan-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rangan-level-bars {
+  display: inline-flex;
+  height: 14px;
+  align-items: center;
+  gap: 2px;
+}
+
+.rangan-level-bars > span {
+  width: 2.5px;
+  height: 14px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: center;
+  transition: transform 70ms linear;
+}
+
+.rangan-stop-glyph {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.rangan-stop-glyph.small {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.rangan-voice-stop {
+  color: #e0504d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rangan-level-bars > span {
+    transition: none;
+  }
 }
 
 .rangan-mic:disabled {

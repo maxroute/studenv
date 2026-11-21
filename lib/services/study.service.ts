@@ -15,6 +15,7 @@ import {
   type StudyPassage,
 } from "@/lib/study/generation";
 import {
+  extractJsonObject,
   PLAN_AUTO_SOURCES,
   parsePlanReply,
   planInstruction,
@@ -233,7 +234,20 @@ export function createStudyService(deps: StudyDeps) {
         { maxTokens: 2_000, temperature: 0.3 },
       );
       const reply = parsePlanReply(result.text, picked.length);
-      if (reply.topics.length === 0) throw httpError("Rangan could not plan from this. Please try again.", 502);
+      if (reply.topics.length === 0) {
+        // A reply with an empty topic list means the model read the material and none of it is
+        // about the request: an answer, not a failure. Saying "try again" would fail the same way.
+        if (Array.isArray(extractJsonObject(result.text)?.topics)) {
+          throw input.refs
+            ? httpError("What you chose doesn't cover that. Choose other material, or say what to plan.", 422)
+            : httpError(
+                "Your library doesn't have material on that yet. Add notes, a PDF or a video about it, or choose what to plan from in Planner → Plan with Rangan.",
+                404,
+                { needSources: true },
+              );
+        }
+        throw httpError("Rangan could not plan from this. Please try again.", 502);
+      }
 
       const topicSource = (index: number | null): StudySourceLink | null => {
         const found = index === null ? null : picked[index];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AudioLines, Loader2, Mic, Square } from "lucide-react";
+import { AudioLines, Loader2, Mic } from "lucide-react";
 import { create } from "zustand";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { voiceActionFor } from "@/hooks/use-voice-action";
@@ -253,10 +253,30 @@ export function RanganDictateButton({ onText, disabled }: { onText: (text: strin
       disabled={disabled && !dictating}
       aria-label={dictating ? (phase === "listening" ? "Finish speaking" : "Cancel") : "Speak your question"}
       title={dictating ? "Finish" : "Speak instead of typing"}
-      style={dictating ? { boxShadow: `0 0 0 ${2 + Math.round(level * 8)}px rgba(224, 108, 106, 0.35)` } : undefined}
+      style={dictating && phase === "listening" ? { boxShadow: `0 0 0 ${2 + Math.round(level * 4)}px rgba(224, 80, 77, 0.3)` } : undefined}
     >
-      {dictating && phase === "transcribing" ? <Loader2 size={16} className="rangan-spin" /> : dictating ? <Square size={14} /> : <Mic size={17} />}
+      {dictating && phase === "transcribing" ? (
+        <Loader2 size={16} className="rangan-spin" />
+      ) : dictating ? (
+        <span className="rangan-recording" aria-hidden>
+          <LevelBars level={level} />
+          <span className="rangan-stop-glyph" />
+        </span>
+      ) : (
+        <Mic size={17} />
+      )}
     </button>
+  );
+}
+
+/** Three bars that rise with the speaker's voice, so it's clear the mic hears them. */
+function LevelBars({ level }: { level: number }) {
+  return (
+    <span className="rangan-level-bars">
+      {[0.55, 1, 0.75].map((weight, index) => (
+        <span key={index} style={{ transform: `scaleY(${0.25 + Math.min(1, level * weight * 1.6) * 0.75})` }} />
+      ))}
+    </span>
   );
 }
 
@@ -289,8 +309,8 @@ export function RanganVoiceMode({ send, disabled }: { send: (text: string) => vo
       <span className={`rangan-voice-dot ${phase}`} style={phase === "listening" ? { transform: `scale(${1 + level * 0.9})` } : undefined} aria-hidden />
       <span className="rangan-voice-label">{PHASE_LABEL[phase]}</span>
       <span className="rangan-voice-hint">{phase === "listening" ? "Say “stop” to end" : ""}</span>
-      <button type="button" className="rangan-chip" onClick={stopVoice}>
-        <Square size={12} aria-hidden /> Stop
+      <button type="button" className="rangan-chip rangan-voice-stop" onClick={stopVoice}>
+        <span className="rangan-stop-glyph small" aria-hidden /> Stop
       </button>
     </div>
   );
