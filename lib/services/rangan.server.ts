@@ -1,4 +1,4 @@
-import { complete } from "@/lib/ai/providers";
+import { complete, completeQuick } from "@/lib/ai/providers";
 import { RANGAN_DAILY_LIMIT } from "@/lib/models/rangan.model";
 import * as indexRepository from "@/lib/repositories/rangan-index.repository";
 import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
@@ -17,6 +17,7 @@ export const rangan = createRanganService({
   searchLibrary: async (userId, query, limit) => (await ranganIndex.search(userId, query, limit)).results,
   loadSource: (userId, type, id) => ranganIndex.loadSource(userId, type, id),
   recentNoteIds: indexRepository.recentNoteIds,
+  completeQuick,
   searchWeb: async (query) =>
     (await searchWikipedia(query, { limit: 2 })).map((article) => ({
       ref: article.url,

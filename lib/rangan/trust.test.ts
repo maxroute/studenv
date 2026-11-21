@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { citedClaims, parseSupportReply, removeCitations, splitBeyond, splitSentences, supportInstruction } from "./trust";
+import { citedClaims, parseSupportReply, removeCitations, splitBeyond, splitSentences, supportInstruction, withoutBeyondCitations } from "./trust";
 
 test("sentences keep their citation marks and join back to the answer exactly", () => {
   const answer = "Mitochondria make ATP [1]. The pH is 3.5 here [2].\n- Water is split.[3] Oxygen is released! Plants grow";
@@ -47,4 +47,16 @@ test("the general-knowledge part is split off at its heading", () => {
   assert.deepEqual(splitBeyond("## **Beyond your sources:**\nOnly general."), { sourced: "", beyond: "Only general." });
   assert.deepEqual(splitBeyond("Nothing beyond here."), { sourced: "Nothing beyond here.", beyond: null });
   assert.equal(splitBeyond("We went beyond your sources here.").beyond, null, "only a heading counts");
+  assert.deepEqual(splitBeyond("Cited [1].\n### Beyond your sources – visualizing the OS\nDraw a map [2]."), {
+    sourced: "Cited [1].",
+    beyond: "Draw a map [2].",
+  });
+  assert.equal(withoutBeyondCitations("Cited [1].\n### Beyond your sources – visualizing the OS\nDraw a map [2]."), "Cited [1].\n### Beyond your sources – visualizing the OS\nDraw a map.");
+  assert.equal(splitBeyond("### Beyond-your-sources trick\nx").beyond, null);
+});
+
+test("citations are removed from the general-knowledge part only", () => {
+  const answer = "Your notes say X [1].\n\n### Beyond your sources\nStudy in chunks, as your notes suggest [2]. Also Y [3].";
+  assert.equal(withoutBeyondCitations(answer), "Your notes say X [1].\n\n### Beyond your sources\nStudy in chunks, as your notes suggest. Also Y.");
+  assert.equal(withoutBeyondCitations("No heading [1]."), "No heading [1].");
 });
