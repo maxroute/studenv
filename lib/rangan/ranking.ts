@@ -5,7 +5,7 @@
 import { formatRef } from "@/lib/refs/ref-grammar";
 
 /** Kinds of source Rangan indexes. Stored as plain strings, so new kinds need no migration. */
-export const INDEX_SOURCE_TYPES = ["note", "pdf", "transcript", "item"] as const;
+export const INDEX_SOURCE_TYPES = ["note", "pdf", "transcript", "item", "board"] as const;
 export type IndexSourceType = (typeof INDEX_SOURCE_TYPES)[number];
 
 const MAX_QUERY_TERMS = 16;
@@ -73,6 +73,8 @@ export function passageRef(sourceType: string, sourceId: string, anchor: string)
       return formatRef({ type: "asset", id: sourceId, ...(anchor ? { anchor } : {}) });
     case "transcript":
       return formatRef({ type: "asset", id: sourceId });
+    case "board":
+      return formatRef({ type: "workspace", id: sourceId });
     default:
       return formatRef({ type: "item", id: sourceId });
   }

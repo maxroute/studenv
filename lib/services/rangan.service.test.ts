@@ -145,8 +145,8 @@ test("the model sees Rangan's instructions, then history, then the library passa
   assert.deepEqual(firstUser, { role: "user", content: "What is osmosis?" });
   assert.deepEqual(firstAnswer, { role: "assistant", content: "Water crossing a membrane." });
   assert.equal(last.role, "user");
-  assert.match(last.content, /\[1\] Cell biology › Energy\nMitochondria make ATP\./);
-  assert.match(last.content, /\[2\] Textbook › Page 4\n/);
+  assert.match(last.content, /\[1\] \(the student's library\) › Cell biology › Energy\nMitochondria make ATP\./);
+  assert.match(last.content, /\[2\] \(the student's library\) › Textbook › Page 4\n/);
   assert.match(last.content, /Question: And diffusion\?$/);
 });
 
@@ -467,7 +467,7 @@ test("Wikipedia is searched only when the library has little on the question", a
   const thin = twoStepDeps({ answer: "ATP is the energy currency [2].", verdict: '[{"claim":1,"supported":true}]', passages: [PASSAGES[0]], web: [WIKI] });
   const result = await createRanganService(thin.deps).ask("u1", { question: "What is ATP?" });
   assert.deepEqual(thin.webQueries, ["What is ATP?"]);
-  assert.match(thin.sent[0].at(-1)?.content ?? "", /\[2\] Adenosine triphosphate › Wikipedia/);
+  assert.match(thin.sent[0].at(-1)?.content ?? "", /\[2\] \(Wikipedia\) › Adenosine triphosphate › Wikipedia/);
   assert.deepEqual(result.citations.map((citation) => [citation.n, citation.sourceType]), [[2, "web"]]);
 });
 
@@ -535,14 +535,15 @@ test("the subject is searched, not the whole message, and an unrelated book is l
   assert.deepEqual(searches, ["operating system kernel processes"]);
   const prompt = sent[0].at(-1)?.content ?? "";
   assert.doesNotMatch(prompt, /Word Power Made Easy/, "the vocabulary book is not given to the model");
-  assert.match(prompt, /\[1\] CS notes › Kernel/);
+  assert.match(prompt, /\[1\] \(the student's library\) › CS notes › Kernel/);
   assert.deepEqual(result.citations.map((citation) => citation.title), ["CS notes"]);
 });
 
 test("with nothing on the subject in the library, Wikipedia is searched for the subject", async () => {
   const { deps, webQueries, sent } = readingDeps({ reading: OS_READING, library: [VOCABULARY] });
   await createRanganService(deps).ask("u1", { question: OS_REQUEST });
-  assert.deepEqual(webQueries, ["operating systems"]);
+  // Nothing relevant comes back here, so the subject's other names are tried too.
+  assert.deepEqual(webQueries, ["operating systems", "operating system", "OS"]);
   assert.doesNotMatch(sent[0].at(-1)?.content ?? "", /Word Power Made Easy/);
 });
 
@@ -671,7 +672,7 @@ test("a map brings freely licensed pictures for what it asked, and the on-subjec
       return query === "Paging" ? picture("Paging") : null;
     },
     searchWeb: async () => [
-      { ref: "https://en.wikipedia.org/wiki/Operating_system", sourceType: "web", title: "Operating system", heading: "Wikipedia", snippet: "", content: "An OS manages a computer.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Operating_system" } },
+      { ref: "https://en.wikipedia.org/wiki/Operating_system", sourceType: "web", title: "Operating system", heading: "Wikipedia", snippet: "", content: "An OS manages a computer; its kernel runs each process.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Operating_system" } },
       { ref: "https://en.wikipedia.org/wiki/Operating_system", sourceType: "web", title: "Operating system", heading: "Wikipedia", snippet: "", content: "Again.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Operating_system" } },
       { ref: "https://en.wikipedia.org/wiki/Paging", sourceType: "web", title: "Paging", heading: "Wikipedia", snippet: "", content: "Paging splits memory.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Paging" } },
     ],
@@ -783,4 +784,103 @@ test("an edit request with no page open is answered as a question", async () => 
   const reply = await createRanganService(deps).ask("u1", { question: "simplify this page" });
   assert.equal(reply.kind, undefined);
   assert.equal(reply.answer, "The kernel schedules processes [1].");
+});
+
+// ── where Rangan looks: what is open, then the library, then the web ─────────
+
+const OPEN_OS_PAGE = {
+  ref: "note:open1",
+  title: "My OS page",
+  blocks: [
+    { type: "heading", text: "Scheduling", locked: false },
+    { type: "paragraph", text: "The scheduler picks which process runs on the kernel next.", locked: false },
+    { type: "heading", text: "Gardening", locked: false },
+    { type: "paragraph", text: "Water tomatoes in the morning.", locked: false },
+  ],
+};
+
+test("the open page comes first, labelled as open; its indexed copy and unrelated parts are left out", async () => {
+  const stale: LibraryPassage = { ...OS_NOTE, ref: "note:open1#b_BBBBBBBBBB", title: "My OS page", content: "Old text about the kernel." };
+  const { deps, sent, webQueries } = readingDeps({ reading: OS_READING, library: [stale, OS_NOTE], answer: "This page says the scheduler picks the next process [1]. Your notes agree [2]." });
+  const reply = await createRanganService(deps).ask("u1", { question: "how does the kernel scheduler pick a process?", page: OPEN_OS_PAGE });
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.match(prompt, /\[1\] \(open in front of the student\) › My OS page › Scheduling\nThe scheduler picks/);
+  assert.match(prompt, /\[2\] \(the student's library\) › CS notes › Kernel/);
+  assert.doesNotMatch(prompt, /Old text about the kernel/, "the page's indexed copy isn't repeated");
+  assert.doesNotMatch(prompt, /tomatoes/, "parts of the page that don't match aren't sent");
+  assert.deepEqual(webQueries, [], "the page and the library were enough: no internet");
+  assert.equal(reply.kind, undefined);
+  if (reply.kind === undefined) assert.deepEqual(reply.citations.map((citation) => [citation.origin, citation.open?.kind]), [["open", "note"], ["library", "note"]]);
+});
+
+test("the open board comes first too, and its citations open the board", async () => {
+  const { deps, sent } = readingDeps({ reading: OS_READING, library: [], answer: "This board links the kernel to scheduling [1]." });
+  const board = {
+    ref: "workspace:b1",
+    title: "OS board",
+    elements: [
+      { key: "e1", type: "sticky", text: "Kernel", selected: false, locked: false },
+      { key: "e2", type: "sticky", text: "Scheduler\nPicks the next process", selected: false, locked: false },
+    ],
+    edges: [{ from: "e1", to: "e2", label: "runs" }],
+  };
+  const reply = await createRanganService(deps).ask("u1", { question: "what does this board say about the kernel?", board });
+  assert.match(sent[0].at(-1)?.content ?? "", /\[1\] \(open in front of the student\) › OS board\nKernel\n → runs → Scheduler/);
+  if (reply.kind === undefined) assert.deepEqual(reply.citations[0].open, { kind: "board", boardId: "b1" });
+});
+
+test("the internet is used only when the open page and the library have too little, and then a lesson video is offered", async () => {
+  const web: LibraryPassage = { ref: "https://en.wikipedia.org/wiki/Kernel_(operating_system)", sourceType: "web", title: "Kernel (operating system)", heading: "Wikipedia", snippet: "", content: "The kernel is the core of an OS.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Kernel_(operating_system)" } };
+  const videoAsks: string[][] = [];
+  const thin = readingDeps({ reading: OS_READING, library: [], answer: "Wikipedia says the kernel is the core [1]." });
+  thin.deps.searchWeb = async () => [web];
+  thin.deps.findVideo = async (query, subject) => {
+    videoAsks.push([query, subject]);
+    return { videoId: "AAAAAAAAAAA", title: "Operating systems explained", channel: "Teacher" };
+  };
+  const reply = await createRanganService(thin.deps).ask("u1", { question: "what is a kernel?" });
+  assert.equal(reply.kind, undefined);
+  if (reply.kind !== undefined) return;
+  assert.deepEqual(reply.citations.map((citation) => citation.origin), ["web"]);
+  assert.deepEqual(videoAsks, [["operating systems explained", "operating systems"]]);
+  assert.equal(reply.video?.videoId, "AAAAAAAAAAA");
+
+  // Enough in the library: no internet, so no video either.
+  const rich = readingDeps({ reading: OS_READING, library: [OS_NOTE, { ...OS_NOTE, ref: "note:os2", title: "More OS notes" }] });
+  let asked = false;
+  rich.deps.findVideo = async () => {
+    asked = true;
+    return null;
+  };
+  const richReply = await createRanganService(rich.deps).ask("u1", { question: "what is a kernel?" });
+  assert.deepEqual(rich.webQueries, []);
+  assert.equal(asked, false);
+  if (richReply.kind === undefined) assert.equal(richReply.video, undefined);
+});
+
+test("changing the open page doesn't also cite it as a source", async () => {
+  const { deps, sent } = pageDeps({
+    reading: EDIT_READING,
+    sources: { "note:mine": { title: "OS", passages: [OS_NOTE] } },
+    write: JSON.stringify({ summary: "Simplified.", changes: [{ replace: [2, 2], markdown: "The kernel runs things." }] }),
+  });
+  await createRanganService(deps).ask("u1", { question: "simplify this page", page: OPEN_PAGE });
+  assert.doesNotMatch(sent[0][1].content, /open in front of the student/);
+});
+
+test("a Wikipedia article that only shares the subject's name is left out, and the subject's other names are tried", async () => {
+  const reading = JSON.stringify({ subject: "northern lights", search: "northern lights cause", names: ["northern lights", "aurora borealis"], terms: ["solar wind", "magnetic field", "atmosphere"], actions: [] });
+  const article = (title: string, content: string): LibraryPassage => ({ ref: `https://en.wikipedia.org/wiki/${title.replace(/ /g, "_")}`, sourceType: "web", title, heading: "Wikipedia", snippet: "", content, open: { kind: "web", url: `https://en.wikipedia.org/wiki/${title.replace(/ /g, "_")}` } });
+  const { deps, sent, webQueries } = readingDeps({ reading, library: [], answer: "Auroras come from the solar wind [1]." });
+  deps.searchWeb = async (query) => {
+    webQueries.push(query);
+    return query === "northern lights"
+      ? [article("Northern Lights (Pullman novel)", "Northern Lights is a fantasy novel by Philip Pullman."), article("Minnesota Northern Lights", "A hockey team.")]
+      : [article("Aurora", "An aurora is light in the upper atmosphere caused by the solar wind and Earth's magnetic field.")];
+  };
+  await createRanganService(deps).ask("u1", { question: "what causes the northern lights?" });
+  assert.deepEqual(webQueries, ["northern lights", "aurora borealis"]);
+  const prompt = sent[0].at(-1)?.content ?? "";
+  assert.match(prompt, /\(Wikipedia\) › Aurora/);
+  assert.doesNotMatch(prompt, /Pullman|hockey/);
 });
