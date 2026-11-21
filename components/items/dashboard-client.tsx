@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { ChevronDown } from "lucide-react";
 import { ItemGrid } from "@/components/items/item-grid";
-import { ShelfFiles } from "@/components/items/shelf-files";
 import { openItemPage } from "@/lib/client/open-item-page";
 
 import { useAppStore } from "@/hooks/useAppStore";
@@ -448,8 +447,6 @@ export function DashboardClient() {
             </div>
           </div>
 
-          {/* Items and the vault's files scroll together, as one list. */}
-          <div className="shelf-scroll">
           <ItemGrid
             items={visibleItems}
             selectedId={selectedId}
@@ -462,14 +459,6 @@ export function DashboardClient() {
             }}
             onToggleStar={(item) => patchItem(item, { starred: !item.starred })}
           />
-          {isLoading ? null : (
-            <ShelfFiles
-              filters={{ nav: filters.nav, tag: filters.tag, status: filters.status, query: debouncedQuery }}
-              view={filters.view ?? "grid"}
-              onShelved={() => void mutate()}
-            />
-          )}
-          </div>
         </main>
       </div>
 

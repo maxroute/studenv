@@ -10,6 +10,7 @@ import { useCollections } from "@/hooks/useCollections";
 import { useItems } from "@/hooks/useItems";
 import type { DashboardNav } from "@/types";
 import { formatBytes } from "@/lib/utils/format-bytes";
+import { startNavigation } from "@/lib/client/navigation-progress";
 
 const tagPalette = [
   "#e05a4b",
@@ -145,20 +146,43 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     done: items.filter((item) => item.status === "done").length,
   };
 
+  // The row just clicked, highlighted until its page arrives: the click worked.
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  useEffect(() => setPendingUrl(null), [pathname]);
   const go = (url: string) => {
+    if (url !== pathname) {
+      startNavigation(url);
+      setPendingUrl(url);
+    }
     router.push(url);
     onClose?.();
   };
+  /** Starts loading a page or board as the pointer rests on it, so the click opens it sooner. */
+  const warm = (url: string) => {
+    if (url !== pathname) router.prefetch(url);
+  };
   const shelf = (nav: DashboardNav) => {
-    if (pathname !== "/shelf") router.push("/shelf");
+    if (pathname !== "/shelf") {
+      startNavigation("/shelf");
+      router.push("/shelf");
+    }
     setNav(nav);
     onClose?.();
   };
   const onShelf = pathname === "/shelf" || pathname.startsWith("/shelf/");
   const shelfActive = (nav: DashboardNav) => onShelf && filters.nav === nav && !filters.tag;
 
-  const row = (key: string, label: string, active: boolean, onClick: () => void, icon?: ReactNode, count?: number) => (
-    <button key={key} className={`nav-item ${active ? "active" : ""}`} type="button" onClick={onClick} title={label}>
+  const row = (key: string, label: string, active: boolean, onClick: () => void, icon?: ReactNode, count?: number, href?: string) => (
+    <button
+      key={key}
+      className={`nav-item ${active ? "active" : ""}${href && pendingUrl === href ? " pending" : ""}`}
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-busy={href !== undefined && pendingUrl === href}
+      onPointerEnter={href ? () => warm(href) : undefined}
+      onFocus={href ? () => warm(href) : undefined}
+    >
       {icon ?? <span className="nav-icon" />}
       <span className="nav-label">{label}</span>
       {count === undefined ? null : <span className="nav-count">{count}</span>}
@@ -212,7 +236,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <div className="sidebar-section">
           {heading("Pages", "/notes")}
           {topPages.slice(0, SECTION_LIMIT).map((page) =>
-            row(`page:${page.id}`, page.title || "Untitled", pathname === `/notes/${page.id}`, () => go(`/notes/${page.id}`), <span className="nav-icon">✎</span>),
+            row(`page:${page.id}`, page.title || "Untitled", pathname === `/notes/${page.id}`, () => go(`/notes/${page.id}`), <span className="nav-icon">✎</span>, undefined, `/notes/${page.id}`),
           )}
           {pages && topPages.length === 0 ? <div className="sidebar-empty-copy">No pages yet.</div> : null}
           {more(topPages.length, "/notes")}
@@ -222,7 +246,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <div className="sidebar-section">
           {heading("Boards", "/library/boards")}
           {(boards ?? []).slice(0, SECTION_LIMIT).map((board) =>
-            row(`board:${board.id}`, board.title || "Untitled board", pathname === `/workspaces/${board.id}`, () => go(`/workspaces/${board.id}`), <span className="nav-icon">⬚</span>),
+            row(`board:${board.id}`, board.title || "Untitled board", pathname === `/workspaces/${board.id}`, () => go(`/workspaces/${board.id}`), <span className="nav-icon">⬚</span>, undefined, `/workspaces/${board.id}`),
           )}
           {boards && boards.length === 0 ? <div className="sidebar-empty-copy">Open a page&rsquo;s board to start one.</div> : null}
           {more(boards?.length ?? 0, "/library/boards")}

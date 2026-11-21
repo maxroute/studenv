@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { confirmSignOut } from "@/components/layout/confirm-sign-out";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Menu, Plus, Search } from "lucide-react";
@@ -80,9 +81,9 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
     };
   }, []);
 
-  function handleSignOut() {
+  async function handleSignOut() {
     setMenuOpen(false);
-    void signOut({ callbackUrl: "/auth/signin" });
+    if (await confirmSignOut()) void signOut({ callbackUrl: "/auth/signin" });
   }
 
   const isLibraryRoute =
@@ -254,7 +255,7 @@ export function Topbar({ user: initialUser, onOpenSidebar }: TopbarProps) {
               role="menuitem"
               type="button"
             >
-              Log out
+              Sign out
             </button>
           </div>
         </div>

@@ -7,7 +7,9 @@
 // `window.prompt` / `window.confirm` are not available everywhere: embedded
 // browsers and app shells (Electron-based ones, some installed web apps)
 // throw "prompt() is not supported". These are plain DOM so editor commands
-// (which run outside React) can await them. Styled in notes.css.
+// (which run outside React) can await them. Styled in note-dialogs.css:
+// notes.css brings it in for notes, and other users (sign-out) import it.
+// Not imported here, so tests that load this file under plain Node still run.
 
 type DialogShell = { root: HTMLDivElement; panel: HTMLDivElement; close: () => void };
 

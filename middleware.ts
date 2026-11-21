@@ -11,6 +11,10 @@ import {
   checkRateLimit,
 } from "@/lib/security/rateLimit";
 import { getRateLimitIdentifier } from "@/lib/security/request";
+import { signedInRedirect } from "@/lib/auth/signed-in-redirect";
+
+/** Pages a signed-in visitor skips: the home page and the sign-in forms. */
+const SIGNED_IN_SKIPS = new Set(["/", "/auth/signin", "/auth/signup"]);
 
 const authSecret =
   process.env.NEXTAUTH_SECRET ||
@@ -137,6 +141,22 @@ export default async function middleware(request: NextRequest) {
       );
       addCorsHeaders(response);
       return response;
+    }
+  }
+
+  // Signed in, the home page and sign-in forms go straight into the app.
+  if (!isApiRoute && request.method === "GET" && SIGNED_IN_SKIPS.has(pathname)) {
+    let signedIn = false;
+    try {
+      signedIn = typeof (await readSessionToken(request))?.sub === "string";
+    } catch {
+      signedIn = false;
+    }
+    const destination = signedIn ? signedInRedirect(pathname, nextUrl.searchParams) : null;
+    if (destination) {
+      const redirect = NextResponse.redirect(new URL(destination, request.url));
+      addSecurityHeaders(redirect);
+      return redirect;
     }
   }
 

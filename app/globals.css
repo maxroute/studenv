@@ -3214,37 +3214,6 @@ textarea {
   color: var(--amber);
 }
 
-/* Vault files not on the Shelf yet (components/items/shelf-files.tsx). */
-.type-badge.file {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--surface2);
-  color: var(--muted);
-}
-
-.shelf-files {
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-}
-
-.shelf-files-head {
-  padding: 18px 24px 0;
-}
-
-.shelf-files-head h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.shelf-files-head p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .playlist-mini-badge {
   border: 1px solid rgba(155, 127, 232, 0.26);
   border-radius: 999px;
@@ -6778,24 +6747,6 @@ body.shelf-scroll-locked {
   min-height: 0;
 }
 
-/* The Shelf's items and the vault's files scroll as one list (shelf-files.tsx). */
-.shelf-scroll {
-  display: flex;
-  flex-direction: column;
-}
-
-.shelf-shell .shelf-scroll {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-.shelf-shell .shelf-scroll .cards-grid {
-  flex: none;
-  overflow: visible;
-}
-
 
 /* Workspace interaction cursors are owned by the active canvas tool. */
 [data-workspace-interaction="pan"],
@@ -7183,4 +7134,53 @@ body.shelf-scroll-locked {
   [data-note-card]:hover .note-card-hint {
     opacity: 1;
   }
+}
+
+
+/* Navigation progress (components/ui/navigation-progress.tsx): shows at once
+   when a link or the sidebar starts a navigation, until the next page lands. */
+.nav-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 10050;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.nav-progress.active {
+  opacity: 1;
+}
+
+.nav-progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--amber, #f5a623);
+  box-shadow: 0 0 8px rgba(245, 166, 35, 0.6);
+}
+
+.nav-progress.active .nav-progress-bar {
+  animation: nav-progress-grow 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes nav-progress-grow {
+  0% { width: 0; }
+  10% { width: 35%; }
+  100% { width: 92%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress.active .nav-progress-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
+  }
+}
+
+/* A sidebar row just clicked, until its page arrives (sidebar.tsx). */
+.nav-item.pending {
+  background: var(--surface2);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--amber);
 }
