@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CalendarDays, Check, Loader2, SlidersHorizontal } from "lucide-react";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { useStudyPlanDraft } from "@/hooks/use-study-plan-draft";
+import { useVoiceAction } from "@/hooks/use-voice-action";
 import { dayLabel, minutesLabel, planSessions, saveStudyPlan, settingsSummary } from "@/lib/client/study-plan";
 
 /** Sessions listed in the card before "and N more". */
@@ -22,14 +23,16 @@ export function RanganPlanCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
   const total = schedule.sessions.reduce((sum, session) => sum + session.minutes, 0);
 
   const add = async () => {
-    if (saving || schedule.sessions.length === 0) return;
+    if (saving || schedule.sessions.length === 0) return false;
     setSaving(true);
     setFailure(null);
     const result = await saveStudyPlan(plan.goal, schedule.sessions);
     setSaving(false);
     if (result.ok) markPlanSaved(turn.id, schedule.sessions.length);
     else setFailure(result.message);
+    return result.ok;
   };
+  useVoiceAction(turn.id, turn.saved === null ? add : null);
 
   const openPlanner = (adjust: boolean) => {
     if (adjust) useStudyPlanDraft.getState().setDraft(plan);
@@ -78,7 +81,7 @@ export function RanganPlanCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
         </div>
       ) : (
         <div className="rangan-plan-actions">
-          <button type="button" className="rangan-plan-add" onClick={add} disabled={saving || schedule.sessions.length === 0}>
+          <button type="button" className="rangan-plan-add" onClick={() => void add()} disabled={saving || schedule.sessions.length === 0}>
             {saving ? <Loader2 size={15} className="rangan-spin" aria-hidden /> : <Check size={15} aria-hidden />}
             Add {schedule.sessions.length} session{schedule.sessions.length === 1 ? "" : "s"} ({minutesLabel(total)})
           </button>

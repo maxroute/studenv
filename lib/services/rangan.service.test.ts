@@ -929,3 +929,22 @@ test("a task reply that can't be read gives the question back", async () => {
     return true;
   });
 });
+
+test("a study plan asked for in any words goes to the plan flow, and the question is given back", async () => {
+  const reading = JSON.stringify({ subject: "graphs", search: "graphs", names: ["graph"], terms: ["vertex", "edge"], actions: ["plan"] });
+  const { deps, sent } = readingDeps({ reading });
+  await assert.rejects(createRanganService(deps).ask("u1", { question: "i want to get through this before my exam on friday" }), (error: { status?: number; details?: { reroute?: string }; usage?: { used: number } }) => {
+    assert.equal(error.status, 409);
+    assert.equal(error.details?.reroute, "plan");
+    assert.equal(error.usage?.used, 0, "the question is given back");
+    return true;
+  });
+  assert.equal(sent.length, 0, "the model isn't asked to answer");
+});
+
+test("a single thing to do by a time stays a task even if the reading also says plan", async () => {
+  const reading = JSON.stringify({ subject: "DSA", search: "DSA", names: [], terms: [], actions: ["plan", "task"] });
+  const { deps } = readingDeps({ reading, answer: DSA_TASK });
+  const result = await createRanganService(deps).ask("u1", { question: "plan to solve 5 dsa problems before 12 am" });
+  assert.equal(result.kind, "task");
+});

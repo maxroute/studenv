@@ -13,7 +13,7 @@ import type { BoardSummary } from "@/lib/workspace/board-edit";
 import type { RanganBoardEdit, RanganExplore, RanganMap, RanganPageDraft, RanganPageEdit, RanganTaskReply } from "@/lib/services/rangan.service";
 import { appArea, type RanganTaskDraft } from "@/lib/rangan/task";
 import type { StudyPlanResult } from "@/lib/services/study.service";
-import { isPlanRequest } from "@/lib/study/plan-intent";
+import { isPlanRequest, refersToOpen } from "@/lib/study/plan-intent";
 import { mutate as mutateCache } from "swr";
 import { canRestore, conversationTitle, MAX_TURNS_PER_SAVE, storedTurn, type StoredTurn } from "@/lib/rangan/conversation";
 
@@ -146,6 +146,22 @@ function errorMessage(status: number, body: unknown): string {
   return typeof error === "string" ? error : "Rangan couldn't answer that. Please try again.";
 }
 
+/** Where a refused request should go instead, when Rangan read it as something else. */
+function rerouteOf(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const details = (body as { details?: unknown }).details;
+  if (typeof details !== "object" || details === null) return null;
+  const reroute = (details as { reroute?: unknown }).reroute;
+  return typeof reroute === "string" ? reroute : null;
+}
+
+/** True when a plan was refused because nothing about it was found in the library. */
+function needsSources(body: unknown): boolean {
+  if (typeof body !== "object" || body === null) return false;
+  const details = (body as { details?: unknown }).details;
+  return typeof details === "object" && details !== null && (details as { needSources?: unknown }).needSources === true;
+}
+
 /** The student's own day, time and time zone, so "before midnight" is their midnight. */
 function localClock() {
   const now = new Date();
@@ -208,27 +224,29 @@ export const useRanganStore = create<RanganState>((set, get) => {
     const open = request.kind === "ask" && !request.focus && !board ? useOpenPage.getState().page : null;
     const planned = open ? pageBlocks(open.editor) : null;
 
-    const url =
-      request.kind === "summarize"
+    // A plan about "this" uses the page open in front of the student.
+    const openPageId = useOpenPage.getState().page?.noteId ?? null;
+    const urlFor = (current: RanganRequest) =>
+      current.kind === "summarize"
         ? "/api/rangan/summarize"
-        : request.kind === "plan"
+        : current.kind === "plan"
           ? "/api/study/plan"
-          : request.kind === "explore"
+          : current.kind === "explore"
             ? "/api/rangan/explore"
             : "/api/rangan/ask";
-    const payload =
-      request.kind === "summarize"
-        ? { ref: request.ref }
-        : request.kind === "plan"
-          ? { request: request.request, today: localDay() }
-          : request.kind === "explore"
-            ? (request.ref ? { ref: request.ref } : {})
+    const payloadFor = (current: RanganRequest, refs?: string[]) =>
+      current.kind === "summarize"
+        ? { ref: current.ref }
+        : current.kind === "plan"
+          ? { request: current.request, today: localDay(), ...(refs ? { refs } : {}) }
+          : current.kind === "explore"
+            ? (current.ref ? { ref: current.ref } : {})
             : {
-                question: request.question,
+                question: current.question,
                 where: appArea(window.location.pathname),
                 clock: localClock(),
                 ...(history.length ? { history } : {}),
-                ...(request.focus ? { focus: request.focus } : {}),
+                ...(current.focus ? { focus: current.focus } : {}),
                 ...(open && planned ? { page: { ref: `note:${open.noteId}`, title: open.title.slice(0, 500), blocks: planned } } : {}),
                 ...(board && boardPlanned
                   ? {
@@ -241,43 +259,61 @@ export const useRanganStore = create<RanganState>((set, get) => {
                     }
                   : {}),
               };
-    try {
-      const response = await fetch(url, {
+    const send = async (current: RanganRequest, refs?: string[]) => {
+      const response = await fetch(urlFor(current), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadFor(current, refs)),
       });
       const body: unknown = await response.json().catch(() => null);
       get().applyUsage(usageFromBody(body));
+      return { response, body };
+    };
+    /** A plan, from the open page when the request is about it, or when the library search finds nothing. */
+    const sendPlan = async (current: Extract<RanganRequest, { kind: "plan" }>) => {
+      const pageRefs = openPageId ? [`note:${openPageId}`] : undefined;
+      const first = await send(current, pageRefs && refersToOpen(current.request) ? pageRefs : undefined);
+      if (first.response.status === 404 && pageRefs && !refersToOpen(current.request) && needsSources(first.body)) return send(current, pageRefs);
+      return first;
+    };
+
+    try {
+      let current = request;
+      let { response, body } = current.kind === "plan" ? await sendPlan(current) : await send(current);
+      // Rangan read a question as a request for a study plan: the question was given back, so plan it.
+      if (current.kind === "ask" && response.status === 409 && rerouteOf(body) === "plan") {
+        current = { kind: "plan", request: current.question.slice(0, 500) };
+        ({ response, body } = await sendPlan(current));
+      }
       if (!response.ok) {
-        const retry = NOT_RETRYABLE.has(response.status) ? null : request;
+        const retry = NOT_RETRYABLE.has(response.status) ? null : current;
         const content =
-          request.kind === "plan" && response.status === 404
+          current.kind === "plan" && response.status === 404
             ? "Rangan couldn't find notes about that in your library. Name the subject, or choose the material yourself in Planner → Plan with Rangan."
             : errorMessage(response.status, body);
         set((state) => ({ turns: [...state.turns, { id: newId(), role: "error", content, retry }] }));
         return;
       }
-      if (request.kind === "explore") {
+      if (current.kind === "explore") {
         const explore = body as RanganExplore | null;
         set((state) => ({
           turns: [
             ...state.turns,
             explore && Array.isArray(explore.gaps)
               ? { id: newId(), role: "explore", explore }
-              : { id: newId(), role: "error", content: "Rangan couldn't suggest anything right now. Please try again.", retry: request },
+              : { id: newId(), role: "error", content: "Rangan couldn't suggest anything right now. Please try again.", retry: current },
           ],
         }));
         return;
       }
-      if (request.kind === "plan") {
+      if (current.kind === "plan") {
         const plan = (body as { data?: StudyPlanResult } | null)?.data;
         set((state) => ({
           turns: [
             ...state.turns,
             plan
               ? { id: newId(), role: "plan", plan, saved: null }
-              : { id: newId(), role: "error", content: "Rangan couldn't plan that. Please try again.", retry: request },
+              : { id: newId(), role: "error", content: "Rangan couldn't plan that. Please try again.", retry: current },
           ],
         }));
         return;

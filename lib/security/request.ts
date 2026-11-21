@@ -40,6 +40,23 @@ function isNextDynamicUsageError(error: unknown) {
   );
 }
 
+/** Where a refused request should go instead; the only values a client acts on. */
+const REROUTES = new Set(["plan"]);
+
+/**
+ * The few fixed flags a client error may carry for the screen to act on:
+ * `needSources` (choose what to plan from) and `reroute` (send the request
+ * to another flow). Anything else in `details` stays on the server.
+ */
+function safeFlags(details: unknown): { needSources?: true; reroute?: string } {
+  if (!details || typeof details !== "object") return {};
+  const { needSources, reroute } = details as { needSources?: unknown; reroute?: unknown };
+  return {
+    ...(needSources === true ? { needSources: true as const } : {}),
+    ...(typeof reroute === "string" && REROUTES.has(reroute) ? { reroute } : {}),
+  };
+}
+
 export function getErrorResponse(error: unknown) {
   const err =
     error && typeof error === "object"
@@ -105,9 +122,14 @@ export function getErrorResponse(error: unknown) {
         ? { reset: (err.details as { reset: number }).reset }
         : undefined;
 
+  if (err.name === "ValidationHttpError") {
+    return { message: message || "Please check your request and try again.", status, details };
+  }
+  const flags = safeFlags(err.details);
+  const extra = { ...(details as object | undefined), ...flags, ...(usage ? { usage } : {}) };
   return {
     message: message || "Please check your request and try again.",
     status,
-    details: usage && err.name !== "ValidationHttpError" ? { ...(details as object | undefined), usage } : details,
+    details: Object.keys(extra).length ? extra : undefined,
   };
 }

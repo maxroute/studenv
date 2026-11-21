@@ -100,3 +100,12 @@ test("a malformed usage is dropped, never passed on", (t) => {
   const extra = getErrorResponse(Object.assign(new Error("x"), { status: 502, usage: { ...USAGE, token: "secret" } }));
   assert.deepEqual(Object.keys((extra.details as { usage: object }).usage).sort(), ["asOf", "limit", "remaining", "resetAt", "used"], "extra fields can't ride along");
 });
+
+test("a client error passes on only the fixed flags the screen acts on", () => {
+  const reroute = getErrorResponse(Object.assign(new Error("That's a request for a study plan."), { status: 409, usage: USAGE, details: { reroute: "plan", secret: "x" } }));
+  assert.deepEqual(reroute.details, { reroute: "plan", usage: USAGE });
+  const sources = getErrorResponse(Object.assign(new Error("Rangan couldn't find anything about that."), { status: 404, details: { needSources: true, query: "private words" } }));
+  assert.deepEqual(sources.details, { needSources: true });
+  const unknown = getErrorResponse(Object.assign(new Error("Nope."), { status: 409, details: { reroute: "admin", needSources: "yes" } }));
+  assert.equal(unknown.details, undefined, "only known values pass");
+});

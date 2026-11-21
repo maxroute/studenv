@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { changePasswordSchema } from "@/lib/models/user.model";
 import { requireAuth } from "@/lib/auth/session";
 import { apiError, apiSuccess } from "@/lib/security/headers";
-import { authRateLimiter, checkRateLimit } from "@/lib/security/rateLimit";
+import { changePasswordLimiter, checkRateLimit } from "@/lib/security/rateLimit";
 import {
   getErrorResponse,
   getRateLimitIdentifier,
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireJsonContentType(request);
     const user = await requireAuth();
-    await checkRateLimit(authRateLimiter, getRateLimitIdentifier(request, user.id));
+    await checkRateLimit(changePasswordLimiter, getRateLimitIdentifier(request, user.id));
     const body = await validateBody(request, changePasswordSchema);
     const result = await authService.changePassword(
       user.id,

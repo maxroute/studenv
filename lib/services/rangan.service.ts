@@ -515,6 +515,11 @@ export function createRanganService(deps: RanganDeps) {
       // outright ("add a task", "remind me", "in the planner"), it is a task even
       // if the reading missed it; asked for a page or board, it never is.
       const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
+      // A study plan has its own flow, which reads the material and spreads it over days. The
+      // question is given back (this throws inside the allowance) and the panel asks for the plan.
+      if (!input.focus && reading?.actions.includes("plan") && !reading.actions.includes("task") && !makesOther && !asksForTask(input.question)) {
+        throw Object.assign(new Error("That's a request for a study plan."), { status: 409, details: { reroute: "plan" } });
+      }
       if (!input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)

@@ -1,5 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis/cloudflare";
+import { retryMessage } from "@/lib/security/auth-limits";
 
 type RateLimitResult = {
   success: boolean;
@@ -29,10 +30,10 @@ function logRateLimitFallback(error: unknown, scope: string) {
   console.warn(`[rate-limit] Falling back to in-memory limiter for ${scope}.`, error);
 }
 
-function createFallbackLimiter(limit: number, durationMs: number): Limiter {
+function createFallbackLimiter(name: string, limit: number, durationMs: number): Limiter {
   return {
     async limit(identifier: string) {
-      const key = `${limit}:${durationMs}:${identifier}`;
+      const key = `${name}:${identifier}`;
       const now = Date.now();
       const current = memoryWindow.get(key);
 
@@ -63,14 +64,19 @@ function createFallbackLimiter(limit: number, durationMs: number): Limiter {
   };
 }
 
-function createLimiter(limit: number, duration: `${number} s` | `${number} m` | `${number} h`) {
+/**
+ * A limit with its own name. The name keeps its counts apart from every other
+ * limit's, even one with the same size and window: two limits must never share
+ * a counter.
+ */
+function createLimiter(name: string, limit: number, duration: `${number} s` | `${number} m` | `${number} h`) {
   const unit = duration.endsWith("h")
     ? 60 * 60 * 1000
     : duration.endsWith("m")
       ? 60 * 1000
       : 1000;
   const amount = Number.parseInt(duration, 10);
-  const fallbackLimiter = createFallbackLimiter(limit, amount * unit);
+  const fallbackLimiter = createFallbackLimiter(name, limit, amount * unit);
 
   if (!redis) {
     return fallbackLimiter;
@@ -80,7 +86,7 @@ function createLimiter(limit: number, duration: `${number} s` | `${number} m` | 
     redis,
     limiter: Ratelimit.slidingWindow(limit, duration),
     analytics: true,
-    prefix: `second-brain:${limit}:${duration}`,
+    prefix: `studenv:${name}`,
   });
 
   return {
@@ -95,19 +101,32 @@ function createLimiter(limit: number, duration: `${number} s` | `${number} m` | 
   };
 }
 
-export const authRateLimiter = createLimiter(5, "15 m");
-export const passwordResetLimiter = createLimiter(3, "1 h");
-export const verificationResendLimiter = createLimiter(5, "15 m");
-export const apiRateLimiter = createLimiter(100, "1 m");
-export const searchRateLimiter = createLimiter(30, "1 m");
-export const extractRateLimiter = createLimiter(20, "1 m");
-export const contactRateLimiter = createLimiter(3, "15 m");
+export const apiRateLimiter = createLimiter("api", 100, "1 m");
+export const searchRateLimiter = createLimiter("search", 30, "1 m");
+export const extractRateLimiter = createLimiter("extract", 20, "1 m");
+export const contactRateLimiter = createLimiter("contact", 3, "15 m");
+
+// Auth steps, each counted on its own. Per network address, a shared Wi-Fi
+// (a class, a hostel) has room for several people to sign up at once; per
+// email address, one account can't be used to flood an inbox.
+export const signupIpLimiter = createLimiter("signup-ip", 10, "15 m");
+export const signupEmailLimiter = createLimiter("signup-email", 5, "1 h");
+export const verifyEmailIpLimiter = createLimiter("verify-email-ip", 20, "15 m");
+export const resetPasswordIpLimiter = createLimiter("reset-password-ip", 10, "15 m");
+export const verificationResendIpLimiter = createLimiter("resend-ip", 10, "15 m");
+export const verificationResendEmailLimiter = createLimiter("resend-email", 3, "15 m");
+export const passwordResetIpLimiter = createLimiter("forgot-ip", 10, "1 h");
+export const passwordResetEmailLimiter = createLimiter("forgot-email", 3, "1 h");
+/** Voice typing, per signed-in user: plenty for talking, not for bulk transcription. */
+export const transcribeLimiter = createLimiter("transcribe", 40, "15 m");
+/** Per signed-in user. */
+export const changePasswordLimiter = createLimiter("change-password", 5, "15 m");
 
 export async function checkRateLimit(limiter: Limiter, identifier: string) {
   const result = await limiter.limit(identifier);
 
   if (!result.success) {
-    const error = new Error("Too many requests.");
+    const error = new Error(retryMessage(result.reset, Date.now(), "requests"));
     Object.assign(error, { status: 429, details: result });
     throw error;
   }

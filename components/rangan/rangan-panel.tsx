@@ -16,6 +16,7 @@ import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
 import { RanganTaskCard } from "./rangan-task-card";
 import { RanganHistory } from "./rangan-history";
+import { RanganDictateButton, RanganVoiceMode, RanganVoiceProblem, stopVoice, useVoiceStore } from "./rangan-voice";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
 import { resetLabel } from "@/lib/rangan/usage";
@@ -200,6 +201,10 @@ export function RanganPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const voiceMode = useVoiceStore((state) => state.mode);
+
+  // Closing the panel ends voice typing or voice mode: the microphone is never left on.
+  useEffect(() => () => stopVoice(), []);
   const loadingConversation = useRanganStore((state) => state.loadingConversation);
   const onBoard = pathname?.startsWith("/workspaces/") ?? false;
   const spent = usage !== null && usage.remaining <= 0;
@@ -263,14 +268,20 @@ export function RanganPanel() {
     router.push(href);
   };
 
-  const submit = () => {
-    const question = draft.trim();
+  /** Sends a question, typed or spoken. */
+  const send = (text: string) => {
+    const question = text.trim();
     if (!question || pending || spent) return;
-    setDraft("");
     setShowHistory(false);
     // "What should I explore next?" gets a card built from the page in front of the student.
     if (isExploreRequest(question)) void explore(currentNoteId ? `note:${currentNoteId}` : undefined, question);
     else void ask(question);
+  };
+
+  const submit = () => {
+    if (!draft.trim() || pending || spent) return;
+    setDraft("");
+    send(draft);
   };
 
   const onInputKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -434,27 +445,35 @@ export function RanganPanel() {
             submit();
           }}
         >
+          <RanganVoiceProblem />
           {!spent ? (
             <div className="rangan-chips">
-              {currentNoteId ? (
-                <button
-                  type="button"
-                  className="rangan-chip"
-                  disabled={pending}
-                  onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
-                >
-                  <ListTree size={14} aria-hidden /> Summarize this page
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="rangan-chip"
-                disabled={pending}
-                onClick={() => void explore(currentNoteId ? `note:${currentNoteId}` : undefined)}
-                title={currentNoteId ? "From this page" : "From the page you edited last"}
-              >
-                <Compass size={14} aria-hidden /> What should I explore next?
-              </button>
+              {voiceMode === "conversation" ? (
+                <RanganVoiceMode send={send} disabled={pending} />
+              ) : (
+                <>
+                  <RanganVoiceMode send={send} disabled={pending} />
+                  {currentNoteId ? (
+                    <button
+                      type="button"
+                      className="rangan-chip"
+                      disabled={pending}
+                      onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
+                    >
+                      <ListTree size={14} aria-hidden /> Summarize this page
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="rangan-chip"
+                    disabled={pending}
+                    onClick={() => void explore(currentNoteId ? `note:${currentNoteId}` : undefined)}
+                    title={currentNoteId ? "From this page" : "From the page you edited last"}
+                  >
+                    <Compass size={14} aria-hidden /> What should I explore next?
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
           <div className="rangan-input-row">
@@ -464,11 +483,18 @@ export function RanganPanel() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onInputKey}
-              placeholder={spent ? "You've used today's questions" : "Ask Rangan…"}
+              placeholder={spent ? "You've used today's questions" : voiceMode === "dictating" ? "Listening…" : voiceMode === "conversation" ? "Voice mode is on" : "Ask Rangan…"}
               aria-label="Ask Rangan"
               rows={1}
               maxLength={2_000}
               disabled={spent}
+            />
+            <RanganDictateButton
+              disabled={pending || spent}
+              onText={(text) => {
+                setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
+                inputRef.current?.focus({ preventScroll: true });
+              }}
             />
             <button type="submit" className="rangan-send" aria-label="Send" disabled={!draft.trim() || pending || spent}>
               {pending ? <Loader2 size={16} className="rangan-spin" /> : <Send size={16} />}
