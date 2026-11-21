@@ -11,6 +11,7 @@ import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hook
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
 import { RanganLogo } from "./rangan-launcher";
 import { RanganExploreCard } from "./rangan-explore-card";
+import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
@@ -249,6 +250,17 @@ export function RanganPanel() {
             </div>
           ) : turn.role === "assistant" ? (
             <Answer key={turn.id} turn={turn} onOpen={openCitation} />
+          ) : turn.role === "page" ? (
+            <RanganPageDraftCard
+              key={turn.id}
+              turn={turn}
+              onBoard={onBoard}
+              onNavigate={() => {
+                if (isNarrow() && !onBoard) close();
+              }}
+            />
+          ) : turn.role === "edit" ? (
+            <RanganPageEditCard key={turn.id} turn={turn} />
           ) : turn.role === "explore" ? (
             <RanganExploreCard
               key={turn.id}

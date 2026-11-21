@@ -30,6 +30,20 @@ export const ranganAskSchema = z
     question: z.string().trim().min(1, "Ask Rangan something.").max(RANGAN_QUESTION_MAX),
     history: z.array(historyTurn).max(RANGAN_HISTORY_MAX_TURNS).optional(),
     focus: focusSchema.optional(),
+    /**
+     * The page open in front of the student, as the editor shows it right now
+     * (unsaved typing included), so Rangan can change it when asked.
+     */
+    page: z
+      .object({
+        ref: z.string().trim().min(1).max(420),
+        title: z.string().max(500),
+        blocks: z
+          .array(z.object({ type: z.string().min(1).max(40), text: z.string().max(4_000), locked: z.boolean() }).strict())
+          .max(400),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

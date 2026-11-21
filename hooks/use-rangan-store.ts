@@ -4,7 +4,9 @@ import { create } from "zustand";
 import type { OpenTarget } from "@/lib/rangan/citations";
 import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
-import type { RanganExplore } from "@/lib/services/rangan.service";
+import { pageBlocks, useOpenPage } from "@/hooks/use-open-page";
+import type { PageBlock } from "@/lib/rangan/page";
+import type { RanganExplore, RanganPageDraft, RanganPageEdit } from "@/lib/services/rangan.service";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { isPlanRequest } from "@/lib/study/plan-intent";
 
@@ -41,7 +43,11 @@ export type RanganTurn =
   /** A study plan shown as a card; `saved` is how many sessions were added to the planner. */
   | { id: string; role: "plan"; plan: StudyPlanResult; saved: number | null }
   /** Gaps, connections and next questions, shown as a card. */
-  | { id: string; role: "explore"; explore: RanganExplore };
+  | { id: string; role: "explore"; explore: RanganExplore }
+  /** A new page Rangan wrote; `noteId` once the student created it. */
+  | { id: string; role: "page"; draft: RanganPageDraft; noteId: string | null }
+  /** A change to the open page; `planned` is the page as it was when Rangan planned it. */
+  | { id: string; role: "edit"; edit: RanganPageEdit; planned: PageBlock[]; applied: boolean };
 
 type RanganState = {
   open: boolean;
@@ -64,6 +70,10 @@ type RanganState = {
   explore: (ref?: string, label?: string) => Promise<void>;
   /** Records that a plan card's sessions were added to the planner. */
   markPlanSaved: (turnId: string, count: number) => void;
+  /** Records that a page draft was created as a page. */
+  markPageCreated: (turnId: string, noteId: string) => void;
+  /** Records that a page edit was applied. */
+  markEditApplied: (turnId: string) => void;
 };
 
 /** Turns sent back as context, newest last; the API accepts at most 10. */
@@ -118,6 +128,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
             : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
     set((state) => ({ pending: true, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
 
+    // The open page as it is right now, so Rangan can change it when asked.
+    const open = request.kind === "ask" && !request.focus ? useOpenPage.getState().page : null;
+    const planned = open ? pageBlocks(open.editor) : null;
+
     const url =
       request.kind === "summarize"
         ? "/api/rangan/summarize"
@@ -133,7 +147,12 @@ export const useRanganStore = create<RanganState>((set, get) => {
           ? { request: request.request, today: localDay() }
           : request.kind === "explore"
             ? (request.ref ? { ref: request.ref } : {})
-            : { question: request.question, ...(history.length ? { history } : {}), ...(request.focus ? { focus: request.focus } : {}) };
+            : {
+                question: request.question,
+                ...(history.length ? { history } : {}),
+                ...(request.focus ? { focus: request.focus } : {}),
+                ...(open && planned ? { page: { ref: `note:${open.noteId}`, title: open.title.slice(0, 500), blocks: planned } } : {}),
+              };
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -174,6 +193,15 @@ export const useRanganStore = create<RanganState>((set, get) => {
               : { id: newId(), role: "error", content: "Rangan couldn't plan that. Please try again.", retry: request },
           ],
         }));
+        return;
+      }
+      const reply = body as { kind?: unknown } | null;
+      if (reply?.kind === "page") {
+        set((state) => ({ turns: [...state.turns, { id: newId(), role: "page", draft: body as RanganPageDraft, noteId: null }] }));
+        return;
+      }
+      if (reply?.kind === "edit") {
+        set((state) => ({ turns: [...state.turns, { id: newId(), role: "edit", edit: body as RanganPageEdit, planned: planned ?? [], applied: false }] }));
         return;
       }
       const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown; support?: unknown };
@@ -248,6 +276,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
       get().openPanel();
       await run({ kind: "explore", ...(ref ? { ref } : {}), label: label?.trim().slice(0, 300) || "What should I explore next?" });
     },
+    markPageCreated: (turnId, noteId) =>
+      set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "page" ? { ...turn, noteId } : turn)) })),
+    markEditApplied: (turnId) =>
+      set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "edit" ? { ...turn, applied: true } : turn)) })),
     markPlanSaved: (turnId, count) =>
       set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "plan" ? { ...turn, saved: count } : turn)) })),
     retry: async (request) => {
