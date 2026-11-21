@@ -64,7 +64,7 @@ export function RelatedInLibrary({ noteId, title, embedded = false }: { noteId: 
       window.open(target.url, "_blank", "noopener,noreferrer");
       return;
     }
-    const href = `/shelf/${encodeURIComponent(target.itemId)}`;
+    const href = target.kind === "board" ? `/workspaces/${encodeURIComponent(target.boardId)}` : `/shelf/${encodeURIComponent(target.itemId)}`;
     if (embedded) window.open(href, "_blank", "noopener");
     else router.push(href);
   };

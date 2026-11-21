@@ -20,7 +20,18 @@ export type RanganCitationView = {
   heading: string;
   snippet: string;
   open: OpenTarget | null;
+  /** Where it came from: what was open, the library, or the web; absent on older answers. */
+  origin?: "open" | "library" | "web";
 };
+
+/** A lesson video from an answer, kept only when it has a real YouTube id. */
+function videoFrom(value: unknown): { video?: { videoId: string; title: string; channel: string } } {
+  if (!value || typeof value !== "object") return {};
+  const { videoId, title, channel } = value as Record<string, unknown>;
+  return typeof videoId === "string" && /^[A-Za-z0-9_-]{11}$/.test(videoId) && typeof title === "string"
+    ? { video: { videoId, title: title.slice(0, 200), channel: typeof channel === "string" ? channel.slice(0, 120) : "" } }
+    : {};
+}
 
 /** What a turn asked for, so a failed one can be sent again exactly. */
 export type RanganRequest =
@@ -40,6 +51,8 @@ export type RanganTurn =
       partial?: boolean;
       /** The check of cited sentences against their sources; absent on answers from before it existed. */
       support?: { checked: boolean; removed: number };
+      /** A lesson video offered when the answer reached beyond the library. */
+      video?: { videoId: string; title: string; channel: string };
     }
   | { id: string; role: "error"; content: string; retry: RanganRequest | null }
   /** A study plan shown as a card; `saved` is how many sessions were added to the planner. */
@@ -232,7 +245,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
         set((state) => ({ turns: [...state.turns, { id: newId(), role: "edit", edit: body as RanganPageEdit, planned: planned ?? [], applied: false }] }));
         return;
       }
-      const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown; support?: unknown };
+      const answer = body as { answer?: unknown; citations?: unknown; partial?: unknown; support?: unknown; video?: unknown };
       const support = answer.support as { checked?: unknown; removed?: unknown } | undefined;
       set((state) => ({
         turns: [
@@ -246,6 +259,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
             ...(support && typeof support.checked === "boolean" && typeof support.removed === "number"
               ? { support: { checked: support.checked, removed: support.removed } }
               : {}),
+            ...videoFrom(answer.video),
           },
         ],
       }));

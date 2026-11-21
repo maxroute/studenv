@@ -75,6 +75,7 @@ export function StudyMaker({ onReview }: { onReview: () => void }) {
     if (target.kind === "pdf") setPdf({ assetId: target.assetId, title, page: target.page });
     else if (target.kind === "note") router.push(`/notes/${encodeURIComponent(target.noteId)}${target.blockId ? `#${target.blockId}` : ""}`);
     else if (target.kind === "web") window.open(target.url, "_blank", "noopener,noreferrer");
+    else if (target.kind === "board") router.push(`/workspaces/${encodeURIComponent(target.boardId)}`);
     else router.push(`/shelf/${encodeURIComponent(target.itemId)}`);
   };
 

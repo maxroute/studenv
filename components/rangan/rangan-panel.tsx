@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Compass, FileText, Globe, ListTree, Loader2, NotebookText, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { BookOpen, Compass, FileText, Globe, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -29,7 +29,9 @@ const EXAMPLES = [
   "Plan my revision for the next two weeks",
 ];
 
-const SOURCE_LABEL: Record<string, string> = { note: "Page", pdf: "PDF", transcript: "Video", item: "Shelf", web: "Wikipedia" };
+const SOURCE_LABEL: Record<string, string> = { note: "Page", pdf: "PDF", transcript: "Video", item: "Shelf", board: "Board", web: "Wikipedia" };
+/** Where a source sits in the order Rangan looks: what is open first, then the library, then the web. */
+const openLabel = (sourceType: string) => (sourceType === "board" ? "This board" : "This page");
 
 type PdfOpen = { assetId: string; title: string; page: number };
 
@@ -37,6 +39,7 @@ function SourceIcon({ type }: { type: string }) {
   if (type === "pdf") return <FileText size={14} aria-hidden />;
   if (type === "note") return <NotebookText size={14} aria-hidden />;
   if (type === "web") return <Globe size={14} aria-hidden />;
+  if (type === "board") return <LayoutDashboard size={14} aria-hidden />;
   return <BookOpen size={14} aria-hidden />;
 }
 
@@ -102,7 +105,7 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
       ) : null}
       {turn.citations.length > 0 ? (
         <div className="rangan-sources" aria-label="Sources">
-          <div className="rangan-sources-label">{fromWeb ? "Sources" : "From your library"}</div>
+          <div className="rangan-sources-label">{fromWeb ? "Sources" : turn.citations.every((citation) => citation.origin === "open") ? `From ${openLabel(turn.citations[0].sourceType).toLowerCase()}` : "From your library"}</div>
           {turn.citations.map((citation) => (
             <button
               key={citation.n}
@@ -117,7 +120,11 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
                   <SourceIcon type={citation.sourceType} />
                   <span className="rangan-source-name">{citation.title || "Untitled"}</span>
                   <span className="rangan-source-kind">
-                    {citation.open?.kind === "pdf" ? `p. ${citation.open.page}` : SOURCE_LABEL[citation.sourceType] ?? ""}
+                    {citation.origin === "open"
+                      ? openLabel(citation.sourceType)
+                      : citation.open?.kind === "pdf"
+                        ? `p. ${citation.open.page}`
+                        : SOURCE_LABEL[citation.sourceType] ?? ""}
                   </span>
                 </span>
                 {citation.heading && citation.open?.kind !== "pdf" ? (
@@ -128,6 +135,16 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
             </button>
           ))}
         </div>
+      ) : null}
+      {turn.video ? (
+        <a className="rangan-answer-video" href={`https://www.youtube.com/watch?v=${encodeURIComponent(turn.video.videoId)}`} target="_blank" rel="noopener noreferrer">
+          <PlayCircle size={16} aria-hidden />
+          <span>
+            <span className="rangan-plan-meta">Watch a lesson on YouTube</span>
+            <strong>{turn.video.title}</strong>
+            {turn.video.channel ? <span className="rangan-plan-meta">{turn.video.channel}</span> : null}
+          </span>
+        </a>
       ) : null}
     </div>
   );
@@ -191,7 +208,12 @@ export function RanganPanel() {
       window.open(target.url, "_blank", "noopener,noreferrer");
       return;
     }
-    const href = `/shelf/${encodeURIComponent(target.itemId)}`;
+    if (target.kind === "board" && pathname === `/workspaces/${target.boardId}`) {
+      // Already on that board.
+      if (isNarrow()) close();
+      return;
+    }
+    const href = target.kind === "board" ? `/workspaces/${encodeURIComponent(target.boardId)}` : `/shelf/${encodeURIComponent(target.itemId)}`;
     if (onBoard) {
       window.open(href, "_blank", "noopener");
       return;
@@ -390,7 +412,7 @@ export function RanganPanel() {
           </div>
           <p className="rangan-privacy">
             To answer, the relevant parts of your library and your question are sent to Groq or Cloudflare. When your library has
-            little on a question, the question is also looked up on Wikipedia. For mind maps, only the topic is also searched on Wikimedia Commons (pictures) and YouTube (one video). Answers can be wrong, so check the sources.
+            little on a question, the question is also looked up on Wikipedia. Then, and for mind maps, only the topic is also searched on YouTube for one lesson video; maps also look on Wikimedia Commons for pictures. Answers can be wrong, so check the sources.
           </p>
         </form>
       </aside>

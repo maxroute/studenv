@@ -8,7 +8,9 @@ import {
   withHashes,
   type HashedPassage,
 } from "@/lib/rangan/chunking";
+import { boardPassages, sceneText } from "@/lib/rangan/board-text";
 import { planChunkSync, type IndexedSource, type SourceVersion } from "@/lib/rangan/index-plan";
+import { parseWorkspaceSceneJson } from "@/types/workspace";
 import type { IndexSourceType } from "@/lib/rangan/ranking";
 
 // Every query here is scoped to `ownerId`: a user's index only ever holds and
@@ -16,7 +18,7 @@ import type { IndexSourceType } from "@/lib/rangan/ranking";
 
 /** Every source the user has now, with a version that changes when its text can. */
 export async function listSourceVersions(ownerId: string): Promise<SourceVersion[]> {
-  const [notes, pdfs, transcripts, articles] = await Promise.all([
+  const [notes, pdfs, transcripts, articles, boards] = await Promise.all([
     prisma.note.findMany({
       where: { ownerId, deletedAt: null },
       select: { id: true, title: true, updatedAt: true },
@@ -35,6 +37,11 @@ export async function listSourceVersions(ownerId: string): Promise<SourceVersion
     prisma.item.findMany({
       where: { userId: ownerId, type: "article", OR: [{ excerpt: { not: null } }, { notes: { not: null } }] },
       select: { id: true, title: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.workspace.findMany({
+      where: { ownerId },
+      select: { id: true, title: true, latestVersion: true, lastSnapshotId: true },
       orderBy: { updatedAt: "desc" },
     }),
   ]);
@@ -62,6 +69,8 @@ export async function listSourceVersions(ownerId: string): Promise<SourceVersion
       version: String(row.updatedAt.getTime()),
     })),
     ...articles.map((item) => ({ type: "item" as const, id: item.id, title: item.title, version: String(item.updatedAt.getTime()) })),
+    // A board's words change only with a new snapshot.
+    ...boards.map((board) => ({ type: "board" as const, id: board.id, title: board.title, version: `${board.latestVersion}:${board.lastSnapshotId ?? ""}` })),
   ];
 }
 
@@ -106,6 +115,22 @@ export async function loadPassages(ownerId: string, type: IndexSourceType, id: s
       });
       if (!item) return null;
       return withHashes(chunkPlainText([item.excerpt, item.notes].filter(Boolean).join("\n\n")));
+    }
+    case "board": {
+      const board = await prisma.workspace.findFirst({ where: { id, ownerId }, select: { lastSnapshotId: true } });
+      if (!board) return null;
+      const snapshot = board.lastSnapshotId
+        ? await prisma.workspaceSnapshot.findFirst({ where: { id: board.lastSnapshotId, workspaceId: id }, select: { sceneJson: true } })
+        : await prisma.workspaceSnapshot.findFirst({ where: { workspaceId: id }, orderBy: { version: "desc" }, select: { sceneJson: true } });
+      if (!snapshot) return [];
+      let items: ReadonlyArray<{ id: string; type: string; props?: unknown }> = [];
+      try {
+        items = parseWorkspaceSceneJson(snapshot.sceneJson).items;
+      } catch {
+        items = [];
+      }
+      const { nodes, edges } = sceneText(items);
+      return withHashes(boardPassages(nodes, edges));
     }
   }
 }
@@ -258,6 +283,8 @@ export async function findSourceTitle(ownerId: string, type: IndexSourceType, id
       return (await prisma.mediaAsset.findFirst({ where: { id, ownerId }, select: { title: true } }))?.title ?? null;
     case "item":
       return (await prisma.item.findFirst({ where: { id, userId: ownerId }, select: { title: true } }))?.title ?? null;
+    case "board":
+      return (await prisma.workspace.findFirst({ where: { id, ownerId }, select: { title: true } }))?.title ?? null;
   }
 }
 
