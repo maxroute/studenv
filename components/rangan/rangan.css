@@ -900,3 +900,41 @@ body:has(.note-keyboard-bar) .rangan-fab {
   padding: 4px 8px;
   font-size: 13px;
 }
+
+/* Mind maps Rangan drafts */
+.rangan-map-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.rangan-map-centre {
+  font-weight: 600;
+}
+
+.rangan-map-outline ul {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.rangan-map-outline li {
+  margin: 3px 0;
+}
+
+.rangan-map-branch em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.rangan-page-map {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}

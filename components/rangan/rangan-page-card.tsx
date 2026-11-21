@@ -9,6 +9,7 @@ import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { citationLabel, type PageChange } from "@/lib/rangan/page";
 import { applyPageEdit, createPageFromDraft, flashcardsFromPage } from "./page-actions";
+import { CreateBoardButton, MapOutline } from "./rangan-map-card";
 
 /**
  * The Markdown as a preview shows it: citation marks dropped (the sources are
@@ -104,7 +105,15 @@ export function RanganPageDraftCard({ turn, onBoard, onNavigate }: { turn: Extra
       ) : null}
       <Sources citations={draft.citations} />
       <SupportNote support={draft.support} />
-      {draft.boardRequested ? <p className="rangan-plan-meta">You also asked for a board. Rangan can&apos;t build boards yet; that&apos;s coming next.</p> : null}
+      {draft.map ? (
+        <div className="rangan-page-map">
+          <p className="rangan-plan-meta">And a mind map for a board{turn.noteId ? ", linked to this page" : ""}:</p>
+          <MapOutline map={draft.map} />
+          <div className="rangan-plan-actions">
+            <CreateBoardButton turnId={turn.id} map={draft.map} boardId={turn.boardId ?? null} pageNoteId={turn.noteId} onNavigate={onNavigate} />
+          </div>
+        </div>
+      ) : null}
       <div className="rangan-plan-actions">
         {turn.noteId ? (
           <>

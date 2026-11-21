@@ -6,7 +6,9 @@ import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
 import { pageBlocks, useOpenPage } from "@/hooks/use-open-page";
 import type { PageBlock } from "@/lib/rangan/page";
-import type { RanganExplore, RanganPageDraft, RanganPageEdit } from "@/lib/services/rangan.service";
+import { openBoard, openBoardSummary } from "@/components/rangan/board-actions";
+import type { BoardSummary } from "@/lib/workspace/board-edit";
+import type { RanganBoardEdit, RanganExplore, RanganMap, RanganPageDraft, RanganPageEdit } from "@/lib/services/rangan.service";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { isPlanRequest } from "@/lib/study/plan-intent";
 
@@ -45,9 +47,13 @@ export type RanganTurn =
   /** Gaps, connections and next questions, shown as a card. */
   | { id: string; role: "explore"; explore: RanganExplore }
   /** A new page Rangan wrote; `noteId` once the student created it. */
-  | { id: string; role: "page"; draft: RanganPageDraft; noteId: string | null }
+  | { id: string; role: "page"; draft: RanganPageDraft; noteId: string | null; boardId?: string | null }
   /** A change to the open page; `planned` is the page as it was when Rangan planned it. */
-  | { id: string; role: "edit"; edit: RanganPageEdit; planned: PageBlock[]; applied: boolean };
+  | { id: string; role: "edit"; edit: RanganPageEdit; planned: PageBlock[]; applied: boolean }
+  /** A new map board Rangan drafted; `boardId` once the student created it. */
+  | { id: string; role: "map"; map: RanganMap; boardId: string | null }
+  /** Additions to the open board; `planned` is the board as it was when Rangan planned them. */
+  | { id: string; role: "board-edit"; edit: RanganBoardEdit; planned: BoardSummary; applied: boolean };
 
 type RanganState = {
   open: boolean;
@@ -72,8 +78,10 @@ type RanganState = {
   markPlanSaved: (turnId: string, count: number) => void;
   /** Records that a page draft was created as a page. */
   markPageCreated: (turnId: string, noteId: string) => void;
-  /** Records that a page edit was applied. */
+  /** Records that a page edit or board edit was applied. */
   markEditApplied: (turnId: string) => void;
+  /** Records that a map draft (alone or with a page) was created as a board. */
+  markBoardCreated: (turnId: string, boardId: string) => void;
 };
 
 /** Turns sent back as context, newest last; the API accepts at most 10. */
@@ -128,8 +136,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
             : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
     set((state) => ({ pending: true, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
 
-    // The open page as it is right now, so Rangan can change it when asked.
-    const open = request.kind === "ask" && !request.focus ? useOpenPage.getState().page : null;
+    // The open board or page as it is right now, so Rangan can add to it or change it when asked.
+    const board = request.kind === "ask" && !request.focus ? openBoard() : null;
+    const boardPlanned = board ? openBoardSummary() : null;
+    const open = request.kind === "ask" && !request.focus && !board ? useOpenPage.getState().page : null;
     const planned = open ? pageBlocks(open.editor) : null;
 
     const url =
@@ -152,6 +162,16 @@ export const useRanganStore = create<RanganState>((set, get) => {
                 ...(history.length ? { history } : {}),
                 ...(request.focus ? { focus: request.focus } : {}),
                 ...(open && planned ? { page: { ref: `note:${open.noteId}`, title: open.title.slice(0, 500), blocks: planned } } : {}),
+                ...(board && boardPlanned
+                  ? {
+                      board: {
+                        ref: `workspace:${board.id}`,
+                        title: board.title.slice(0, 500),
+                        elements: boardPlanned.elements.map(({ key, type, text, selected, locked }) => ({ key, type: type.slice(0, 40), text: text.slice(0, 400), selected, locked })),
+                        edges: boardPlanned.edges.slice(0, 400).map((edge) => ({ ...edge, label: edge.label.slice(0, 60) })),
+                      },
+                    }
+                  : {}),
               };
     try {
       const response = await fetch(url, {
@@ -198,6 +218,14 @@ export const useRanganStore = create<RanganState>((set, get) => {
       const reply = body as { kind?: unknown } | null;
       if (reply?.kind === "page") {
         set((state) => ({ turns: [...state.turns, { id: newId(), role: "page", draft: body as RanganPageDraft, noteId: null }] }));
+        return;
+      }
+      if (reply?.kind === "map") {
+        set((state) => ({ turns: [...state.turns, { id: newId(), role: "map", map: (body as { map: RanganMap }).map, boardId: null }] }));
+        return;
+      }
+      if (reply?.kind === "board-edit") {
+        set((state) => ({ turns: [...state.turns, { id: newId(), role: "board-edit", edit: body as RanganBoardEdit, planned: boardPlanned ?? { elements: [], edges: [] }, applied: false }] }));
         return;
       }
       if (reply?.kind === "edit") {
@@ -279,7 +307,13 @@ export const useRanganStore = create<RanganState>((set, get) => {
     markPageCreated: (turnId, noteId) =>
       set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "page" ? { ...turn, noteId } : turn)) })),
     markEditApplied: (turnId) =>
-      set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "edit" ? { ...turn, applied: true } : turn)) })),
+      set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && (turn.role === "edit" || turn.role === "board-edit") ? { ...turn, applied: true } : turn)) })),
+    markBoardCreated: (turnId, boardId) =>
+      set((state) => ({
+        turns: state.turns.map((turn) =>
+          turn.id !== turnId ? turn : turn.role === "map" ? { ...turn, boardId } : turn.role === "page" ? { ...turn, boardId } : turn,
+        ),
+      })),
     markPlanSaved: (turnId, count) =>
       set((state) => ({ turns: state.turns.map((turn) => (turn.id === turnId && turn.role === "plan" ? { ...turn, saved: count } : turn)) })),
     retry: async (request) => {

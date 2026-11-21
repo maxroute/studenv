@@ -524,8 +524,8 @@ function readingDeps(options: { reading?: string | Error; library?: LibraryPassa
   return { ...fake, quick, webQueries };
 }
 
-/** A question about operating systems that also asks for a board (boards come in a later change). */
-const OS_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel processes", names: ["operating system", "OS"], terms: ["kernel", "process", "scheduler"], actions: ["board"] });
+/** A question about operating systems, with no page or board to make. */
+const OS_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel processes", names: ["operating system", "OS"], terms: ["kernel", "process", "scheduler"], actions: [] });
 
 test("the subject is searched, not the whole message, and an unrelated book is left out", async () => {
   const { deps, searches, sent, quick } = readingDeps({ reading: OS_READING });
@@ -536,7 +536,6 @@ test("the subject is searched, not the whole message, and an unrelated book is l
   const prompt = sent[0].at(-1)?.content ?? "";
   assert.doesNotMatch(prompt, /Word Power Made Easy/, "the vocabulary book is not given to the model");
   assert.match(prompt, /\[1\] CS notes › Kernel/);
-  assert.match(prompt, /You can't create boards yet/);
   assert.deepEqual(result.citations.map((citation) => citation.title), ["CS notes"]);
 });
 
@@ -614,13 +613,86 @@ test("asking for a page returns a draft with its outline and cited sources, for 
   assert.match(sent[0][0].content, /writing a study page/);
   assert.match(sent[0][1].content, /Write a study page that teaches "operating systems"/);
   assert.equal([...counts.values()][0], 1);
-  assert.equal(reply.boardRequested, undefined);
+  assert.equal(reply.map, undefined);
 });
 
-test("a page request that also asks for a board says boards come later", async () => {
-  const { deps } = pageDeps({ reading: PAGE_READING.replace('"actions":["page"]', '"actions":["page","board"]'), write: "# OS\n## Kernel\nIt runs things." });
-  const reply = await createRanganService(deps).ask("u1", { question: "make a note and a board on operating systems" });
-  assert.equal(reply.kind === "page" && reply.boardRequested, true);
+const MAP_REPLY = JSON.stringify({
+  title: "OS map",
+  centre: "Operating System",
+  branches: [
+    { title: "Kernel", note: "The core", relation: "has", passage: 1, children: [{ title: "Scheduler" }] },
+    { title: "Memory", note: "Where data lives", relation: "manages", children: [{ title: "Paging" }] },
+  ],
+  links: [{ from: "Scheduler", to: "Paging", label: "shares" }],
+  tips: ["Draw the layers"],
+});
+
+/** The model answers each call in turn: page, citation check, map, ... */
+function sequenceDeps(reading: string, replies: string[], extra: Partial<RanganDeps> = {}) {
+  const fake = readingDeps({ reading, library: [OS_NOTE] });
+  let call = 0;
+  fake.deps.complete = async (messages) => {
+    fake.sent.push(messages);
+    return { text: replies[Math.min(call++, replies.length - 1)], provider: "groq-large", model: "m" };
+  };
+  Object.assign(fake.deps, extra);
+  return fake;
+}
+
+test("a page request that also asks for a board brings a map, for the same one question", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["page","board"]');
+  const { deps, counts } = sequenceDeps(reading, ["# OS\n## Kernel\nIt runs things.", MAP_REPLY]);
+  const reply = await createRanganService(deps).ask("u1", { question: "make a note and a mind map on operating systems" });
+  assert.equal(reply.kind, "page");
+  if (reply.kind !== "page") return;
+  assert.equal(reply.map?.draft.centre, "Operating System");
+  assert.deepEqual(reply.map?.sources, [{ n: 1, ref: OS_NOTE.ref, sourceType: "note", title: "CS notes" }]);
+  assert.equal([...counts.values()][0], 1);
+});
+
+test("asking for a board returns a map draft with its outline", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
+  const { deps, sent } = sequenceDeps(reading, [MAP_REPLY]);
+  const reply = await createRanganService(deps).ask("u1", { question: "make a mind map of operating systems" });
+  assert.equal(reply.kind, "map");
+  if (reply.kind !== "map") return;
+  assert.deepEqual(reply.map.outline, ["Kernel (has)", "  Scheduler", "Memory (manages)", "  Paging"]);
+  assert.match(sent[0][1].content, /Plan a mind map that teaches "operating systems"/);
+});
+
+test("a map reply that isn't a map is an error, so the question is given back", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
+  const { deps, counts } = sequenceDeps(reading, ["Sorry."]);
+  await assert.rejects(createRanganService(deps).ask("u1", { question: "make a mind map" }), { status: 502 });
+  assert.equal([...counts.values()][0], 0);
+});
+
+const OPEN_BOARD = {
+  ref: "workspace:board1",
+  title: "OS map",
+  elements: [
+    { key: "e1", type: "sticky", text: "Memory", selected: true, locked: false },
+    { key: "e2", type: "sticky", text: "Operating System", selected: false, locked: false },
+  ],
+  edges: [{ from: "e2", to: "e1", label: "manages" }],
+};
+
+test("asking to add to the open board returns a plan on its elements", async () => {
+  const reading = EDIT_READING;
+  const plan = JSON.stringify({ summary: "Expanded Memory.", changes: [{ add: { to: "e1", title: "Paging", label: "uses", children: [{ title: "Page table" }] } }, { add: { to: "e7", title: "Nowhere" } }] });
+  const { deps, sent } = sequenceDeps(reading, [plan], { ownsBoard: async (userId, id) => userId === "u1" && id === "board1" });
+  const reply = await createRanganService(deps).ask("u1", { question: "expand the selected node", board: OPEN_BOARD });
+  assert.equal(reply.kind, "board-edit");
+  if (reply.kind !== "board-edit") return;
+  assert.equal(reply.boardRef, "workspace:board1");
+  assert.deepEqual(reply.changes, [{ kind: "add", to: "e1", node: { title: "Paging", note: "" }, label: "uses", children: [{ title: "Page table", note: "" }], also: [] }]);
+  assert.match(sent[0][1].content, /e1\* \(sticky\) Memory/);
+});
+
+test("someone else's board can't be changed, and the question is given back", async () => {
+  const { deps, counts } = sequenceDeps(EDIT_READING, ["{}"], { ownsBoard: async () => false });
+  await assert.rejects(createRanganService(deps).ask("u1", { question: "expand the selected node", board: OPEN_BOARD }), { status: 404 });
+  assert.equal([...counts.values()][0], 0);
 });
 
 test("a reply that isn't a page is an error, so the question is given back", async () => {
