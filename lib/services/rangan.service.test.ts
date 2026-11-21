@@ -524,7 +524,8 @@ function readingDeps(options: { reading?: string | Error; library?: LibraryPassa
   return { ...fake, quick, webQueries };
 }
 
-const OS_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel processes", names: ["operating system", "OS"], terms: ["kernel", "process", "scheduler"], actions: ["page", "board"] });
+/** A question about operating systems that also asks for a board (boards come in a later change). */
+const OS_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel processes", names: ["operating system", "OS"], terms: ["kernel", "process", "scheduler"], actions: ["board"] });
 
 test("the subject is searched, not the whole message, and an unrelated book is left out", async () => {
   const { deps, searches, sent, quick } = readingDeps({ reading: OS_READING });
@@ -535,7 +536,7 @@ test("the subject is searched, not the whole message, and an unrelated book is l
   const prompt = sent[0].at(-1)?.content ?? "";
   assert.doesNotMatch(prompt, /Word Power Made Easy/, "the vocabulary book is not given to the model");
   assert.match(prompt, /\[1\] CS notes › Kernel/);
-  assert.match(prompt, /You can't create pages or boards yet/);
+  assert.match(prompt, /You can't create boards yet/);
   assert.deepEqual(result.citations.map((citation) => citation.title), ["CS notes"]);
 });
 
@@ -568,4 +569,96 @@ test("a citation inside the general-knowledge part is removed and not listed as 
   const result = await createRanganService(deps).ask("u1", { question: "What does the OS kernel do?" });
   assert.equal(result.answer, "The kernel schedules processes [1].\n\n### Beyond your sources\nStudy in 30-minute chunks.");
   assert.deepEqual(result.citations.map((citation) => citation.n), [1]);
+});
+
+// ── Writing a new page and changing the open page ──────────────────────────
+
+const PAGE_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel", names: ["operating system", "OS"], terms: ["kernel", "process"], actions: ["page"] });
+const EDIT_READING = JSON.stringify({ subject: "operating systems", search: "operating system kernel", names: ["operating system", "OS"], terms: ["kernel", "process"], actions: ["edit"] });
+
+/** The first model call writes; later ones check citations. */
+function pageDeps(options: { reading: string; write: string; verdict?: string; sources?: Record<string, { title: string; passages: LibraryPassage[] }> }) {
+  const fake = readingDeps({ reading: options.reading, library: [OS_NOTE] });
+  let calls = 0;
+  fake.deps.complete = async (messages) => {
+    fake.sent.push(messages);
+    calls += 1;
+    return { text: calls === 1 ? options.write : (options.verdict ?? "[]"), provider: "groq-large", model: "m" };
+  };
+  fake.deps.loadSource = async (userId, type, id) => (userId === "u1" ? (options.sources?.[`${type}:${id}`] ?? null) : null);
+  return fake;
+}
+
+const OPEN_PAGE = {
+  ref: "note:mine",
+  title: "OS",
+  blocks: [
+    { type: "heading", text: "OS", locked: false },
+    { type: "paragraph", text: "The kernel is the core.", locked: false },
+    { type: "pdfPage", text: "Textbook p. 4", locked: false },
+  ],
+};
+
+test("asking for a page returns a draft with its outline and cited sources, for one question", async () => {
+  const { deps, sent, counts } = pageDeps({
+    reading: PAGE_READING,
+    write: "# Operating Systems\n## The kernel\nThe kernel schedules processes [1].\n## Revision\n### Test yourself\nQ: What is the kernel?\nA: The core.",
+    verdict: '[{"claim": 1, "supported": true}]',
+  });
+  const reply = await createRanganService(deps).ask("u1", { question: "make me a note on operating systems" });
+  assert.equal(reply.kind, "page");
+  if (reply.kind !== "page") return;
+  assert.equal(reply.title, "Operating Systems");
+  assert.deepEqual(reply.outline, ["The kernel", "Revision", "Test yourself"]);
+  assert.deepEqual(reply.citations.map((citation) => citation.ref), [OS_NOTE.ref]);
+  assert.match(sent[0][0].content, /writing a study page/);
+  assert.match(sent[0][1].content, /Write a study page that teaches "operating systems"/);
+  assert.equal([...counts.values()][0], 1);
+  assert.equal(reply.boardRequested, undefined);
+});
+
+test("a page request that also asks for a board says boards come later", async () => {
+  const { deps } = pageDeps({ reading: PAGE_READING.replace('"actions":["page"]', '"actions":["page","board"]'), write: "# OS\n## Kernel\nIt runs things." });
+  const reply = await createRanganService(deps).ask("u1", { question: "make a note and a board on operating systems" });
+  assert.equal(reply.kind === "page" && reply.boardRequested, true);
+});
+
+test("a reply that isn't a page is an error, so the question is given back", async () => {
+  const { deps, counts } = pageDeps({ reading: PAGE_READING, write: "Sorry, I can't." });
+  await assert.rejects(createRanganService(deps).ask("u1", { question: "make me a note on operating systems" }), { status: 502 });
+  assert.equal([...counts.values()][0], 0);
+});
+
+test("asking to change the open page returns a safe plan; locked blocks stay locked", async () => {
+  const { deps, sent } = pageDeps({
+    reading: EDIT_READING,
+    sources: { "note:mine": { title: "OS", passages: [OS_NOTE] } },
+    write: JSON.stringify({
+      summary: "Simplified the kernel line.",
+      changes: [
+        { replace: [2, 2], markdown: "The **kernel** runs the computer [1]." },
+        { replace: [3, 3], markdown: "replace the PDF page" },
+      ],
+    }),
+    verdict: '[{"claim": 1, "supported": true}]',
+  });
+  const reply = await createRanganService(deps).ask("u1", { question: "simplify this page", page: OPEN_PAGE });
+  assert.equal(reply.kind, "edit");
+  if (reply.kind !== "edit") return;
+  assert.equal(reply.pageRef, "note:mine");
+  assert.deepEqual(reply.changes, [{ kind: "replace", from: 2, to: 2, markdown: "The **kernel** runs the computer [1]." }]);
+  assert.match(sent[0][1].content, /\[3\] \(PDF page, locked\)/, "the server locks a PDF page even if the panel didn't");
+});
+
+test("someone else's page can't be changed, and the question is given back", async () => {
+  const { deps, counts } = pageDeps({ reading: EDIT_READING, sources: {}, write: "{}" });
+  await assert.rejects(createRanganService(deps).ask("u1", { question: "simplify this page", page: OPEN_PAGE }), { status: 404 });
+  assert.equal([...counts.values()][0], 0);
+});
+
+test("an edit request with no page open is answered as a question", async () => {
+  const { deps } = pageDeps({ reading: EDIT_READING, write: "The kernel schedules processes [1]." });
+  const reply = await createRanganService(deps).ask("u1", { question: "simplify this page" });
+  assert.equal(reply.kind, undefined);
+  assert.equal(reply.answer, "The kernel schedules processes [1].");
 });

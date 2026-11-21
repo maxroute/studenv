@@ -12,6 +12,7 @@ import {
   type OpenTarget,
 } from "@/lib/rangan/citations";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
+import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
 import { aboutSubject, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
@@ -52,6 +53,8 @@ export type RanganDeps = {
 export type SummarySourceType = "note" | "pdf" | "transcript";
 
 export type RanganAnswer = {
+  /** Absent on a chat answer; "page" and "edit" mark the other replies. */
+  kind?: undefined;
   answer: string;
   provider: ProviderId;
   usage: RanganUsageSummary;
@@ -64,6 +67,34 @@ export type RanganAnswer = {
    */
   support: { checked: boolean; removed: number };
 };
+
+/** A new teaching page Rangan wrote, for the student to look over and create. Nothing is saved yet. */
+export type RanganPageDraft = Omit<RanganAnswer, "answer" | "kind"> & {
+  kind: "page";
+  /** Page drafts and edits have no chat answer. */
+  answer?: undefined;
+  title: string;
+  /** The page in Rangan's Markdown; [n] marks match `citations`. */
+  markdown: string;
+  /** The page's ## and ### headings, for the preview. */
+  outline: string[];
+  /** The request also asked for a board, which Rangan can't build yet. */
+  boardRequested?: boolean;
+};
+
+/** A change Rangan suggests to the open page, for the student to look over and apply. Nothing is saved yet. */
+export type RanganPageEdit = Omit<RanganAnswer, "answer" | "kind"> & {
+  kind: "edit";
+  /** Page drafts and edits have no chat answer. */
+  answer?: undefined;
+  /** The page the change is for, `note:<id>`. */
+  pageRef: string;
+  summary: string;
+  /** Numbered against the blocks the request sent (1-based); [n] marks match `citations`. */
+  changes: PageChange[];
+};
+
+export type RanganReply = RanganAnswer | RanganPageDraft | RanganPageEdit;
 
 export type RanganSummary = RanganAnswer & {
   title: string;
@@ -86,6 +117,9 @@ export type RanganExplore = {
   provider: ProviderId;
   usage: RanganUsageSummary;
 };
+
+/** Blocks of the open page Rangan never rewrites, whatever the panel says. */
+const LOCKED_TYPES = new Set(["pdfPage", "embed", "blockMath", "citation", "unsupported"]);
 
 /** Until Rangan can make pages and boards, it says so instead of describing one. */
 function cannotCreateYet(actions: readonly string[]): string {
@@ -205,14 +239,14 @@ export function createRanganService(deps: RanganDeps) {
    * model call that uses no daily question. Null when it can't be read; the
    * question is then searched as before.
    */
-  async function readRequest(question: string, history: RanganAskInput["history"]): Promise<RequestReading | null> {
+  async function readRequest(question: string, history: RanganAskInput["history"], openPage?: string): Promise<RequestReading | null> {
     if (!deps.completeQuick) return null;
     const previous = [...(history ?? [])].reverse().find((turn) => turn.role === "user")?.content;
     try {
       const result = await deps.completeQuick(
         [
           { role: "system", content: READING_SYSTEM_PROMPT },
-          { role: "user", content: readingInstruction(question, previous) },
+          { role: "user", content: readingInstruction(question, previous, openPage) },
         ],
         { maxTokens: 300, temperature: 0 },
       );
@@ -257,19 +291,76 @@ export function createRanganService(deps: RanganDeps) {
     }
   }
 
-  async function ask(userId: string, input: RanganAskInput): Promise<RanganAnswer> {
+  /** A new teaching page on the request's subject, cited from the library or Wikipedia. Nothing is saved. */
+  async function writePage(input: RanganAskInput, reading: RequestReading, passages: LibraryPassage[], usage: RanganUsageSummary): Promise<RanganPageDraft> {
+    const subject = reading.subject ?? reading.search;
+    const result = await deps.complete(
+      [
+        { role: "system", content: PAGE_SYSTEM_PROMPT },
+        { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageInstruction(input.question, subject)}` },
+      ],
+      { maxTokens: 3_500, temperature: 0.3 },
+    );
+    const draft = normalizeCitationMarks(result.text).trim();
+    if (!/^#{1,3}\s/m.test(draft)) throw Object.assign(new Error("Rangan couldn't write that page. Please try again."), { status: 502 });
+    const { answer: markdown, support } = await checkSupport(draft, passages);
+    const title = /^#\s+(.+)$/m.exec(markdown)?.[1].replace(/\[\d{1,2}\]/g, "").replace(/[*_`]/g, "").trim() || subject;
+    return {
+      kind: "page",
+      title: title.slice(0, 300),
+      markdown,
+      outline: outline(markdown),
+      ...(reading.actions.includes("board") ? { boardRequested: true } : {}),
+      provider: result.provider,
+      usage,
+      citations: citationsFor(markdown, passages),
+      support,
+    };
+  }
+
+  /** A change to the open page as the student described it. Nothing is applied: the student sees it first. */
+  async function editPage(userId: string, input: RanganAskInput, page: NonNullable<RanganAskInput["page"]>, passages: LibraryPassage[], usage: RanganUsageSummary): Promise<RanganPageEdit> {
+    const ref = parseRef(page.ref);
+    if (!ref || ref.type !== "note" || !(await deps.loadSource(userId, "note", ref.id))) throw notFound();
+    const blocks = page.blocks.map((block) => ({ ...block, locked: block.locked || LOCKED_TYPES.has(block.type) }));
+    const result = await deps.complete(
+      [
+        { role: "system", content: PAGE_SYSTEM_PROMPT },
+        { role: "user", content: `${buildLibraryContext(passages)}\n\n${editInstruction(input.question, page.title, blocks)}` },
+      ],
+      { maxTokens: 3_000, temperature: 0.2 },
+    );
+    const plan = parseEditPlan(normalizeCitationMarks(result.text), blocks);
+    if (!plan) throw Object.assign(new Error("Rangan couldn't work out a safe change to this page. Try saying exactly what to change."), { status: 502 });
+    // Each change's citations are checked like an answer's.
+    const changes: PageChange[] = [];
+    let removed = 0;
+    let checked = true;
+    for (const change of plan.changes) {
+      const verified = await checkSupport(change.markdown, passages);
+      removed += verified.support.removed;
+      checked &&= verified.support.checked;
+      changes.push({ ...change, markdown: verified.answer });
+    }
+    const all = changes.map((change) => change.markdown).join("\n");
+    return { kind: "edit", pageRef: `note:${ref.id}`, summary: plan.summary, changes, provider: result.provider, usage, citations: citationsFor(all, passages), support: { checked, removed } };
+  }
+
+  async function ask(userId: string, input: RanganAskInput): Promise<RanganReply> {
     return withQuestion(userId, async (usage) => {
       // "Explain this": the selected text steers the search and is quoted to the model.
       // Otherwise the request is read first, so only its subject is searched.
-      const reading = input.focus ? null : await readRequest(input.question, input.history);
+      const reading = input.focus ? null : await readRequest(input.question, input.history, input.page?.title);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)
         : (reading?.search ?? retrievalQuery(input.question, input.history));
       const passages = await passagesFor(userId, query, reading);
+      if (reading?.actions.includes("edit") && input.page) return editPage(userId, input, input.page, passages, usage);
+      if (reading?.actions.includes("page")) return writePage(input, reading, passages, usage);
       const prompt = [
         buildLibraryContext(passages),
         input.focus ? focusBlock(input.focus) : null,
-        reading?.actions.length ? cannotCreateYet(reading.actions) : null,
+        reading?.actions.includes("board") ? cannotCreateYet(["board"]) : null,
         `Question: ${input.question}`,
       ]
         .filter(Boolean)

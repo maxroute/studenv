@@ -17,6 +17,7 @@ import { parseNoteDoc } from "@/lib/notes/note-format";
 import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
 import { AppearsIn } from "@/components/refs/appears-in";
 import { RelatedInLibrary } from "@/components/rangan/related-in-library";
+import { useOpenPage } from "@/hooks/use-open-page";
 import { createMentionSuggestion } from "./mention-suggestion";
 import { createSlashSuggestion, slashCommands } from "./slash-commands";
 import { NoteBubbleMenu } from "./note-bubble-menu";
@@ -425,6 +426,13 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
   useEffect(() => {
     if (status === "saved") onSaved();
   }, [onSaved, status]);
+
+  // Rangan reads and changes this page only while it is open and editable.
+  useEffect(() => {
+    if (!editor || !note || readOnlyReason) return;
+    useOpenPage.getState().register({ noteId, title: title || "Untitled", editor, saveNow });
+    return () => useOpenPage.getState().unregister(noteId, editor);
+  }, [editor, note, readOnlyReason, noteId, title, saveNow]);
 
   // Save before leaving the page or the note.
   useEffect(() => {

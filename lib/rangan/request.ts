@@ -14,7 +14,7 @@
 import { z } from "zod";
 import { extractJsonObject } from "@/lib/study/plan";
 
-export type RequestAction = "page" | "board";
+export type RequestAction = "page" | "board" | "edit";
 
 export type RequestReading = {
   /** What the student wants to learn about, or null for messages without a subject ("hi", "summarize what I know"). */
@@ -35,16 +35,17 @@ export const READING_SYSTEM_PROMPT = [
   "Reply with only the JSON object.",
 ].join(" ");
 
-export function readingInstruction(message: string, previousQuestion?: string): string {
+export function readingInstruction(message: string, previousQuestion?: string, openPage?: string): string {
   return [
     `Message: """${message.slice(0, 2_000)}"""`,
     previousQuestion ? `The student's previous question, for context if the message is a follow-up: """${previousQuestion.slice(0, 1_000)}"""` : "",
+    openPage ? `The student has the page """${openPage.slice(0, 200)}""" open.` : "The student has no page open.",
     "subject: the topic the student wants to learn about, in a few words; null if there is none (a greeting, or a request about their notes in general).",
     "search: a short search for the subject, 2 to 8 words of key terms only. Leave out task words such as create, make, explain, teach, easy, understand, revision, board, map, note.",
     "names: 1 to 5 names for the subject itself: its full name, abbreviations and synonyms.",
     "terms: 3 to 8 core terms a text about the subject would use.",
     "If the message is not in English, include names and terms in the message's language too.",
-    'actions: include "page" if the student asks you to create, write or make a note or page; include "board" if they ask for a board, map, mind map, diagram or visualization. Otherwise [].',
+    'actions: include "page" if the student asks you to create, write or make a new note or page; include "edit" if they ask you to change the open page (add to it, simplify, shorten, reorganize, turn into a table, add questions, fix mistakes); include "board" if they ask for a board, map, mind map, diagram or visualization. Otherwise [].',
     'Reply with only a JSON object: {"subject": "...", "search": "...", "names": ["..."], "terms": ["..."], "actions": []}',
   ]
     .filter(Boolean)
@@ -76,7 +77,7 @@ export function parseReading(text: string): RequestReading | null {
           .filter((value) => value.length >= 2 && value.length <= 60),
       ),
     ].slice(0, max);
-  const actions = (["page", "board"] as const).filter((action) => (parsed.data.actions ?? []).includes(action));
+  const actions = (["page", "board", "edit"] as const).filter((action) => (parsed.data.actions ?? []).includes(action));
   const search = parsed.data.search || subject || "";
   if (!search) return null;
   const names = subject ? [...new Set([subject, ...words(parsed.data.names, 6)])] : [];
