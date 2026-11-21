@@ -63,6 +63,7 @@ test("the shared allowance refuses when spent and refunds failures", async () =>
     dailyLimit: 2,
     now: () => new Date("2026-11-21T10:00:00Z"),
     consumeQuestion: async (_userId, _day, limit) => (counts.used >= limit ? { allowed: false, used: counts.used } : { allowed: true, used: ++counts.used }),
+    getUsedCount: async () => counts.used,
     refundQuestion: async () => {
       counts.refunded += 1;
       counts.used -= 1;

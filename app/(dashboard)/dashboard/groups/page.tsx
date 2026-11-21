@@ -234,12 +234,16 @@ export default function StudyGroupsPage() {
   const socketRef = useRef<Socket | null>(null);
   const {
     groups,
-    isLoading: loading,
+    isLoading: groupsLoading,
+    data: loadedGroups,
+    error: groupsError,
     upsertGroup,
     addGroup,
     refreshGroup,
     mutate: mutateGroups,
   } = useStudyGroups();
+  const groupsFailed = !loadedGroups && Boolean(groupsError);
+  const loading = groupsLoading || (!loadedGroups && !groupsError);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const { group: activeGroupDetails, mutateActiveGroup } =
     useStudyGroup(selectedGroupId);
@@ -1007,7 +1011,16 @@ export default function StudyGroupsPage() {
               </div>
             ) : null}
 
-            {!loading && groups.length === 0 ? (
+            {groupsFailed ? (
+              <div className="p-4 text-xs text-center text-[var(--ink-3)]" role="status">
+                <p>Still connecting… trying again.</p>
+                <button type="button" className="mt-2 underline" onClick={() => void mutateGroups()}>
+                  Retry now
+                </button>
+              </div>
+            ) : null}
+
+            {!loading && !groupsFailed && groups.length === 0 ? (
               <div className="p-4 text-xs text-center text-[var(--ink-3)]">
                 Start your first study group and invite people with a simple
                 code.

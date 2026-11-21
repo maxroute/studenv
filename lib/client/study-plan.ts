@@ -3,6 +3,7 @@
 import { mutate } from "swr";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { buildPlanSessions, planSessionTask, type PlanSettings } from "@/lib/study/plan";
+import { reportUsage } from "@/lib/client/usage-bus";
 
 // Shared by the Planner's "Plan with Rangan" dialog and the plan card in the
 // Rangan chat.
@@ -59,6 +60,7 @@ async function call<T>(url: string, body: unknown): Promise<ApiResult<T>> {
   try {
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const json = await response.json().catch(() => null);
+    reportUsage(json);
     return { ok: response.ok && Boolean(json?.ok), status: response.status, data: json?.data, error: json?.error, details: json?.details };
   } catch {
     return { ok: false, status: 0, error: "You seem to be offline. Check your connection and try again." };

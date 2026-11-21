@@ -150,6 +150,10 @@ body:has(.note-keyboard-bar) .rangan-fab {
   color: var(--amber);
 }
 
+.rangan-usage-change {
+  color: var(--text);
+}
+
 .rangan-header-actions {
   display: flex;
   flex-shrink: 0;

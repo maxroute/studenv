@@ -23,6 +23,7 @@ const withQuestion = createAllowance({
   now: () => new Date(),
   consumeQuestion: usageRepository.consumeQuestion,
   refundQuestion: usageRepository.refundQuestion,
+  getUsedCount: usageRepository.getUsedCount,
 });
 
 const runAiGenerate = createAiGenerateService({

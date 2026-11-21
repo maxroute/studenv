@@ -4,7 +4,7 @@ import type { StudyPlanRequest, StudyRequest, StudySourceKind } from "@/lib/mode
 import { buildLibraryContext, openTarget, type OpenTarget } from "@/lib/rangan/citations";
 import { passageRef } from "@/lib/rangan/ranking";
 import { formatRef, parseRef } from "@/lib/refs/ref-grammar";
-import { utcDayStart } from "@/lib/services/rangan.service";
+import { spendQuestion } from "@/lib/rangan/usage";
 import {
   flashcardInstruction,
   parseFlashcards,
@@ -41,6 +41,7 @@ export type StudyDeps = {
   now: () => Date;
   consumeQuestion: (userId: string, day: Date, limit: number) => Promise<{ allowed: boolean; used: number }>;
   refundQuestion: (userId: string, day: Date) => Promise<void>;
+  getUsedCount: (userId: string, day: Date) => Promise<number>;
   /** The user's sources that best match `query`, best first: pages as notes, PDFs and videos as assets. */
   findSources: (userId: string, query: string) => Promise<Array<{ type: "note" | "asset"; id: string }>>;
   /** The user's note or asset with its text, or null when it is not theirs or has no text. */
@@ -106,11 +107,6 @@ const INDEX_TYPE: Record<StudySourceKind, "note" | "pdf" | "transcript"> = { not
 
 const httpError = (message: string, status: number, details?: unknown) => Object.assign(new Error(message), { status, details });
 
-function usageSummary(limit: number, used: number, day: Date): RanganUsageSummary {
-  const clamped = Math.min(Math.max(used, 0), limit);
-  return { limit, used: clamped, remaining: limit - clamped, resetAt: new Date(day.getTime() + 86_400_000).toISOString() };
-}
-
 /** Labels {@link passageLabel} gives when a passage has no page or heading. */
 const GENERIC_LABELS = new Set(["Open page", "PDF", "Video"]);
 
@@ -147,19 +143,8 @@ export function createStudyService(deps: StudyDeps) {
   }
 
   /** Uses one daily question for `run`, and gives it back if `run` fails. */
-  async function withQuestion<T>(userId: string, run: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
-    const day = utcDayStart(deps.now());
-    const taken = await deps.consumeQuestion(userId, day, deps.dailyLimit);
-    const usage = usageSummary(deps.dailyLimit, taken.used, day);
-    if (!taken.allowed) {
-      throw httpError(`You've used all ${usage.limit} Rangan questions for today. They reset at midnight UTC.`, 429, { usage });
-    }
-    try {
-      return await run(usage);
-    } catch (error) {
-      await deps.refundQuestion(userId, day);
-      throw error;
-    }
+  function withQuestion<T>(userId: string, run: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
+    return spendQuestion(deps, userId, run, (usage) => httpError(`You've used all ${usage.limit} Rangan questions for today. They reset at midnight UTC.`, 429, { usage }));
   }
 
   const unusable = () => httpError("Rangan could not make study questions from this. Please try again.", 502);

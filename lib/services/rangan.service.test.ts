@@ -81,7 +81,7 @@ test("an answer reports how many questions are left today", async () => {
   const result = await createRanganService(deps).ask("u1", { question: "Hi" });
   assert.equal(result.answer, "An answer.");
   assert.equal(result.provider, "groq-large");
-  assert.deepEqual(result.usage, { limit: 3, used: 1, remaining: 2, resetAt: "2026-11-21T00:00:00.000Z" });
+  assert.deepEqual(result.usage, { limit: 3, used: 1, remaining: 2, resetAt: "2026-11-21T00:00:00.000Z", asOf: "2026-11-20T15:30:00.000Z" });
 });
 
 test("the allowance runs out after the daily limit and nothing more is sent to a model", async () => {
@@ -128,6 +128,7 @@ test("usage for a new day starts full", async () => {
     used: 0,
     remaining: 25,
     resetAt: "2026-11-21T00:00:00.000Z",
+    asOf: "2026-11-20T15:30:00.000Z",
   });
 });
 

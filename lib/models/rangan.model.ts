@@ -76,6 +76,8 @@ export type RanganUsageSummary = {
   remaining: number;
   /** Next UTC midnight, ISO string. */
   resetAt: string;
+  /** When this count was true, ISO string: a screen ignores a summary older than the one it shows. */
+  asOf: string;
 };
 
 /** Query of `GET /api/rangan/search`. */

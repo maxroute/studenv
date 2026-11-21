@@ -16,6 +16,8 @@ import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
+import { resetLabel } from "@/lib/rangan/usage";
+import type { RanganUsageSummary } from "@/lib/models/rangan.model";
 import "./rangan.css";
 
 const NotePdfViewer = dynamic(() => import("@/components/notes/note-pdf-viewer").then((mod) => mod.NotePdfViewer), {
@@ -147,6 +149,41 @@ function Answer({ turn, onOpen }: { turn: Extract<RanganTurn, { role: "assistant
         </a>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * How many of today's questions are left, and when that resets in the
+ * reader's own time. A change shows for a moment ("Used 1", "1 given back"),
+ * so it is clear what each request cost.
+ */
+function UsagePill({ usage }: { usage: RanganUsageSummary }) {
+  const previous = useRef<{ used: number; resetAt: string } | null>(null);
+  const [change, setChange] = useState<string | null>(null);
+
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = { used: usage.used, resetAt: usage.resetAt };
+    // Only a change within the same day; a new day's reset is not "given back".
+    if (!before || before.resetAt !== usage.resetAt || before.used === usage.used) return;
+    const delta = usage.used - before.used;
+    setChange(delta > 0 ? `Used ${delta}` : `${-delta} given back`);
+    const timer = window.setTimeout(() => setChange(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [usage.used, usage.resetAt]);
+
+  const reset = resetLabel(usage.resetAt);
+  return (
+    <span className={`rangan-usage${usage.remaining <= 3 ? " low" : ""}`} title={reset ? `Resets at ${reset} your time (midnight UTC)` : "Resets at midnight UTC"}>
+      {usage.remaining} of {usage.limit} left today
+      {usage.remaining <= 3 && reset ? <span className="rangan-usage-reset"> · resets {reset}</span> : null}
+      {change ? (
+        <span className="rangan-usage-change" role="status">
+          {" "}
+          · {change}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -341,11 +378,7 @@ export function RanganPanel() {
           <div className="rangan-heading">
             <RanganLogo size={28} className="rangan-header-logo" />
             <span className="rangan-name">Rangan</span>
-            {usage ? (
-              <span className={`rangan-usage${usage.remaining <= 3 ? " low" : ""}`} title="Resets at midnight UTC">
-                {usage.remaining} of {usage.limit} left today
-              </span>
-            ) : null}
+            {usage ? <UsagePill usage={usage} /> : null}
           </div>
           <div className="rangan-header-actions">
             {turns.length > 0 ? (

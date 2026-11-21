@@ -12,6 +12,7 @@ import {
   type OpenTarget,
 } from "@/lib/rangan/citations";
 import { snippet } from "@/lib/rangan/ranking";
+import { spendQuestion, usageSummary, utcDayStart } from "@/lib/rangan/usage";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
 import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
@@ -228,20 +229,7 @@ function onSubject(text: string, reading: RequestReading | null): boolean {
   return (mentionsAny(text, reading.names) && terms >= 1) || terms >= 2;
 }
 
-/** The UTC midnight that starts the day containing `date`. */
-export function utcDayStart(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function usageSummary(limit: number, used: number, day: Date): RanganUsageSummary {
-  const clamped = Math.min(Math.max(used, 0), limit);
-  return {
-    limit,
-    used: clamped,
-    remaining: limit - clamped,
-    resetAt: new Date(day.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-  };
-}
+export { utcDayStart } from "@/lib/rangan/usage";
 
 function notFound() {
   return Object.assign(new Error("That page or file wasn't found, or it has no text to summarize yet."), { status: 404 });
@@ -371,23 +359,15 @@ export function createRanganService(deps: RanganDeps) {
 
   async function getUsage(userId: string): Promise<RanganUsageSummary> {
     const day = utcDayStart(deps.now());
-    return usageSummary(deps.dailyLimit, await deps.getUsedCount(userId, day), day);
+    return usageSummary(deps.dailyLimit, await deps.getUsedCount(userId, day), day, deps.now());
   }
 
   /**
    * Takes a question from today's allowance, runs `work`, and gives the
    * question back if `work` fails, so a student is never charged for an error.
    */
-  async function withQuestion<T>(userId: string, work: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
-    const day = utcDayStart(deps.now());
-    const taken = await deps.consumeQuestion(userId, day, deps.dailyLimit);
-    if (!taken.allowed) throw allowanceSpent(usageSummary(deps.dailyLimit, taken.used, day));
-    try {
-      return await work(usageSummary(deps.dailyLimit, taken.used, day));
-    } catch (error) {
-      await deps.refundQuestion(userId, day);
-      throw error;
-    }
+  function withQuestion<T>(userId: string, work: (usage: RanganUsageSummary) => Promise<T>): Promise<T> {
+    return spendQuestion(deps, userId, work, allowanceSpent);
   }
 
   /** A new teaching page on the request's subject, cited from the library or Wikipedia. Nothing is saved. */

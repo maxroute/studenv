@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { pickUsage } from "@/lib/rangan/usage";
 
 export function getRequestContext(request: NextRequest) {
   return {
@@ -48,8 +49,15 @@ export function getErrorResponse(error: unknown) {
           name?: string;
           status?: number;
           details?: unknown;
+          usage?: unknown;
         })
       : {};
+
+  // The day's Rangan count is safe to show and is what the screen needs after
+  // a refused or refunded question; it is only passed on when well formed.
+  const usageCandidate =
+    err.usage ?? (err.details && typeof err.details === "object" ? (err.details as { usage?: unknown }).usage : undefined);
+  const usage = pickUsage(usageCandidate) ?? undefined;
 
   const status =
     typeof err.status === "number" &&
@@ -81,7 +89,7 @@ export function getErrorResponse(error: unknown) {
     return {
       message: PUBLIC_SERVER_ERROR,
       status: status >= 500 ? status : 500,
-      details: undefined,
+      details: usage ? { usage } : undefined,
     };
   }
 
@@ -100,6 +108,6 @@ export function getErrorResponse(error: unknown) {
   return {
     message: message || "Please check your request and try again.",
     status,
-    details,
+    details: usage && err.name !== "ValidationHttpError" ? { ...(details as object | undefined), usage } : details,
   };
 }

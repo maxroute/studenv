@@ -5,6 +5,7 @@ import { toEditorContent } from "@/lib/notes/editor-bridge";
 import { markdownToNote } from "@/lib/notes/markdown-to-note";
 import { NOTE_DOC_FORMAT, NOTE_DOC_VERSION, parseNoteDoc, type NoteNode } from "@/lib/notes/note-format";
 import { bottomUp, citationNodes, pageFromDraft, pageUnchanged, type PageBlock, type PageChange, type PageCitation } from "@/lib/rangan/page";
+import { reportUsage } from "@/lib/client/usage-bus";
 
 // Creating a page Rangan wrote, and applying a change Rangan suggested to the
 // open page. Both happen only when the student taps the button for them.
@@ -15,6 +16,7 @@ async function post<T>(url: string, body?: unknown): Promise<{ ok: boolean; data
   try {
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const json = await response.json().catch(() => null);
+    reportUsage(json);
     return { ok: response.ok && Boolean(json?.ok), data: json?.data, error: json?.error };
   } catch {
     return { ok: false, error: "You seem to be offline. Check your connection and try again." };

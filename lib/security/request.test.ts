@@ -77,3 +77,26 @@ test("rate-limit responses expose only the retry timestamp", () => {
   assert.equal(result.status, 429);
   assert.deepEqual(result.details, { reset: 123456789 });
 });
+
+const USAGE = { limit: 25, used: 25, remaining: 0, resetAt: "2026-11-22T00:00:00.000Z", asOf: "2026-11-21T10:00:00.000Z" };
+
+test("a spent or refunded Rangan question tells the screen the true count, and only that", (t) => {
+  t.mock.method(console, "error", () => {});
+  // Spent: refused with the count.
+  const spent = getErrorResponse(Object.assign(new Error("You've used all 25 Rangan questions for today."), { status: 429, details: { usage: USAGE } }));
+  assert.equal(spent.status, 429);
+  assert.deepEqual(spent.details, { usage: USAGE });
+  // Refunded after a failure: even a server error passes the count, with no other detail.
+  const failed = getErrorResponse(Object.assign(new Error("model said: secret provider text"), { status: 502, usage: USAGE, details: { provider: "secret" } }));
+  assert.equal(failed.status, 502);
+  assert.equal(failed.message, "Something went wrong. Please try again shortly.");
+  assert.deepEqual(failed.details, { usage: USAGE });
+});
+
+test("a malformed usage is dropped, never passed on", (t) => {
+  t.mock.method(console, "error", () => {});
+  const bad = getErrorResponse(Object.assign(new Error("x"), { status: 502, usage: { ...USAGE, remaining: 7, token: "secret" } }));
+  assert.equal(bad.details, undefined);
+  const extra = getErrorResponse(Object.assign(new Error("x"), { status: 502, usage: { ...USAGE, token: "secret" } }));
+  assert.deepEqual(Object.keys((extra.details as { usage: object }).usage).sort(), ["asOf", "limit", "remaining", "resetAt", "used"], "extra fields can't ride along");
+});

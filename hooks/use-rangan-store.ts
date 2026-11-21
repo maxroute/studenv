@@ -4,6 +4,8 @@ import { create } from "zustand";
 import type { OpenTarget } from "@/lib/rangan/citations";
 import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
+import { mergeUsage, pickUsage, usageFromBody } from "@/lib/rangan/usage";
+import { onUsage } from "@/lib/client/usage-bus";
 import { pageBlocks, useOpenPage } from "@/hooks/use-open-page";
 import type { PageBlock } from "@/lib/rangan/page";
 import { openBoard, openBoardSummary } from "@/components/rangan/board-actions";
@@ -78,6 +80,12 @@ type RanganState = {
   toggle: () => void;
   clear: () => void;
   refreshUsage: () => Promise<void>;
+  /**
+   * Shows a usage summary if it is newer than the one shown. Replies can
+   * arrive late or out of order, so an older count never replaces a newer one.
+   * `broadcast: false` is for a count that came from another tab.
+   */
+  applyUsage: (incoming: unknown, broadcast?: boolean) => void;
   ask: (question: string) => Promise<void>;
   /** "Explain this": opens the panel and asks about text selected on a page. */
   explain: (text: string, title?: string) => Promise<void>;
@@ -112,16 +120,18 @@ function errorMessage(status: number, body: unknown): string {
   return typeof error === "string" ? error : "Rangan couldn't answer that. Please try again.";
 }
 
-function usageFrom(body: unknown): RanganUsageSummary | null {
-  if (typeof body !== "object" || body === null) return null;
-  const direct = (body as { usage?: unknown }).usage;
-  const nested = (body as { details?: { usage?: unknown } }).details?.usage;
-  // Study routes wrap their result as { ok, data }.
-  const wrapped = (body as { data?: { usage?: unknown } }).data?.usage;
-  const usage = direct ?? nested ?? wrapped;
-  return typeof usage === "object" && usage !== null && typeof (usage as RanganUsageSummary).remaining === "number"
-    ? (usage as RanganUsageSummary)
-    : null;
+const USAGE_CHANNEL = "studenv:rangan-usage";
+let usageChannel: BroadcastChannel | null = null;
+
+/** Other tabs of this browser hear a new count at once, with no request to the server. */
+function channelForUsage(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  try {
+    usageChannel ??= new BroadcastChannel(USAGE_CHANNEL);
+    return usageChannel;
+  } catch {
+    return null;
+  }
 }
 
 /** Errors that retrying cannot fix: the daily limit, a bad request, a missing page. */
@@ -193,8 +203,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
         body: JSON.stringify(payload),
       });
       const body: unknown = await response.json().catch(() => null);
-      const usage = usageFrom(body);
-      if (usage) set({ usage });
+      get().applyUsage(usageFromBody(body));
       if (!response.ok) {
         const retry = NOT_RETRYABLE.has(response.status) ? null : request;
         const content =
@@ -275,11 +284,28 @@ export const useRanganStore = create<RanganState>((set, get) => {
     }
   }
 
+  // One counter for everything that spends a question, in this tab and others.
+  if (typeof window !== "undefined") {
+    onUsage((usage) => get().applyUsage(usage));
+    channelForUsage()?.addEventListener("message", (event) => get().applyUsage(event.data, false));
+  }
+
   return {
     open: false,
     turns: [],
     pending: false,
     usage: null,
+    applyUsage: (incoming, broadcast = true) => {
+      const usage = pickUsage(incoming);
+      if (!usage) return;
+      const current = get().usage;
+      // The same count again (a tab hearing its own echo) changes nothing and is not passed on.
+      if (current && current.asOf === usage.asOf && current.used === usage.used && current.resetAt === usage.resetAt) return;
+      const next = mergeUsage(current, usage);
+      if (next === current) return;
+      set({ usage: next });
+      if (broadcast) channelForUsage()?.postMessage(next);
+    },
     openPanel: () => {
       set({ open: true });
       void get().refreshUsage();
@@ -290,8 +316,8 @@ export const useRanganStore = create<RanganState>((set, get) => {
     refreshUsage: async () => {
       try {
         const response = await fetch("/api/rangan/usage", { cache: "no-store" });
-        const usage = usageFrom(await response.json().catch(() => null));
-        if (response.ok && usage) set({ usage });
+        const usage = usageFromBody(await response.json().catch(() => null));
+        if (response.ok && usage) get().applyUsage(usage);
       } catch {
         // The count is a hint; the server enforces the allowance either way.
       }
