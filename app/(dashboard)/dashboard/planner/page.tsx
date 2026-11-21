@@ -5,7 +5,6 @@ import useSWR from "swr";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import {
   Calendar,
-  CalendarDays,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -454,7 +453,6 @@ export default function PlannerPage() {
         <header className={styles.header}>
           <div>
             <div className={styles.titleRow}>
-              <CalendarDays className={styles.titleIcon} />
               <h1>Planner</h1>
             </div>
             <p>Organize your day and never miss an important task.</p>
