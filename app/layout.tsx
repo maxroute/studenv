@@ -1,9 +1,10 @@
 
 import { Analytics } from "@vercel/analytics/next"; import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { dmMono, dmSans, fraunces } from "@/lib/fonts/app-fonts";
 import "@/app/globals.css";
 import { BootLoaderGate } from "@/components/ui/boot-loader-gate";
+import { NavigationProgress } from "@/components/ui/navigation-progress";
 import { Providers } from "@/components/ui/providers";
 import { getPublicSiteUrl } from "@/lib/seo/site-url";
 
@@ -30,6 +31,10 @@ export default async function RootLayout({
         className={`${dmSans.variable} ${dmMono.variable} ${fraunces.variable}`}
       >
         <Providers>
+          {/* Reads the address; in Suspense so static pages stay static. */}
+          <Suspense fallback={null}>
+            <NavigationProgress />
+          </Suspense>
           <BootLoaderGate>{children}</BootLoaderGate>
           <div id="viewer-portal-root" className="fixed inset-0 pointer-events-none z-[9999]" />
         </Providers>

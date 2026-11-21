@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { flushSync } from "react-dom";
 import { signOut } from "next-auth/react";
+import { confirmSignOut } from "@/components/layout/confirm-sign-out";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarCheck,
@@ -151,11 +152,13 @@ export function DashboardSidebar() {
           <span>Settings</span>
         </Link>
         <button 
-          onClick={() => signOut({ callbackUrl: '/' })}
+          onClick={async () => {
+            if (await confirmSignOut()) void signOut({ callbackUrl: "/auth/signin" });
+          }}
           className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-[13px] text-[var(--muted)] transition hover:bg-[rgba(224,85,85,0.06)] hover:text-[#e05555]"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
-          <span>Logout</span>
+          <span>Sign out</span>
         </button>
       </div>
     </aside>
