@@ -1,0 +1,278 @@
+/* Board controls (BoardControls.tsx): undo and redo, zoom, and the "lost your
+   view" tip. Fixed to the bottom-left; sized for the pointer in use. */
+
+.bc {
+  /* The size and edge come from the shared scale in globals.css; icons, text,
+     gaps and corners are all derived from the size. */
+  --bc-size: var(--ui-size);
+  --bc-icon: calc(var(--bc-size) * 0.48);
+  --bc-text: max(11px, calc(var(--bc-size) * 0.37));
+  --bc-gap: calc(var(--bc-size) * 0.24);
+  --bc-radius: calc(var(--bc-size) * 0.3);
+  --bc-edge: var(--ui-edge);
+  position: fixed;
+  z-index: 1200;
+  left: calc(var(--bc-edge) + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--bc-edge) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: flex-end;
+  gap: var(--bc-gap);
+  font-size: var(--bc-text);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.bc-pill {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  height: var(--bc-size);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--bc-radius);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.bc-zoom {
+  position: relative;
+}
+
+.bc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: var(--bc-size);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.bc-btn + .bc-btn {
+  border-left: 1px solid #f1f5f9;
+}
+
+.bc-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.bc-btn:active {
+  background: #f1f5f9;
+}
+
+.bc-btn:disabled {
+  color: #cbd5e1;
+  cursor: default;
+  background: transparent;
+}
+
+.bc-btn:focus-visible,
+.bc-item:focus-visible,
+.bc-tip-fit:focus-visible,
+.bc-tip-x:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: -2px;
+}
+
+.bc-btn svg {
+  width: var(--bc-icon);
+  height: var(--bc-icon);
+  flex: none;
+}
+
+/* The percentage: a button that opens the zoom menu. */
+.bc-percent {
+  min-width: calc(var(--bc-size) * 1.55);
+  padding: 0 calc(var(--bc-size) * 0.18);
+  font-size: var(--bc-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-percent svg {
+  width: calc(var(--bc-size) * 0.36);
+  height: calc(var(--bc-size) * 0.36);
+  color: #94a3b8;
+  transition: transform 0.15s;
+}
+
+.bc-percent[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+/* Minus and plus are for a mouse on a roomy window. Touch screens (coarse
+   pointer, or no hover) and small screens zoom by pinching, so they go. */
+.bc-step {
+  min-width: calc(var(--bc-size) * 0.9);
+  width: calc(var(--bc-size) * 0.9);
+}
+
+@media (pointer: coarse), (hover: none), (max-width: 767px) {
+  .bc-step {
+    display: none;
+  }
+}
+
+/* The zoom menu, opening upward from the percentage. */
+.bc-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--bc-gap));
+  z-index: 2;
+  min-width: max(170px, calc(var(--bc-size) * 5.4));
+  max-width: calc(100vw - 2 * var(--bc-edge));
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: calc(var(--bc-radius) + 2px);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.bc-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--bc-size) * 0.28);
+  width: 100%;
+  min-height: max(32px, var(--bc-size));
+  padding: 0 calc(var(--bc-size) * 0.3);
+  border: 0;
+  border-radius: calc(var(--bc-radius) - 2px);
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-size: max(12px, calc(var(--bc-text) * 1.05));
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bc-item:hover {
+  background: #f1f5f9;
+}
+
+.bc-item svg {
+  width: var(--bc-icon);
+  height: var(--bc-icon);
+  flex: none;
+  color: #64748b;
+}
+
+.bc-item .bc-one {
+  display: inline-block;
+  width: var(--bc-icon);
+  text-align: center;
+  font-size: 0.78em;
+  color: #64748b;
+}
+
+.bc-item kbd {
+  margin-left: auto;
+  padding-left: 16px;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 0.85em;
+}
+
+@media (pointer: coarse) {
+  /* The menu is opened on purpose and used one tap at a time: a bit roomier. */
+  .bc-item {
+    min-height: max(36px, var(--bc-size));
+  }
+
+  .bc-item kbd {
+    display: none;
+  }
+}
+
+/* "Lost your view?": a one-line tip above the controls. */
+.bc-tip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--bc-gap));
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 2 * var(--bc-edge));
+  padding: 4px 4px 4px calc(var(--bc-size) * 0.34);
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.08);
+  color: #475569;
+  font-size: max(11px, calc(var(--bc-text) * 0.95));
+  white-space: nowrap;
+}
+
+.bc-tip-fit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(var(--bc-size) * 0.82);
+  padding: 0 calc(var(--bc-size) * 0.3);
+  border: 0;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bc-tip-fit:hover {
+  background: #e0e7ff;
+}
+
+.bc-tip-fit svg {
+  width: calc(var(--bc-size) * 0.4);
+  height: calc(var(--bc-size) * 0.4);
+}
+
+.bc-tip-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--bc-size) * 0.82);
+  height: calc(var(--bc-size) * 0.82);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.bc-tip-x:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.bc-tip-x svg {
+  width: calc(var(--bc-size) * 0.4);
+  height: calc(var(--bc-size) * 0.4);
+}
+
+/* A narrow phone: the tip drops its question and keeps the action. */
+@media (max-width: 380px) {
+  .bc-tip-text {
+    display: none;
+  }
+
+  .bc-tip {
+    padding-left: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-btn,
+  .bc-percent svg {
+    transition: none;
+  }
+}

@@ -7184,3 +7184,21 @@ body.shelf-scroll-locked {
   color: var(--text);
   box-shadow: inset 2px 0 0 var(--amber);
 }
+
+
+/* One size scale for the floating controls over a board or page (the board's
+   undo and zoom controls, its phone tool dock, Rangan's button), so they scale
+   together with the screen: a mouse gets 28 to 34 px, fingers get 32 to 44 px.
+   The smaller of width and height is used, so a phone on its side doesn't get
+   big buttons. */
+:root {
+  --ui-size: clamp(28px, min(4.2vw, 3.8vh), 34px);
+  --ui-edge: clamp(8px, 2.4vw, 14px);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --ui-size: clamp(32px, min(8.4vw, 5vh), 44px);
+    --ui-edge: clamp(8px, 2.2vw, 14px);
+  }
+}

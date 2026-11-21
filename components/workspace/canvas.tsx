@@ -8,16 +8,11 @@ import {
   StickyNote,
   FileText,
   Lock,
-  Maximize2,
-  Minus,
   MousePointer2,
   Pencil,
-  Plus,
+  Pin,
   Spline,
   Type,
-  X,
-  Undo2,
-  Redo2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
@@ -52,6 +47,10 @@ import { ShapeToolButton, ShapeToolIcon } from "./shapes/ShapeToolButton";
 import type { ShapeKind } from "@/lib/workspace/shape-types";
 import { SHAPE_KINDS } from "@/lib/workspace/shape-types";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
+import { BoardControls } from "./BoardControls";
+import "./tool-dock.css";
+import { browserStorage, readDockPinned, writeDockPinned } from "@/lib/workspace/dock-pin";
+import { contentBounds, fitCamera, stepScale, zoomAroundCentre } from "@/lib/workspace/fit-view";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
 import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
@@ -97,100 +96,6 @@ type CanvasPoint = DrawingPoint;
 // Text fields and the open menu keep the browser's own context menu.
 const CONTEXT_MENU_NATIVE_TARGETS = 'input, textarea, [contenteditable="true"], [data-workspace-context-menu]';
 
-// Undo/redo buttons: finger-sized (44 px) on coarse pointers, compact otherwise.
-const HISTORY_BUTTON_CLASS =
-  "flex h-[30px] w-[32px] items-center justify-center text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent [@media(pointer:coarse)]:h-[44px] [@media(pointer:coarse)]:w-[44px]";
-
-function ZoomControls({ utils, onFitToScreen, showFitHint, onDismissFitHint, canUndo, canRedo, onUndo, onRedo }: { utils: any; onFitToScreen: () => void; showFitHint: boolean; onDismissFitHint: () => void; canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }) {
-  const [scale, setScale] = useState(1);
-  const zoomAnimationTime = 140;
-  const handleFitToScreen = () => {
-    onFitToScreen();
-    onDismissFitHint();
-  };
-
-  useEffect(() => {
-    if (!utils.instance) return;
-    const interval = window.setInterval(() => {
-      setScale(utils.instance.transformState.scale);
-    }, 100);
-    return () => window.clearInterval(interval);
-  }, [utils.instance]);
-
-  const handleStepZoom = (direction: 1 | -1) => {
-    const instance = utils.instance;
-    if (!instance) return;
-
-    const currentScale = instance.transformState.scale ?? 1;
-    const currentPercent = Math.round(currentScale * 100);
-    const nextPercent = Math.max(10, Math.min(500, currentPercent + direction * 10));
-
-    utils.setTransform(
-      instance.transformState.positionX,
-      instance.transformState.positionY,
-      nextPercent / 100,
-      zoomAnimationTime,
-      "easeOut",
-    );
-  };
-
-  return (
-    <div className="fixed bottom-4 left-4 z-[1200] flex flex-col items-stretch overflow-hidden rounded-lg border bg-white shadow-lg select-none">
-      {showFitHint && (
-        <div className="border-b border-slate-100 px-3 py-2.5 animate-in slide-in-from-bottom-1 fade-in duration-200">
-          <div className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold leading-4 text-slate-800">Lost your view?</p>
-              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">Fit everything back into view.</p>
-            </div>
-            <button type="button" onClick={onDismissFitHint} aria-label="Dismiss Fit to Screen tip" className="-mr-1 -mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="flex items-center">
-      <button type="button" onClick={onUndo} disabled={!canUndo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Undo" aria-label="Undo">
-        <Undo2 size={15} />
-      </button>
-      <button type="button" onClick={onRedo} disabled={!canRedo} className={`${HISTORY_BUTTON_CLASS} border-r`} title="Redo" aria-label="Redo">
-        <Redo2 size={15} />
-      </button>
-      <button
-        onClick={() => handleStepZoom(-1)}
-        className="p-1.5 hover:bg-slate-50 transition-colors border-r"
-        title="Zoom Out"
-      >
-        <Minus size={14} className="text-slate-600" />
-      </button>
-      <div
-        className="px-2 py-1 font-mono text-[10px] min-w-12 text-center text-slate-600 font-medium cursor-pointer hover:bg-slate-50 transition-colors"
-        onClick={() => utils.resetTransform()}
-        title="Reset Zoom"
-      >
-        {Math.round(scale * 100)}%
-      </div>
-      <button
-        onClick={() => handleStepZoom(1)}
-        className="p-1.5 hover:bg-slate-50 transition-colors border-l"
-        title="Zoom In"
-      >
-        <Plus size={14} className="text-slate-600" />
-      </button>
-      <button
-        onClick={handleFitToScreen}
-        className={`flex items-center gap-1.5 border-l px-2 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 ${showFitHint ? "bg-slate-50" : ""}`}
-        title="Fit to Screen"
-        aria-label="Fit to Screen"
-      >
-        <Maximize2 size={14} className="shrink-0" />
-        {showFitHint && <span className="whitespace-nowrap text-[11px] font-medium">Fit to Screen</span>}
-      </button>
-      </div>
-    </div>
-  );
-}
-
 function buildStrokePath(points: CanvasPoint[]) {
   if (points.length === 0) return "";
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
@@ -227,6 +132,22 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [drawTool, setDrawTool] = useState<DrawTool>("pen");
   const [activeShapeKind, setActiveShapeKind] = useState<ShapeKind>("rectangle");
   const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
+  // "Keep the tools open": the phone dock stays open after a tool is picked.
+  const [mobileToolbarPinned, setMobileToolbarPinned] = useState(false);
+  useEffect(() => {
+    if (readDockPinned(browserStorage())) {
+      setMobileToolbarPinned(true);
+      setMobileToolbarOpen(true);
+    }
+  }, []);
+  const closeMobileToolbar = useCallback(() => {
+    if (!mobileToolbarPinned) setMobileToolbarOpen(false);
+  }, [mobileToolbarPinned]);
+  const toggleToolbarPinned = useCallback(() => {
+    const next = !mobileToolbarPinned;
+    setMobileToolbarPinned(next);
+    writeDockPinned(browserStorage(), next);
+  }, [mobileToolbarPinned]);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [fitHintDismissed, setFitHintDismissed] = useState(false);
   const [fitHintEligible, setFitHintEligible] = useState(false);
@@ -428,42 +349,36 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   // after onInit or a saved non-1 zoom bakes a position * (1 - zoom) offset in.
   const [isTransformReady, setIsTransformReady] = useState(false);
   const hasAppliedInitialFitRef = useRef(false);
-  const fitWorkspaceToViewport = useCallback(() => {
+  /** Space the controls take at the bottom-left, kept free when fitting so they never cover content. */
+  const controlsInset = () => ({ bottom: typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches ? 68 : 56 });
+  /** Moves the camera so `bounds` is in view, or does nothing when the board isn't laid out yet. */
+  const showBounds = useCallback((bounds: ReturnType<typeof contentBounds>, maxScale: number) => {
     const wrapper = wrapperRef.current;
-    const instance = transformRef.current?.instance;
-    if (!wrapper || !instance || items.length === 0) return;
-
+    if (!wrapper || !bounds || !transformRef.current?.instance) return;
     const rect = wrapper.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
-
-    const bounds = items.reduce(
-      (acc, item) => {
-        const radians = ((item.rotation ?? 0) * Math.PI) / 180;
-        const rotatedWidth = Math.abs(item.w * Math.cos(radians)) + Math.abs(item.h * Math.sin(radians));
-        const rotatedHeight = Math.abs(item.w * Math.sin(radians)) + Math.abs(item.h * Math.cos(radians));
-        const centerX = item.x + item.w / 2;
-        const centerY = item.y + item.h / 2;
-        const left = centerX - rotatedWidth / 2;
-        const top = centerY - rotatedHeight / 2;
-        return {
-          left: Math.min(acc.left, left),
-          top: Math.min(acc.top, top),
-          right: Math.max(acc.right, left + rotatedWidth),
-          bottom: Math.max(acc.bottom, top + rotatedHeight),
-        };
-      },
-      { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, bottom: Number.NEGATIVE_INFINITY },
-    );
-
-    const contentWidth = Math.max(1, bounds.right - bounds.left);
-    const contentHeight = Math.max(1, bounds.bottom - bounds.top);
-    const padding = Math.min(48, Math.max(20, Math.min(rect.width, rect.height) * 0.06));
-    const scale = clampScale(Math.min((rect.width - padding * 2) / contentWidth, (rect.height - padding * 2) / contentHeight, 1));
-    const positionX = (rect.width - contentWidth * scale) / 2 - bounds.left * scale;
-    const positionY = (rect.height - contentHeight * scale) / 2 - bounds.top * scale;
-
-    transformRef.current?.setTransform(positionX, positionY, scale, 180, "easeOut");
-  }, [items]);
+    const camera = fitCamera(bounds, { width: rect.width, height: rect.height }, { insets: controlsInset(), maxScale });
+    transformRef.current.setTransform(camera.x, camera.y, camera.scale, 180, "easeOut");
+  }, []);
+  const fitWorkspaceToViewport = useCallback(() => {
+    showBounds(contentBounds(items), 1);
+  }, [items, showBounds]);
+  const zoomToSelection = useCallback(() => {
+    const selected = new Set(useSelectionStore.getState().selectedIds);
+    showBounds(contentBounds(items.filter((item) => selected.has(item.id))), 2);
+  }, [items, showBounds]);
+  /** Zooms to `scale` (or a step from the current zoom) with the middle of the view staying put. */
+  const zoomAroundMiddle = useCallback((nextScale: (current: number) => number) => {
+    const wrapper = wrapperRef.current;
+    const instance = transformRef.current?.instance;
+    if (!wrapper || !instance) return;
+    const rect = wrapper.getBoundingClientRect();
+    const { positionX, positionY, scale } = instance.transformState;
+    const camera = zoomAroundCentre({ x: positionX, y: positionY, scale }, { width: rect.width, height: rect.height }, nextScale(scale));
+    transformRef.current?.setTransform(camera.x, camera.y, camera.scale, 140, "easeOut");
+  }, []);
+  const zoomBy = useCallback((direction: 1 | -1) => zoomAroundMiddle((current) => stepScale(current, direction)), [zoomAroundMiddle]);
+  const zoomTo100 = useCallback(() => zoomAroundMiddle(() => 1), [zoomAroundMiddle]);
   // Measure after React commits item DOM changes. Measuring in render can see
   // the previous (empty) DOM immediately after workspace hydration.
   useEffect(() => {
@@ -2491,7 +2406,19 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             </TransformComponent>
 
 
-            <ZoomControls utils={utils} onFitToScreen={fitWorkspaceToViewport} showFitHint={shouldShowFitHint} onDismissFitHint={dismissFitHint} canUndo={canUndo} canRedo={canRedo} onUndo={handleUndo} onRedo={handleRedo} />
+            <BoardControls
+              zoom={viewport.zoom}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onZoomBy={zoomBy}
+              onZoomTo100={zoomTo100}
+              onFit={fitWorkspaceToViewport}
+              onZoomToSelection={zoomToSelection}
+              showFitHint={shouldShowFitHint}
+              onDismissFitHint={dismissFitHint}
+            />
             <AssetDrawer />
 
             {isDrawing && (
@@ -2620,10 +2547,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
             {/* Mobile dock: collapsed state is only the active tool button;
                 expanded state adds the surrounding scrollable toolbar shell. */}
             <div
-              className={`fixed top-20 left-3 z-[11000] flex sm:hidden flex-col items-center transition-all duration-200 ease-out ${
+              className={`fixed td z-[11000] flex sm:hidden flex-col items-center transition-all duration-200 ease-out ${
                 mobileToolbarOpen
-                  ? "w-11 max-h-[calc(100dvh-7rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-xl backdrop-blur"
-                  : "h-9 w-9 overflow-visible"
+                  ? "td-open max-h-[calc(100dvh-7rem)] overflow-hidden border border-slate-200 bg-white/95 shadow-xl backdrop-blur"
+                  : "td-closed overflow-visible"
               }`}
               onPointerDown={(event) => event.stopPropagation()}
             >
@@ -2633,7 +2560,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                   aria-label="Open tools"
                   aria-expanded={false}
                   onClick={() => setMobileToolbarOpen(true)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-lg transition-colors hover:bg-slate-50"
+                  className="td-btn shrink-0 border border-slate-200 bg-white text-slate-600 shadow-lg transition-colors hover:bg-slate-50"
                 >
                   {isPanning
                     ? <Hand size={20} />
@@ -2649,17 +2576,28 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 </button>
               ) : (
                 <div className="flex max-h-[calc(100dvh-7.5rem)] w-full flex-col items-center gap-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-                  <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
-                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); setMobileToolbarOpen(false); }} compact />
-                  <button type="button" onClick={() => { setActiveTool(activeTool === "connector" ? "select" : "connector"); setIsTextToolLocked(false); setEditingFreeTextId(null); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connector" aria-label="Connector tool" aria-pressed={activeTool === "connector"}><Spline size={20}/></button>
-                  <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
-                  <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
-                  <button type="button" onClick={() => { setMobileToolbarOpen(false); void addNoteCard(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Note page" aria-label="Add a note page"><FileText size={20}/></button>
-                  <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
-                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); setMobileToolbarOpen(false); }} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
-                  <div className="my-0.5 h-px w-6 shrink-0 bg-slate-100" />
-                  <button type="button" onClick={() => { handleToolbarImageUpload(); setMobileToolbarOpen(false); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("select"); setIsTextToolLocked(false); setEditingFreeTextId(null); closeMobileToolbar(); }} className={`td-btn shrink-0 ${activeTool === "select" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Select"><MousePointer2 size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool("pan"); setIsTextToolLocked(false); setEditingFreeTextId(null); closeMobileToolbar(); }} className={`td-btn shrink-0 ${isPanning ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Pan"><Hand size={20}/></button>
+                  <ShapeToolButton activeShapeKind={activeShapeKind} isActive={isShapeToolActive} onOpen={() => handleSelectShapeKind(activeShapeKind)} onSelectShapeKind={(kind) => { handleSelectShapeKind(kind); closeMobileToolbar(); }} compact />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "connector" ? "select" : "connector"); setIsTextToolLocked(false); setEditingFreeTextId(null); closeMobileToolbar(); }} className={`td-btn shrink-0 ${activeTool === "connector" ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Connector" aria-label="Connector tool" aria-pressed={activeTool === "connector"}><Spline size={20}/></button>
+                  <div className="td-rule" />
+                  <button type="button" onClick={() => { setActiveTool(activeTool === "sticky" ? "select" : "sticky"); useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedFreeTextId(null); setEditingFreeTextId(null); setEditingStickyId(null); setSelectedStickyId(null); setIsTextToolLocked(false); closeMobileToolbar(); }} className={`td-btn shrink-0 ${isStickyToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Sticky Note"><StickyNote size={20}/></button>
+                  <button type="button" onClick={() => { closeMobileToolbar(); void addNoteCard(); }} className="td-btn shrink-0 text-slate-500" title="Note page" aria-label="Add a note page"><FileText size={20}/></button>
+                  <button type="button" onClick={() => { useSelectionStore.getState().deselectAll(); setSelectedShapeId(null); setSelectedImageId(null); setSelectedDrawingId(null); setSelectedStickyId(null); activateTextTool(false); closeMobileToolbar(); }} className={`td-btn shrink-0 ${isTextToolActive ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Text"><Type size={20}/></button>
+                  <button type="button" onClick={() => { setActiveTool(isDrawing ? "select" : drawTool); useSelectionStore.getState().deselectAll(); setSelectedImageId(null); setSelectedStickyId(null); setSelectedFreeTextId(null); setIsTextToolLocked(false); setEditingFreeTextId(null); setSelectedDrawingId(null); setSelectedShapeId(null); currentPathRef.current = []; eraserPathRef.current = []; setCurrentPath([]); setEraserPath([]); closeMobileToolbar(); }} className={`td-btn shrink-0 ${isDrawing ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`} title="Draw"><Pencil size={20}/></button>
+                  <div className="td-rule" />
+                  <button type="button" onClick={() => { handleToolbarImageUpload(); closeMobileToolbar(); }} className="td-btn shrink-0 text-slate-500" title="Upload Image"><ImagePlus size={20}/></button>
+                  <div className="td-rule" />
+                  <button
+                    type="button"
+                    onClick={toggleToolbarPinned}
+                    aria-pressed={mobileToolbarPinned}
+                    aria-label={mobileToolbarPinned ? "Let the tools close after use" : "Keep the tools open"}
+                    title={mobileToolbarPinned ? "Tools stay open. Tap to let them close." : "Keep the tools open"}
+                    className={`td-btn shrink-0 ${mobileToolbarPinned ? "bg-indigo-50 text-indigo-600" : "text-slate-500"}`}
+                  >
+                    <Pin size={20} fill={mobileToolbarPinned ? "currentColor" : "none"} />
+                  </button>
                 </div>
               )}
             </div>
