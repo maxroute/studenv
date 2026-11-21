@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { aiGenerateSchema } from "@/lib/models/ai.model";
+import { RANGAN_DAILY_LIMIT } from "@/lib/models/rangan.model";
 import * as aiRepository from "@/lib/repositories/ai.repository";
+import * as usageRepository from "@/lib/repositories/rangan-usage.repository";
 import { apiError } from "@/lib/security/headers";
 import { apiRateLimiter, checkRateLimit } from "@/lib/security/rateLimit";
 import { getErrorResponse, getRateLimitIdentifier } from "@/lib/security/request";
@@ -13,6 +15,15 @@ import {
   generateQuiz,
   generateSummary,
 } from "@/lib/services/ai.service";
+import { createAllowance } from "@/lib/services/rangan-allowance";
+
+/** These tools share Rangan's models, so they share its daily allowance. */
+const withQuestion = createAllowance({
+  dailyLimit: RANGAN_DAILY_LIMIT,
+  now: () => new Date(),
+  consumeQuestion: usageRepository.consumeQuestion,
+  refundQuestion: usageRepository.refundQuestion,
+});
 
 const runAiGenerate = createAiGenerateService({
   isAssetOwnedBy: aiRepository.isAssetOwnedBy,
@@ -24,7 +35,12 @@ const runAiGenerate = createAiGenerateService({
   generateFlashcards,
   generateQuiz,
   chatWithDocument,
+  withQuestion: (userId, run) => withQuestion(userId, () => run()),
 });
+
+export const runtime = "nodejs";
+/** The model chain may try up to three providers. */
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
