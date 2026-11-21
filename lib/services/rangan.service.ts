@@ -13,10 +13,10 @@ import {
 } from "@/lib/rangan/citations";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
-import { aboutSubject, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
+import { aboutSubject, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
 import { extractJsonObject } from "@/lib/study/plan";
 import { boardEditInstruction, parseBoardPlan, type BoardChange } from "@/lib/workspace/board-edit";
-import { mapInstruction, mapOutline, parseMapReply, type MapDraft } from "@/lib/workspace/mind-map";
+import { MAP_MAX_READING, mapInstruction, mapOutline, parseMapReply, type MapDraft, type MapImage } from "@/lib/workspace/mind-map";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
 /** A library passage as Rangan's search returns it. */
@@ -51,6 +51,10 @@ export type RanganDeps = {
   searchWeb?: (query: string) => Promise<LibraryPassage[]>;
   /** True when the board is the user's; checked before Rangan plans changes to it. */
   ownsBoard?: (userId: string, boardId: string) => Promise<boolean>;
+  /** A freely licensed picture for a Wikipedia article title, or null. Without it, maps have no pictures. */
+  findImage?: (query: string) => Promise<Omit<MapImage, "target"> | null>;
+  /** A lesson video for a YouTube search whose title names the subject, or null. Without it, maps have no video. */
+  findVideo?: (query: string, subject: string) => Promise<{ videoId: string; title: string; channel: string } | null>;
   /** A quick call on the smaller models, for reading a request's subject. Without it, the question is searched whole. */
   completeQuick?: (messages: ChatMessage[], options?: CompletionOptions) => Promise<CompletionResult>;
 };
@@ -91,7 +95,17 @@ export type RanganPageDraft = Omit<RanganAnswer, "answer" | "kind"> & {
 export type RanganMapSource = { n: number; ref: string; sourceType: string; title: string };
 
 /** A mind map Rangan drafted, laid out on a new board when the student creates it. */
-export type RanganMap = { draft: MapDraft; outline: string[]; sources: RanganMapSource[] };
+export type RanganMap = {
+  draft: MapDraft;
+  outline: string[];
+  sources: RanganMapSource[];
+  /** Pictures found for the centre ("") and branches; checked again when the board is created. */
+  images: MapImage[];
+  /** Wikipedia articles the map drew on, saved as links when the board is created. */
+  reading: Array<{ title: string; url: string }>;
+  /** A lesson video found for the map, saved to the library when the board is created. */
+  video: { videoId: string; title: string; channel: string } | null;
+};
 
 /** A new board Rangan drafted. Nothing is saved until the student creates it. */
 export type RanganMapDraft = Omit<RanganAnswer, "answer" | "kind"> & {
@@ -394,7 +408,26 @@ export function createRanganService(deps: RanganDeps) {
       // Wikipedia isn't something a board card can show.
       return passage && passage.sourceType !== "web" ? [{ n, ref: passage.ref, sourceType: passage.sourceType, title: passage.title }] : [];
     });
-    return { draft, outline: mapOutline(draft), sources, provider: result.provider };
+    const wanted = [
+      ...(draft.image ? [{ target: "", query: draft.image }] : []),
+      ...draft.branches.flatMap((branch) => (branch.image ? [{ target: branch.title, query: branch.image }] : [])),
+    ];
+    const video = draft.video && deps.findVideo ? await deps.findVideo(draft.video, subject).catch(() => null) : null;
+    const found = deps.findImage
+      ? await Promise.all(wanted.map(async ({ target, query }) => {
+          const image = await deps.findImage?.(query).catch(() => null);
+          return image ? { ...image, target } : null;
+        }))
+      : [];
+    // The same picture twice would only repeat itself.
+    const images = found.filter((image, index, all): image is MapImage => image !== null && all.findIndex((other) => other?.src === image.src) === index);
+    const further = passages
+      // Only articles named for the subject: the fallback's second hit is often a neighbour topic.
+      .filter((passage) => passage.sourceType === "web" && passage.open?.kind === "web" && (reading.names.length === 0 || mentionsAny(passage.title, reading.names)))
+      .map((passage) => ({ title: passage.title, url: passage.ref }))
+      .filter((link, index, all) => all.findIndex((other) => other.url === link.url) === index)
+      .slice(0, MAP_MAX_READING);
+    return { draft, outline: mapOutline(draft), sources, images, reading: further, video, provider: result.provider };
   }
 
   /** Additions to the open board as the student described them. Nothing is applied: the student sees them first. */

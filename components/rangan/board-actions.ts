@@ -32,6 +32,10 @@ export async function createMapBoard(map: RanganMap, pageNoteId?: string | null)
       body: JSON.stringify({
         draft: map.draft,
         sources: map.sources.map((source) => ({ n: source.n, ref: source.ref })),
+        // Chats saved before pictures and reading existed have neither.
+        images: map.images ?? [],
+        reading: map.reading ?? [],
+        video: map.video ?? null,
         ...(pageNoteId ? { pageNoteId } : {}),
       }),
     });

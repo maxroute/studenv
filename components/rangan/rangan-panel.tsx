@@ -390,7 +390,7 @@ export function RanganPanel() {
           </div>
           <p className="rangan-privacy">
             To answer, the relevant parts of your library and your question are sent to Groq or Cloudflare. When your library has
-            little on a question, the question is also looked up on Wikipedia. Answers can be wrong, so check the sources.
+            little on a question, the question is also looked up on Wikipedia. For mind maps, only the topic is also searched on Wikimedia Commons (pictures) and YouTube (one video). Answers can be wrong, so check the sources.
           </p>
         </form>
       </aside>

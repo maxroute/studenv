@@ -660,6 +660,56 @@ test("asking for a board returns a map draft with its outline", async () => {
   assert.match(sent[0][1].content, /Plan a mind map that teaches "operating systems"/);
 });
 
+test("a map brings freely licensed pictures for what it asked, and the on-subject Wikipedia articles it used as reading", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
+  const withPictures = JSON.stringify({ ...JSON.parse(MAP_REPLY), image: "Operating system", branches: JSON.parse(MAP_REPLY).branches.map((b: object, i: number) => ({ ...b, image: i === 1 ? "Paging" : null })) });
+  const asked: string[] = [];
+  const picture = (name: string) => ({ src: `https://upload.wikimedia.org/wikipedia/commons/a/ab/${name}.png`, width: 400, height: 300, alt: name, credit: "A · CC0", sourceUrl: `https://commons.wikimedia.org/wiki/File:${name}.png` });
+  const { deps } = sequenceDeps(reading, [withPictures], {
+    findImage: async (query) => {
+      asked.push(query);
+      return query === "Paging" ? picture("Paging") : null;
+    },
+    searchWeb: async () => [
+      { ref: "https://en.wikipedia.org/wiki/Operating_system", sourceType: "web", title: "Operating system", heading: "Wikipedia", snippet: "", content: "An OS manages a computer.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Operating_system" } },
+      { ref: "https://en.wikipedia.org/wiki/Operating_system", sourceType: "web", title: "Operating system", heading: "Wikipedia", snippet: "", content: "Again.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Operating_system" } },
+      { ref: "https://en.wikipedia.org/wiki/Paging", sourceType: "web", title: "Paging", heading: "Wikipedia", snippet: "", content: "Paging splits memory.", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Paging" } },
+    ],
+  });
+  const reply = await createRanganService(deps).ask("u1", { question: "make a mind map of operating systems" });
+  assert.equal(reply.kind, "map");
+  if (reply.kind !== "map") return;
+  assert.deepEqual(asked.sort(), ["Operating system", "Paging"]);
+  assert.deepEqual(reply.map.images, [{ ...picture("Paging"), target: "Memory" }]);
+  assert.deepEqual(reply.map.reading, [{ title: "Operating system", url: "https://en.wikipedia.org/wiki/Operating_system" }], "once, and only articles named for the subject");
+});
+
+test("a map brings a lesson video when it asks for one, searched with the request's subject", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
+  const withVideo = JSON.stringify({ ...JSON.parse(MAP_REPLY), video: "operating systems explained" });
+  const asked: string[][] = [];
+  const { deps } = sequenceDeps(reading, [withVideo], {
+    findVideo: async (query, subject) => {
+      asked.push([query, subject]);
+      return { videoId: "AAAAAAAAAAA", title: "Operating systems explained", channel: "Teacher" };
+    },
+  });
+  const reply = await createRanganService(deps).ask("u1", { question: "make a mind map of operating systems" });
+  assert.equal(reply.kind, "map");
+  if (reply.kind !== "map") return;
+  assert.deepEqual(asked, [["operating systems explained", "operating systems"]]);
+  assert.equal(reply.map.video?.videoId, "AAAAAAAAAAA");
+});
+
+test("a picture lookup that fails leaves the map without pictures", async () => {
+  const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
+  const withPicture = JSON.stringify({ ...JSON.parse(MAP_REPLY), image: "Operating system" });
+  const { deps } = sequenceDeps(reading, [withPicture], { findImage: async () => { throw new Error("offline"); } });
+  const reply = await createRanganService(deps).ask("u1", { question: "make a mind map of operating systems" });
+  assert.equal(reply.kind, "map");
+  if (reply.kind === "map") assert.deepEqual(reply.map.images, []);
+});
+
 test("a map reply that isn't a map is an error, so the question is given back", async () => {
   const reading = PAGE_READING.replace('"actions":["page"]', '"actions":["board"]');
   const { deps, counts } = sequenceDeps(reading, ["Sorry."]);

@@ -7,6 +7,7 @@
 // itself, and openly licensed (CC BY-SA), so they can be quoted with a link.
 
 import { z } from "zod";
+import { RANGAN_USER_AGENT } from "@/lib/web/client-name";
 
 export type WikiArticle = {
   title: string;
@@ -20,7 +21,7 @@ export type WikiArticle = {
 export type WikiLanguage = "en" | "bn";
 
 /** Wikimedia asks API clients to name themselves. */
-const USER_AGENT = "Studenv-Rangan/1.0 (study assistant)";
+const USER_AGENT = RANGAN_USER_AGENT;
 const TIMEOUT_MS = 5_000;
 const MAX_EXTRACT_CHARS = 1_500;
 const CACHE_MS = 24 * 60 * 60 * 1000;

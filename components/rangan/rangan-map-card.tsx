@@ -27,7 +27,63 @@ export function MapOutline({ map }: { map: RanganMap }) {
         ))}
       </ul>
       {map.draft.tips.length ? <p className="rangan-plan-meta">{map.draft.tips.length} exam tip{map.draft.tips.length === 1 ? "" : "s"}</p> : null}
+      <MapExtras map={map} />
     </div>
+  );
+}
+
+/** The pictures and further reading a map comes with: shown before anything is saved. */
+function MapExtras({ map }: { map: RanganMap }) {
+  const images = map.images ?? [];
+  const reading = map.reading ?? [];
+  const video = map.video ?? null;
+  if (!images.length && !reading.length && !video) return null;
+  return (
+    <>
+      {video ? (
+        <a className="rangan-map-video" href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.videoId)}`} target="_blank" rel="noopener noreferrer">
+          {/* YouTube's own thumbnail, shown as is. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`https://i.ytimg.com/vi/${encodeURIComponent(video.videoId)}/mqdefault.jpg`} alt="" loading="lazy" />
+          <span>
+            <strong>{video.title}</strong>
+            <span className="rangan-plan-meta">{video.channel ? `${video.channel} · ` : ""}YouTube. Saved to your library when you create the board.</span>
+          </span>
+        </a>
+      ) : null}
+      {images.length ? (
+        <div className="rangan-map-images">
+          {images.map((image) => (
+            <figure key={image.src}>
+              {/* A Commons thumbnail shown as is; next/image would proxy a third-party picture through the app. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.src} alt={image.alt} loading="lazy" />
+              <figcaption>
+                <span>{image.target || map.draft.centre}</span>
+                <a href={image.sourceUrl} target="_blank" rel="noopener noreferrer">
+                  {image.credit}
+                </a>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : null}
+      {reading.length ? (
+        <div className="rangan-map-reading">
+          <span className="rangan-plan-meta">Further reading, saved to your library as links when you create the board:</span>
+          <ul>
+            {reading.map((link) => (
+              <li key={link.url}>
+                <a href={link.url} target="_blank" rel="noopener noreferrer">
+                  {link.title}
+                </a>{" "}
+                <span className="rangan-plan-meta">Wikipedia</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -86,7 +142,7 @@ export function RanganMapCard({ turn, onNavigate }: { turn: Extract<RanganTurn, 
         <span className="rangan-plan-goal">{map.draft.title}</span>
       </div>
       <p className="rangan-plan-meta">
-        A new board with a mind map of about {mapElementCount(map.draft)} elements. Nothing is saved until you create it.
+        A new board with a mind map of about {mapElementCount(map.draft, new Map(), { images: (map.images ?? []).length, reading: (map.reading ?? []).length, video: Boolean(map.video) })} elements. Nothing is saved until you create it.
       </p>
       <MapOutline map={map} />
       {map.sources.length ? <p className="rangan-plan-meta">Cards for {map.sources.map((source) => source.title).join(" · ")}</p> : null}
