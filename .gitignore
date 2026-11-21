@@ -70,3 +70,8 @@ Thumbs.db
 .vscode/
 *.local
 storage-search.txt
+
+# Local scratch: macOS/Finder duplicates ("name 2.ts"), Claude Code settings and its scratch outputs
+* 2.*
+.claude/
+Claude outputs/
