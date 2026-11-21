@@ -3214,6 +3214,37 @@ textarea {
   color: var(--amber);
 }
 
+/* Vault files not on the Shelf yet (components/items/shelf-files.tsx). */
+.type-badge.file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  color: var(--muted);
+}
+
+.shelf-files {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.shelf-files-head {
+  padding: 18px 24px 0;
+}
+
+.shelf-files-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.shelf-files-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .playlist-mini-badge {
   border: 1px solid rgba(155, 127, 232, 0.26);
   border-radius: 999px;
@@ -6745,6 +6776,24 @@ body.shelf-scroll-locked {
 
 .shelf-shell .detail {
   min-height: 0;
+}
+
+/* The Shelf's items and the vault's files scroll as one list (shelf-files.tsx). */
+.shelf-scroll {
+  display: flex;
+  flex-direction: column;
+}
+
+.shelf-shell .shelf-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.shelf-shell .shelf-scroll .cards-grid {
+  flex: none;
+  overflow: visible;
 }
 
 

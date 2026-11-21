@@ -33,6 +33,8 @@ import { requestVideoTranscript } from "@/lib/client/video-transcript";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import type { NoteCardNode } from "@/types/workspace";
 import { addNoteCardToBoard } from "./note-card-actions";
+import { addResourceCardToBoard } from "./resource-card-actions";
+import { shelfItemsWithoutFile, type VaultShelfItem } from "@/lib/library/shelf-files";
 
 interface Asset {
   id: string;
@@ -40,10 +42,18 @@ interface Asset {
   kind: "pdf" | "video" | "image" | "audio" | "webpage" | "snapshot";
   currentRevisionId: string | null;
   mimeType: string | null;
+  /** The Shelf item it belongs to, when it has one. */
+  itemId?: string | null;
+  sourceHost?: string | null;
 }
 
 type BoardResource = { assetId: string; kind: Asset["kind"]; title: string; revisionId: string | null; noteIds: string[] };
 
+
+/** Marks a Library entry that is already on the open board. */
+function OnBoardTag() {
+  return <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">On board</span>;
+}
 
 export function AssetDrawer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,6 +71,8 @@ export function AssetDrawer() {
   const [kindFilter, setKindFilter] = useState<"all" | "pages" | "resources">("all");
   const [collapsedPages, setCollapsedPages] = useState<Set<string>>(new Set());
   const [allNotes, setAllNotes] = useState<Array<{ id: string; title: string }>>([]);
+  const [shelfItems, setShelfItems] = useState<Array<{ id: string; title: string; type: string; sourceHost: string | null }>>([]);
+  const [addingItemId, setAddingItemId] = useState<string | null>(null);
   const [touchDragPreview, setTouchDragPreview] = useState<{ assetId: string; x: number; y: number; width: number; height: number } | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -79,6 +91,16 @@ export function AssetDrawer() {
         .then((response) => (response.ok ? response.json() : null))
         .then((json) => {
           if (Array.isArray(json?.data)) setAllNotes(json.data.map((note: { id: string; title: string }) => ({ id: note.id, title: note.title })));
+        })
+        .catch(() => undefined);
+      // Shelf items: those without a file yet are listed in the Library too.
+      void fetch("/api/items")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((json) => {
+          if (Array.isArray(json?.data))
+            setShelfItems(
+              json.data.map((item: { id: string; title: string; type: string; sourceHost: string | null }) => ({ id: item.id, title: item.title ?? "", type: item.type, sourceHost: item.sourceHost ?? null })),
+            );
         })
         .catch(() => undefined);
     }
@@ -264,17 +286,39 @@ export function AssetDrawer() {
   const onBoardAssetIds = new Set([...fromPages, ...boardOnlyAssets.map((asset) => asset.id)]);
   const boardAllResources = [...boardResources.map(resourceAsset), ...boardOnlyAssets].filter((asset) => matches(asset.title));
   const onBoardNoteIds = new Set(boardPages.map((page) => page.noteId));
-  const libraryPages = allNotes.filter((note) => !onBoardNoteIds.has(note.id) && matches(note.title || "Untitled"));
-  const libraryAssets = filteredAssets.filter((asset) => !onBoardAssetIds.has(asset.id));
+  // The Library is everything you have; what is already on this board is marked, not hidden.
+  const libraryPages = allNotes.filter((note) => matches(note.title || "Untitled"));
+  const libraryAssets = filteredAssets;
+  const libraryShelfItems = shelfItemsWithoutFile(shelfItems, new Set(assets.flatMap((asset) => (asset.itemId ? [asset.itemId] : [])))).filter((item) => matches(item.title));
   const showPages = kindFilter !== "resources";
   const showResources = kindFilter !== "pages";
+
+  /** A Shelf item without a file yet: its file is made (as opening it does), then it goes on the board. */
+  const addShelfItem = async (item: VaultShelfItem) => {
+    if (addingItemId) return;
+    setAddingItemId(item.id);
+    try {
+      const response = await fetch(`/api/items/${encodeURIComponent(item.id)}/asset`, { method: "POST" });
+      const json = await response.json().catch(() => null);
+      const assetId = json?.data?.assetId;
+      const kind = json?.data?.kind;
+      if (!response.ok || typeof assetId !== "string" || typeof kind !== "string") {
+        toast.error(typeof json?.error === "string" ? json.error : "That item could not be added.");
+        return;
+      }
+      if (!addResourceCardToBoard({ id: assetId, kind, title: item.title, sourceHost: item.sourceHost })) toast.error("That item could not be added.");
+      void fetchAssets();
+    } finally {
+      setAddingItemId(null);
+    }
+  };
 
   const addPage = async (noteId: string) => {
     const added = await addNoteCardToBoard(noteId);
     if (!added) toast.error("That page could not be added.");
   };
 
-  const renderAssetRow = (asset: Asset, detail: string | undefined, deletable: boolean) => (
+  const renderAssetRow = (asset: Asset, detail: string | undefined, deletable: boolean, onBoard = false) => (
                   <Fragment key={asset.id}>
                   {touchDragPreview?.assetId === asset.id ? (
                     <div
@@ -356,6 +400,7 @@ export function AssetDrawer() {
                     <p className="min-w-0 flex-1 truncate text-[13px] text-slate-700 group-hover:text-slate-900" title={detail ? `${asset.title} · ${detail}` : asset.title}>
                       {asset.title}
                     </p>
+                    {onBoard ? <OnBoardTag /> : null}
                     <span className="shrink-0 text-[10px] font-semibold uppercase tracking-tight text-slate-400">{getAssetKindLabel(asset.kind)}</span>
                     {deletable ? (
                     <button
@@ -722,9 +767,10 @@ export function AssetDrawer() {
                         <div key={page.id} className="flex min-h-[36px] items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-50">
                           <StickyNote className="h-4 w-4 shrink-0 text-slate-400" />
                           <span className="min-w-0 flex-1 truncate text-[13px] text-slate-700">{page.title || "Untitled"}</span>
+                          {onBoardNoteIds.has(page.id) ? <OnBoardTag /> : null}
                           <button
                             type="button"
-                            title="Add this page to the board"
+                            title={onBoardNoteIds.has(page.id) ? "Show this page on the board" : "Add this page to the board"}
                             aria-label={`Add ${page.title || "Untitled"} to the board`}
                             onClick={() => void addPage(page.id)}
                             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
@@ -733,9 +779,39 @@ export function AssetDrawer() {
                           </button>
                         </div>
                       )) : null}
-                      {showResources ? libraryAssets.map((asset) => renderAssetRow(asset, undefined, true)) : null}
-                      {(showPages ? libraryPages.length : 0) + (showResources ? libraryAssets.length : 0) === 0 ? (
-                        <p className="px-2 py-3 text-xs text-slate-400">{searchQuery ? "Nothing matches." : "Everything you have is already on this board."}</p>
+                      {showResources ? libraryAssets.map((asset) => renderAssetRow(asset, undefined, true, onBoardAssetIds.has(asset.id))) : null}
+                      {showResources && libraryShelfItems.length ? (
+                        <>
+                          <p className="px-2 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">From your Shelf</p>
+                          {libraryShelfItems.map((item) => (
+                            <div key={item.id} className="flex min-h-[36px] items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-50">
+                              {item.type === "pdf" ? (
+                                <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                              ) : item.type === "video" ? (
+                                <Video className="h-4 w-4 shrink-0 text-slate-400" />
+                              ) : (
+                                <Globe className="h-4 w-4 shrink-0 text-slate-400" />
+                              )}
+                              <span className="min-w-0 flex-1 truncate text-[13px] text-slate-700" title={item.sourceHost ? `${item.title} · ${item.sourceHost}` : item.title}>
+                                {item.title}
+                              </span>
+                              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-tight text-slate-400">{item.type === "article" ? "Link" : item.type}</span>
+                              <button
+                                type="button"
+                                title="Add to the board"
+                                aria-label={`Add ${item.title} to the board`}
+                                disabled={addingItemId === item.id}
+                                onClick={() => void addShelfItem(item)}
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                              >
+                                {addingItemId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          ))}
+                        </>
+                      ) : null}
+                      {(showPages ? libraryPages.length : 0) + (showResources ? libraryAssets.length + libraryShelfItems.length : 0) === 0 ? (
+                        <p className="px-2 py-3 text-xs text-slate-400">{searchQuery ? "Nothing matches." : "Your library is empty. Upload a file or add a link."}</p>
                       ) : null}
                     </>
                   )}
