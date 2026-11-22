@@ -78,7 +78,7 @@ function fakeDeps(
 
 test("an answer reports how many questions are left today", async () => {
   const { deps } = fakeDeps({ limit: 3 });
-  const result = await createRanganService(deps).ask("u1", { question: "Hi" });
+  const result = await createRanganService(deps).ask("u1", { question: "What is ATP?" });
   assert.equal(result.answer, "An answer.");
   assert.equal(result.provider, "groq-large");
   assert.deepEqual(result.usage, { limit: 3, used: 1, remaining: 2, resetAt: "2026-11-21T00:00:00.000Z", asOf: "2026-11-20T15:30:00.000Z" });
@@ -947,4 +947,38 @@ test("a single thing to do by a time stays a task even if the reading also says 
   const { deps } = readingDeps({ reading, answer: DSA_TASK });
   const result = await createRanganService(deps).ask("u1", { question: "plan to solve 5 dsa problems before 12 am" });
   assert.equal(result.kind, "task");
+});
+
+test("small talk is answered at once: no search, no model, no question used", async () => {
+  for (const question of ["hello", "hello!", "good morning rangan", "what is your name?", "thanks"]) {
+    const { deps, sent, searches } = fakeDeps({ limit: 3 });
+    const webQueries: string[] = [];
+    deps.searchWeb = async (query) => {
+      webQueries.push(query);
+      return [];
+    };
+    const result = await createRanganService(deps).ask("u1", { question, history: [{ role: "user", content: "what is authentication?" }] });
+    assert.equal(result.kind, undefined, question);
+    assert.ok(result.kind === undefined && /Rangan|welcome/i.test(result.answer), question);
+    assert.deepEqual(result.citations, []);
+    assert.equal(result.usage.used, 0, `${question}: no question used`);
+    assert.deepEqual([sent.length, searches.length, webQueries.length], [0, 0, 0], question);
+  }
+});
+
+test("chit-chat the reader spots is answered without the library or the web", async () => {
+  const reading = JSON.stringify({ subject: null, search: "", names: [], terms: [], actions: [], chat: true });
+  const { deps, searches, webQueries, sent } = readingDeps({ reading, answer: "Haha, I'm a librarian, so I'd pick books!" });
+  const result = await createRanganService(deps).ask("u1", { question: "do you like movies or books more?" });
+  assert.ok(result.kind === undefined);
+  assert.deepEqual(result.citations, []);
+  assert.deepEqual([searches.length, webQueries.length], [0, 0]);
+  assert.match(sent[0].at(-1)?.content ?? "", /small talk/);
+});
+
+test("a message read as having no subject never searches the web for its words", async () => {
+  const reading = JSON.stringify({ subject: null, search: "what I know so far", names: [], terms: [], actions: [] });
+  const { deps, webQueries } = readingDeps({ reading, library: [] });
+  await createRanganService(deps).ask("u1", { question: "summarize what I know so far" });
+  assert.deepEqual(webQueries, []);
 });

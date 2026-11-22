@@ -28,6 +28,8 @@ export type RequestReading = {
   terms: string[];
   /** Things the student asked Rangan to make. */
   actions: RequestAction[];
+  /** Small talk or a question about Rangan itself, not about a topic or the student's notes: answered without a search. */
+  chat: boolean;
 };
 
 export const READING_SYSTEM_PROMPT = [
@@ -52,7 +54,8 @@ export function readingInstruction(message: string, previousQuestion?: string, o
     "terms: 3 to 8 core terms a text about the subject would use.",
     "If the message is not in English, include names and terms in the message's language too.",
     'actions: include "page" if the student asks you to create, write or make a new note or page; include "edit" if they ask you to change what is open (on a page: add to it, simplify, shorten, reorganize, turn into a table, add questions, fix mistakes; on a board: add or expand nodes, connect things, add tips, group things); include "board" if they ask for a new board, map, mind map, diagram or visualization; include "task" if they ask to add something to do to their planner, a task, to-do, reminder or deadline, or say they want or need to do something by a day or time ("I want to solve 5 problems before midnight"). include "plan" if they ask for a study plan, schedule or timetable that spreads learning or revision over several days, usually toward an exam or a date ("plan this for my exam on Friday"); one thing to do by a time is a "task", not a plan. What the message asks for decides, wherever the student is: a task or a plan is not a page. Otherwise [].',
-    'Reply with only a JSON object: {"subject": "...", "search": "...", "names": ["..."], "terms": ["..."], "actions": []}',
+    "chat: true if the message is only small talk (a greeting, thanks, how are you) or about you, Rangan, rather than about a topic or the student's notes; otherwise false. For chat, subject is null.",
+    'Reply with only a JSON object: {"subject": "...", "search": "...", "names": ["..."], "terms": ["..."], "actions": [], "chat": false}',
   ]
     .filter(Boolean)
     .join("\n");
@@ -66,6 +69,7 @@ const rawReading = z.object({
   names: z.array(z.unknown()).optional(),
   terms: z.array(z.unknown()).optional(),
   actions: z.array(z.unknown()).optional(),
+  chat: z.unknown().optional(),
 });
 
 /** The model's reading, or null when it can't be read (the caller then searches the message as before). */
@@ -84,10 +88,11 @@ export function parseReading(text: string): RequestReading | null {
       ),
     ].slice(0, max);
   const actions = (["page", "board", "edit", "task", "plan"] as const).filter((action) => (parsed.data.actions ?? []).includes(action));
+  const chat = parsed.data.chat === true && actions.length === 0;
   const search = parsed.data.search || subject || "";
-  if (!search) return null;
+  if (!search && !chat) return null;
   const names = subject ? [...new Set([subject, ...words(parsed.data.names, 6)])] : [];
-  return { subject, search, names, terms: subject ? words(parsed.data.terms, 10) : [], actions };
+  return { subject: chat ? null : subject, search, names: chat ? [] : names, terms: subject && !chat ? words(parsed.data.terms, 10) : [], actions, chat };
 }
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
