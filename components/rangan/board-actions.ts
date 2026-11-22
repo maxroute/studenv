@@ -3,6 +3,7 @@
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import type { RanganMap } from "@/lib/services/rangan.service";
 import { applyBoardPlan, boardSummary, type BoardChange, type BoardSummary } from "@/lib/workspace/board-edit";
+import { applyBoardOps, type BoardOp } from "@/lib/workspace/board-ops";
 import { useSelectionStore } from "@/lib/workspace/selection-engine";
 
 // Creating a map board Rangan drafted, and applying additions Rangan
@@ -66,4 +67,24 @@ export function applyBoardEdit(boardRef: string, changes: readonly BoardChange[]
   store.updateItems(result.items);
   useSelectionStore.getState().clearAndSelectIds(result.addedIds.filter((id) => result.items.find((item) => item.id === id)?.type !== "connector"));
   return { ok: true, added: result.addedIds.length };
+}
+
+/**
+ * Runs Rangan's board tools on the open board as one undo step, then selects
+ * what was added or changed. Refuses when that board isn't open or something
+ * the plan uses has been deleted since.
+ */
+export function applyBoardTools(boardRef: string, ops: readonly BoardOp[], planned: BoardSummary): { ok: true; skipped: number } | { ok: false; message: string } {
+  const board = openBoard();
+  if (!board || `workspace:${board.id}` !== boardRef) return { ok: false, message: "Open that board to apply this." };
+  const store = useWorkspaceStore.getState();
+  const { viewport } = store;
+  const viewportCentre = { x: (-viewport.x + window.innerWidth / 2) / viewport.zoom, y: (-viewport.y + window.innerHeight / 2) / viewport.zoom };
+  const result = applyBoardOps(store.items, ops, planned, { newId, viewportCentre });
+  if (!result) return { ok: false, message: "Something this uses was removed from the board. Ask Rangan again." };
+  store.breakHistoryCapture();
+  store.updateItems(result.items);
+  const shown = new Set(result.items.filter((item) => item.type !== "connector").map((item) => item.id));
+  useSelectionStore.getState().clearAndSelectIds(result.touchedIds.filter((id) => shown.has(id)));
+  return { ok: true, skipped: result.skipped };
 }

@@ -9,6 +9,7 @@ import { findCommonsImage } from "@/lib/web/wikimedia-images";
 import { searchWikipedia, wikiLanguage } from "@/lib/web/wikipedia";
 import { findYouTubeVideo } from "@/lib/web/youtube-search";
 import { linkExists } from "@/lib/web/link-check";
+import * as boardRepository from "@/lib/repositories/rangan-board.repository";
 
 /** Rangan wired to the database and the real model chain. */
 export const rangan = createRanganService({
@@ -26,6 +27,14 @@ export const rangan = createRanganService({
   findImage: (query) => findCommonsImage(query),
   findVideo: (query, subject) => findYouTubeVideo(query, subject, { apiKey: process.env.YOUTUBE_API_KEY, language: wikiLanguage(subject) }),
   ownsBoard: async (userId, boardId) => Boolean(await workspaceRepository.findWorkspaceById(boardId, userId)),
+  findBoardCard: async (userId, ref) => {
+    if (ref.type === "note") {
+      const note = await boardRepository.findNoteCard(userId, ref.id);
+      return note ? { type: "note-card", noteId: ref.id, title: note.title, excerpt: note.excerpt } : null;
+    }
+    const asset = await boardRepository.findAssetCard(userId, ref.id);
+    return asset ? { type: "resource-card", assetId: ref.id, kind: asset.kind, title: asset.title, ...(asset.sourceHost ? { sourceHost: asset.sourceHost } : {}) } : null;
+  },
   searchWeb: async (query) =>
     (await searchWikipedia(query, { limit: 2 })).map((article) => ({
       ref: article.url,

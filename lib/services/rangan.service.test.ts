@@ -1050,3 +1050,46 @@ test("'notes on X' becomes a new page even when the reading didn't ask for one",
   assert.equal(reply.pageKind, "cheatsheet");
   assert.match(sent[0][1].content, /Choose the kind of page that fits/);
 });
+
+// --- Board tools ------------------------------------------------------------------
+
+const STYLED_BOARD = {
+  ...OPEN_BOARD,
+  elements: [
+    { key: "e1", type: "sticky", text: "Memory", selected: true, locked: false, style: "green" },
+    { key: "e2", type: "sticky", text: "Operating System", selected: false, locked: false, style: "yellow" },
+  ],
+};
+
+test("with a board open, plain-words changes use the board tools, with the user's library cards", async () => {
+  const reading = JSON.stringify({ subject: "operating systems", search: "operating system kernel", names: ["operating system", "OS"], terms: ["kernel", "process"], actions: [] });
+  const reply = JSON.stringify({
+    summary: "Added paging, coloured it and laid out a tree.",
+    ops: [
+      { op: "add", what: "sticky", text: "Paging", color: "blue", link: { to: "e1", label: "uses" } },
+      { op: "card", ref: "note:os", link: { to: "n1" } },
+      { op: "arrange", keys: ["e2", "e1", "n1"], layout: "tree" },
+      { op: "edit", key: "e9", text: "nowhere" },
+    ],
+  });
+  const { deps, sent } = sequenceDeps(reading, [reply], {
+    ownsBoard: async (userId, id) => userId === "u1" && id === "board1",
+    findBoardCard: async (userId, ref) => (userId === "u1" && ref.id === "os" ? { type: "note-card", noteId: "os", title: "CS notes", excerpt: "The kernel…" } : null),
+  });
+  const result = await createRanganService(deps).ask("u1", { question: "add paging under memory, blue, and arrange everything as a tree", board: STYLED_BOARD });
+  assert.ok(result.kind === "board-edit");
+  assert.deepEqual(result.changes, []);
+  assert.deepEqual(result.ops?.map((op) => op.op), ["add", "card", "arrange"]);
+  assert.match(sent[0].at(-1)?.content ?? "", /e1\* \(sticky, green\) Memory/);
+  assert.match(sent[0].at(-1)?.content ?? "", /note:os "CS notes"/);
+});
+
+test("on an open board, a 'board' reading with change words edits it rather than drafting a new map", async () => {
+  const reading = JSON.stringify({ subject: "deadlock", search: "deadlock", names: ["deadlock"], terms: [], actions: ["board"] });
+  const reply = JSON.stringify({ summary: "Coloured the tips.", ops: [{ op: "edit", key: "e1", color: "blue" }] });
+  const { deps } = sequenceDeps(reading, [reply], { ownsBoard: async () => true });
+  const result = await createRanganService(deps).ask("u1", { question: "make the memory sticky blue and add a green diamond shape", board: STYLED_BOARD });
+  assert.equal(result.kind, "board-edit");
+  const fresh = await createRanganService(sequenceDeps(reading, ["{}"], { ownsBoard: async () => true }).deps).ask("u1", { question: "make a mind map of deadlock", board: STYLED_BOARD }).catch((error: { status?: number }) => error);
+  assert.notEqual((fresh as { kind?: string }).kind, "board-edit", "a new mind map is not an edit");
+});
