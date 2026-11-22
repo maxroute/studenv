@@ -50,6 +50,9 @@ export function RanganPlanCard({ turn, onNavigate }: { turn: Extract<RanganTurn,
       <p className="rangan-plan-meta">
         {plan.topics.length} topic{plan.topics.length === 1 ? "" : "s"} from {plan.sources.map((source) => source.title).join(", ")}
       </p>
+      {plan.sources.some((source) => source.kind === "web") ? (
+        <p className="rangan-plan-meta">Your library had nothing on this yet, so Rangan planned from Wikipedia.</p>
+      ) : null}
       {schedule.tight ? <p className="rangan-plan-note">There&apos;s more to learn than time allows, so sessions are shorter.</p> : null}
 
       <ol className="rangan-plan-list">

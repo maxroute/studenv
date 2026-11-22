@@ -8,6 +8,9 @@ export type StudySourceKind = "note" | "pdf" | "video";
 /** One source in the "Make from library" list. */
 export type StudySource = { ref: string; kind: StudySourceKind; title: string };
 
+/** Where a plan's topics come from: the student's own sources, or encyclopedia articles (`ref` is the article's link) when their library had nothing on it. */
+export type PlanSource = { ref: string; kind: StudySourceKind | "web"; title: string };
+
 /** Body of `POST /api/study/flashcards` and `POST /api/study/quiz`: the page (`note:<id>`), PDF or video (`asset:<id>`). */
 export const studyRequestSchema = z.object({ ref: z.string().trim().min(1).max(REF_MAX_LENGTH) }).strict();
 

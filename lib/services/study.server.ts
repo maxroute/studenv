@@ -5,6 +5,7 @@ import * as studyRepository from "@/lib/repositories/study.repository";
 import { ranganIndex } from "@/lib/services/rangan-index.server";
 import { createStudyService } from "@/lib/services/study.service";
 import { pickPlanSources } from "@/lib/study/plan";
+import { searchWikipedia } from "@/lib/web/wikipedia";
 
 /** Flashcards and quizzes wired to the database, the daily allowance and the real model chain. */
 export const study = createStudyService({
@@ -16,5 +17,6 @@ export const study = createStudyService({
   findSources: async (userId, query) => pickPlanSources((await ranganIndex.search(userId, query, 12)).results),
   loadSource: studyRepository.loadStudySource,
   complete,
+  searchWeb: async (query) => (await searchWikipedia(query, { limit: 3 })).map(({ title, url, extract }) => ({ title, url, extract })),
   replaceAiCards: studyRepository.replaceAiCards,
 });

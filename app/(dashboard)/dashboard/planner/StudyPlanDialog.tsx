@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { AlertTriangle, ArrowLeft, Check, FileText, Loader2, Play, Plus, RefreshCw, SlidersHorizontal, StickyNote, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, FileText, Globe, Loader2, Play, Plus, RefreshCw, SlidersHorizontal, StickyNote, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { RanganLogo } from "@/components/rangan/rangan-launcher";
 import {
@@ -14,7 +14,7 @@ import {
   saveStudyPlan,
   settingsSummary,
 } from "@/lib/client/study-plan";
-import type { StudySource } from "@/lib/models/study.model";
+import type { PlanSource, StudySource } from "@/lib/models/study.model";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { PLAN_MAX_DAYS, PLAN_MAX_SOURCES, type PlanSettings } from "@/lib/study/plan";
 
@@ -34,7 +34,10 @@ const MINUTE_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** Monday first, the way most study weeks are read. */
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const KIND_ICON = { note: StickyNote, pdf: FileText, video: Play } as const;
+const KIND_ICON = { note: StickyNote, pdf: FileText, video: Play, web: Globe } as const;
+
+/** The plan's sources from the student's library; articles (when the library had nothing) can't be chosen or removed. */
+const librarySources = (plan: StudyPlanResult): StudySource[] => plan.sources.filter((source): source is StudySource => source.kind !== "web");
 
 function addDays(day: string, days: number) {
   const date = new Date(`${day}T00:00:00`);
@@ -78,7 +81,7 @@ export function StudyPlanDialog({ open, onClose, onSaved, initialPlan }: StudyPl
     if (!open || !initialPlan) return;
     setPlan(initialPlan);
     setSettings(initialPlan.settings);
-    setChosen(initialPlan.sources);
+    setChosen(librarySources(initialPlan));
     setRequest(initialPlan.goal);
     setSkipped(new Set());
   }, [open, initialPlan]);
@@ -93,7 +96,7 @@ export function StudyPlanDialog({ open, onClose, onSaved, initialPlan }: StudyPl
   }, [open, busy, onClose]);
 
   const schedule = useMemo(() => (plan && settings ? planSessions(plan, settings) : null), [plan, settings]);
-  const sourcesChanged = Boolean(plan && chosen && chosen.map((source) => source.ref).join() !== plan.sources.map((source) => source.ref).join());
+  const sourcesChanged = Boolean(plan && chosen && chosen.map((source) => source.ref).join() !== librarySources(plan).map((source) => source.ref).join());
 
   const reset = () => {
     setPlan(null);
@@ -128,7 +131,7 @@ export function StudyPlanDialog({ open, onClose, onSaved, initialPlan }: StudyPl
     }
     setPlan(result.plan);
     setSettings(result.plan.settings);
-    setChosen(result.plan.sources);
+    setChosen(librarySources(result.plan));
     setPicking(false);
     setSkipped(new Set());
   };
@@ -223,6 +226,9 @@ export function StudyPlanDialog({ open, onClose, onSaved, initialPlan }: StudyPl
 
                 <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[#9c9788]">
                   <span>From</span>
+                  {plan.sources.filter((source) => source.kind === "web").map((source) => (
+                    <SourceChip key={source.ref} source={source} />
+                  ))}
                   {(chosen ?? []).map((source) => (
                     <SourceChip key={source.ref} source={source} onRemove={chosen && chosen.length > 1 ? () => setChosen(chosen.filter((item) => item.ref !== source.ref)) : undefined} />
                   ))}
@@ -376,7 +382,7 @@ export function StudyPlanDialog({ open, onClose, onSaved, initialPlan }: StudyPl
   );
 }
 
-function SourceChip({ source, onRemove }: { source: StudySource; onRemove?: () => void }) {
+function SourceChip({ source, onRemove }: { source: PlanSource; onRemove?: () => void }) {
   const Icon = KIND_ICON[source.kind];
   return (
     <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[12px] text-[#e4dfcf]">

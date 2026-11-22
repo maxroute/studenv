@@ -217,7 +217,7 @@ test("the request schema checks the request, the day and optional settings", () 
   assert.equal(studyPlanRequestSchema.safeParse({ ...valid, extra: 1 }).success, false);
 });
 
-function setup(options: { reply?: string; failModel?: boolean; allowed?: boolean; found?: string[] } = {}) {
+function setup(options: { reply?: string; replies?: string[]; failModel?: boolean; allowed?: boolean; found?: string[]; web?: Array<{ title: string; url: string; extract: string }> } = {}) {
   const sources: Record<string, LoadedStudySource> = {
     asset1: {
       kind: "pdf",
@@ -232,7 +232,8 @@ function setup(options: { reply?: string; failModel?: boolean; allowed?: boolean
     note1: { kind: "note", id: "note1", title: "My notes", itemId: null, passages: [{ anchor: "b1", heading: "", content: "Meiosis makes gametes." }] },
     empty: { kind: "note", id: "empty", title: "Empty", itemId: null, passages: [] },
   };
-  const calls = { consumed: 0, refunded: 0, prompts: [] as string[], searches: [] as string[] };
+  const calls = { consumed: 0, refunded: 0, prompts: [] as string[], searches: [] as string[], webSearches: [] as string[] };
+  const replies = [...(options.replies ?? [])];
   const deps: StudyDeps = {
     dailyLimit: 25,
     now: () => new Date("2026-11-21T10:00:00Z"),
@@ -252,9 +253,17 @@ function setup(options: { reply?: string; failModel?: boolean; allowed?: boolean
     complete: async (messages) => {
       calls.prompts.push(messages.map((m) => m.content).join("\n"));
       if (options.failModel) throw Object.assign(new Error("busy"), { status: 503 });
-      return { text: options.reply ?? "[]", provider: "groq-large", model: "test" };
+      return { text: replies.shift() ?? options.reply ?? "[]", provider: "groq-large", model: "test" };
     },
     replaceAiCards: async () => ({ created: 0, replaced: 0 }),
+    ...(options.web
+      ? {
+          searchWeb: async (query: string) => {
+            calls.webSearches.push(query);
+            return options.web ?? [];
+          },
+        }
+      : {}),
   };
   return { service: createStudyService(deps), calls };
 }
@@ -421,4 +430,62 @@ test("a plan about \"this\" means what is open", () => {
   for (const message of ["plan my biology test for Dec 4", "make me a study plan for chemistry", "Schedule my reading for this week", "revise for my exam these days"]) {
     assert.equal(refersToOpen(message), false, message);
   }
+});
+
+// --- Plans when the library has nothing on the subject ---------------------------
+
+const ARTICLES = [
+  { title: "Data structure", url: "https://en.wikipedia.org/wiki/Data_structure", extract: "A data structure organizes data. Arrays, linked lists, stacks, queues, trees and graphs are common ones." },
+  { title: "Stack (abstract data type)", url: "https://en.wikipedia.org/wiki/Stack_(abstract_data_type)", extract: "A stack is a last-in, first-out collection with push and pop." },
+];
+const webReply = JSON.stringify({
+  goal: "Data structures exam",
+  finish: "2026-11-28",
+  minutesPerDay: null,
+  days: null,
+  topics: [
+    { title: "What data structures are", cover: "The common kinds and what each is for.", effort: 1, passage: 1 },
+    { title: "Stacks", cover: "Push, pop and last-in, first-out.", effort: 2, passage: 2 },
+  ],
+});
+const nothingReply = JSON.stringify({ goal: "Data structures exam", finish: null, minutesPerDay: null, days: null, topics: [] });
+const dsa = { request: "plan data structures for my exam next week", today: "2026-11-22" };
+
+test("with nothing in the library, a plan is made from encyclopedia articles, for one question", async () => {
+  const { service, calls } = setup({ found: [], web: ARTICLES, reply: webReply });
+  const plan = await service.makePlan("u1", dsa);
+  assert.deepEqual(calls.webSearches.length, 1);
+  assert.deepEqual(plan.sources, [
+    { ref: ARTICLES[0].url, kind: "web", title: "Data structure" },
+    { ref: ARTICLES[1].url, kind: "web", title: "Stack (abstract data type)" },
+  ]);
+  assert.deepEqual(plan.topics[1].source, { ref: ARTICLES[1].url, label: "Stack (abstract data type)", open: { kind: "web", url: ARTICLES[1].url } });
+  assert.deepEqual([calls.consumed, calls.refunded], [1, 0]);
+  assert.match(calls.prompts[0], /A stack is a last-in, first-out collection/);
+});
+
+test("library notes on something else fall back to articles within the same question", async () => {
+  const { service, calls } = setup({ web: ARTICLES, replies: [nothingReply, webReply] });
+  const plan = await service.makePlan("u1", dsa);
+  assert.equal(calls.prompts.length, 2, "the library first, then the articles");
+  assert.match(calls.prompts[0], /Cells are the unit of life/);
+  assert.match(calls.prompts[1], /A data structure organizes data/);
+  assert.ok(plan.sources.every((source) => source.kind === "web"));
+  assert.deepEqual([calls.consumed, calls.refunded], [1, 0], "one question for the whole plan");
+});
+
+test("when the articles don't help either, nothing is charged", async () => {
+  const empty = setup({ web: ARTICLES, replies: [nothingReply, nothingReply] });
+  await assert.rejects(empty.service.makePlan("u1", dsa), { status: 404 });
+  assert.deepEqual([empty.calls.consumed, empty.calls.refunded], [1, 1]);
+
+  const noArticles = setup({ found: [], web: [] });
+  await assert.rejects(noArticles.service.makePlan("u1", dsa), { status: 404 });
+  assert.equal(noArticles.calls.consumed, 0, "nothing anywhere costs nothing");
+});
+
+test("material the student chose is never swapped for articles", async () => {
+  const { service, calls } = setup({ web: ARTICLES, reply: nothingReply });
+  await assert.rejects(service.makePlan("u1", { ...dsa, refs: ["note:note1"] }), { status: 422 });
+  assert.equal(calls.webSearches.length, 0);
 });
