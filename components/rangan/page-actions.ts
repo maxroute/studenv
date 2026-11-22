@@ -4,7 +4,8 @@ import { pageBlocks, useOpenPage } from "@/hooks/use-open-page";
 import { toEditorContent } from "@/lib/notes/editor-bridge";
 import { markdownToNote } from "@/lib/notes/markdown-to-note";
 import { NOTE_DOC_FORMAT, NOTE_DOC_VERSION, parseNoteDoc, type NoteNode } from "@/lib/notes/note-format";
-import { bottomUp, citationNodes, pageFromDraft, pageUnchanged, type PageBlock, type PageChange, type PageCitation } from "@/lib/rangan/page";
+import { bottomUp, citationNodes, draftEmbeds, embedsToShelf, pageFromDraft, pageUnchanged, type PageBlock, type PageChange, type PageCitation } from "@/lib/rangan/page";
+import { saveLinkToShelf } from "@/components/notes/resource-actions";
 import { reportUsage } from "@/lib/client/usage-bus";
 
 // Creating a page Rangan wrote, and applying a change Rangan suggested to the
@@ -27,7 +28,14 @@ const envelope = (blocks: NoteNode[]) => ({ format: NOTE_DOC_FORMAT, version: NO
 
 /** Creates the page as an ordinary top-level page, through the same route as "New page". */
 export async function createPageFromDraft(draft: { title: string; markdown: string; citations: readonly PageCitation[] }): Promise<Result> {
-  const page = pageFromDraft(draft);
+  // Videos and links shown as cards are saved to the Shelf first, as "/Link, video or PDF" does;
+  // one that can't be saved is left out rather than stopping the page.
+  const items = new Map<string, string>();
+  for (const url of draftEmbeds(draft.markdown)) {
+    const saved = await saveLinkToShelf(url);
+    if (saved.ok) items.set(url, saved.itemId);
+  }
+  const page = pageFromDraft({ ...draft, markdown: embedsToShelf(draft.markdown, items) });
   const result = await post<{ id: string }>("/api/notes", { title: page.title, parentId: null, doc: envelope(page.blocks) });
   if (!result.ok || typeof result.data?.id !== "string") return { ok: false, message: result.error ?? "The page could not be created." };
   return { ok: true, noteId: result.data.id };

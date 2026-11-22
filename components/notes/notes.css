@@ -649,6 +649,17 @@
   background: #f5a6231a;
 }
 
+/* "Remember this" (green) and "an idea or example" (purple) callouts Rangan writes. */
+.note-callout[data-variant="success"] {
+  border-color: #5cb87a66;
+  background: #5cb87a1a;
+}
+
+.note-callout[data-variant="idea"] {
+  border-color: #a38be066;
+  background: #a38be01a;
+}
+
 /* Toggle: an arrow, a plain title, and a body that opens under it (like Notion). */
 .note-details {
   display: flex;

@@ -430,9 +430,14 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
   // Rangan reads and changes this page only while it is open and editable.
   useEffect(() => {
     if (!editor || !note || readOnlyReason) return;
-    useOpenPage.getState().register({ noteId, title: title || "Untitled", editor, saveNow });
+    const rename = (next: string) => {
+      setTitle(next);
+      titleRef.current = next;
+      if (editor.isEditable) change(next, fromEditorJSON(editor.getJSON()));
+    };
+    useOpenPage.getState().register({ noteId, title: title || "Untitled", editor, saveNow, rename });
     return () => useOpenPage.getState().unregister(noteId, editor);
-  }, [editor, note, readOnlyReason, noteId, title, saveNow]);
+  }, [editor, note, readOnlyReason, noteId, title, saveNow, change]);
 
   // Save before leaving the page or the note.
   useEffect(() => {

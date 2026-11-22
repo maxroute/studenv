@@ -8,6 +8,7 @@ import { createRanganService } from "@/lib/services/rangan.service";
 import { findCommonsImage } from "@/lib/web/wikimedia-images";
 import { searchWikipedia, wikiLanguage } from "@/lib/web/wikipedia";
 import { findYouTubeVideo } from "@/lib/web/youtube-search";
+import { linkExists } from "@/lib/web/link-check";
 
 /** Rangan wired to the database and the real model chain. */
 export const rangan = createRanganService({
@@ -21,6 +22,7 @@ export const rangan = createRanganService({
   loadSource: (userId, type, id) => ranganIndex.loadSource(userId, type, id),
   recentNoteIds: indexRepository.recentNoteIds,
   completeQuick,
+  linkExists: (href) => linkExists(href),
   findImage: (query) => findCommonsImage(query),
   findVideo: (query, subject) => findYouTubeVideo(query, subject, { apiKey: process.env.YOUTUBE_API_KEY, language: wikiLanguage(subject) }),
   ownsBoard: async (userId, boardId) => Boolean(await workspaceRepository.findWorkspaceById(boardId, userId)),

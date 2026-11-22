@@ -613,7 +613,7 @@ test("asking for a page returns a draft with its outline and cited sources, for 
   assert.deepEqual(reply.outline, ["The kernel", "Revision", "Test yourself"]);
   assert.deepEqual(reply.citations.map((citation) => citation.ref), [OS_NOTE.ref]);
   assert.match(sent[0][0].content, /writing a study page/);
-  assert.match(sent[0][1].content, /Write a study page that teaches "operating systems"/);
+  assert.match(sent[0][1].content, /Write a study page about "operating systems"/);
   assert.equal([...counts.values()][0], 1);
   assert.equal(reply.map, undefined);
 });
@@ -981,4 +981,72 @@ test("a message read as having no subject never searches the web for its words",
   const { deps, webQueries } = readingDeps({ reading, library: [] });
   await createRanganService(deps).ask("u1", { question: "summarize what I know so far" });
   assert.deepEqual(webQueries, []);
+});
+
+// --- Page tools -------------------------------------------------------------------
+
+const TOOL_PAGE = {
+  ref: "note:cmabcdefghijklmnopqrstuvw",
+  title: "Stacks",
+  blocks: [
+    { id: "b_para000001", type: "paragraph", text: "A stack is LIFO.", locked: false },
+    { id: "list:b_task000001", type: "taskList", text: "Revise stacks", locked: false },
+  ],
+};
+
+test("with a page open, an edit in plain words uses the page tools, even when the reading missed it", async () => {
+  const reading = JSON.stringify({ subject: "stacks", search: "stacks", names: ["stack"], terms: ["LIFO"], actions: [] });
+  const reply = JSON.stringify({ summary: "Bolded LIFO and ticked the to-do.", ops: [{ op: "format", block: 1, text: "LIFO", bold: true }, { op: "check", block: 2, done: true }] });
+  const { deps, sent } = readingDeps({ reading, answer: reply });
+  deps.loadSource = async () => ({ title: "Stacks", passages: [] });
+  const result = await createRanganService(deps).ask("u1", { question: "make this bold and tick off revise stacks, add a to-do too", page: { ...TOOL_PAGE, selection: { block: "b_para000001", text: "LIFO" } } });
+  assert.equal(result.kind, "edit");
+  assert.ok(result.kind === "edit");
+  assert.deepEqual(result.ops, [
+    { op: "format", block: "b_para000001", text: "LIFO", set: { bold: true } },
+    { op: "check", block: "list:b_task000001", item: null, done: true },
+  ]);
+  assert.deepEqual(result.changes, []);
+  assert.match(sent[0].at(-1)?.content ?? "", /selected, in block \[1\]: """LIFO"""/);
+});
+
+test("a page sent without block ids still gets the older whole-block edit", async () => {
+  const reading = JSON.stringify({ subject: "stacks", search: "stacks", names: [], terms: [], actions: ["edit"] });
+  const reply = JSON.stringify({ summary: "Added a line.", changes: [{ insertAfter: 1, markdown: "Push adds, pop removes." }] });
+  const { deps } = readingDeps({ reading, answer: reply });
+  deps.loadSource = async () => ({ title: "Stacks", passages: [] });
+  const blocks = TOOL_PAGE.blocks.map(({ type, text, locked }) => ({ type, text, locked }));
+  const result = await createRanganService(deps).ask("u1", { question: "add a line about push and pop", page: { ref: TOOL_PAGE.ref, title: "Stacks", blocks } });
+  assert.ok(result.kind === "edit");
+  assert.equal(result.ops, undefined);
+  assert.equal(result.changes.length, 1);
+});
+
+test("a made-up video or article is left out of a page edit, and the summary says so", async () => {
+  const reading = JSON.stringify({ subject: "stacks", search: "stacks", names: [], terms: [], actions: ["edit"] });
+  const reply = JSON.stringify({
+    summary: "Linked stack and embedded a video.",
+    ops: [
+      { op: "link", block: 1, text: "stack", href: "https://en.wikipedia.org/wiki/Stack_(abstract_data_type)" },
+      { op: "embed", after: 1, url: "https://www.youtube.com/watch?v=madeup00000" },
+    ],
+  });
+  const { deps } = readingDeps({ reading, answer: reply });
+  deps.loadSource = async () => ({ title: "Stacks", passages: [] });
+  deps.linkExists = async (href) => !href.includes("madeup");
+  const result = await createRanganService(deps).ask("u1", { question: "link stack and embed a video", page: TOOL_PAGE });
+  assert.ok(result.kind === "edit");
+  assert.deepEqual(result.ops?.map((op) => op.op), ["link"]);
+  assert.match(result.summary, /One link couldn't be confirmed/);
+});
+
+test("'notes on X' becomes a new page even when the reading didn't ask for one", async () => {
+  const reading = JSON.stringify({ subject: "SQL joins", search: "sql joins", names: ["SQL join"], terms: ["inner join"], actions: [] });
+  const { deps, sent } = pageDeps({ reading, write: "<!-- kind: cheatsheet -->\n# SQL Joins\n## Inner join\nRows that match.", verdict: "[]" });
+  const reply = await createRanganService(deps).ask("u1", { question: "notes on sql joins" });
+  assert.equal(reply.kind, "page");
+  assert.ok(reply.kind === "page");
+  assert.equal(reply.title, "SQL Joins");
+  assert.equal(reply.pageKind, "cheatsheet");
+  assert.match(sent[0][1].content, /Choose the kind of page that fits/);
 });
