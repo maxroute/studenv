@@ -15,6 +15,7 @@ import { snippet } from "@/lib/rangan/ranking";
 import { spendQuestion, usageSummary, utcDayStart } from "@/lib/rangan/usage";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
+import { smallTalk, smallTalkReply } from "@/lib/rangan/small-talk";
 import { asksForTask, clockOrUtc, parseTaskDrafts, TASK_SYSTEM_PROMPT, taskInstruction, type RanganTaskDraft } from "@/lib/rangan/task";
 import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
 import { openBoardPassages, openPagePassages, pickOpenPassages, type PassageOrigin } from "@/lib/rangan/open-source";
@@ -71,7 +72,8 @@ export type RanganAnswer = {
   /** Absent on a chat answer; "page" and "edit" mark the other replies. */
   kind?: undefined;
   answer: string;
-  provider: ProviderId;
+  /** The model that answered; "rangan" for small talk answered without one. */
+  provider: ProviderId | "rangan";
   usage: RanganUsageSummary;
   /** Passages the answer cites, in the order first cited; numbers match the [n] marks in `answer`. */
   citations: RanganCitation[];
@@ -357,7 +359,9 @@ export function createRanganService(deps: RanganDeps) {
    */
   async function webPassages(reading: RequestReading | null, query: string): Promise<LibraryPassage[]> {
     if (!deps.searchWeb) return [];
-    const searches = reading?.subject ? [...new Set([reading.subject, ...reading.names].map((name) => name.trim()).filter(Boolean))].slice(0, 3) : [query];
+    // A message read as having no subject ("summarize what I know", small talk) never goes to the web:
+    // a search for its words finds articles about the words. Without a reading, the message is searched as before.
+    const searches = reading ? (reading.subject ? [...new Set([reading.subject, ...reading.names].map((name) => name.trim()).filter(Boolean))].slice(0, 3) : []) : [query];
     for (const search of searches) {
       const found = await deps.searchWeb(search).catch(() => []);
       const relevant = found.filter((passage) => onSubject(`${passage.title}\n${passage.content}`, reading));
@@ -507,6 +511,11 @@ export function createRanganService(deps: RanganDeps) {
   }
 
   async function ask(userId: string, input: RanganAskInput): Promise<RanganReply> {
+    // "Hello", "thanks", "what's your name": answered at once, with no search and no question used.
+    const talk = input.focus ? null : smallTalk(input.question);
+    if (talk) {
+      return { answer: smallTalkReply(talk, input.question), provider: "rangan", usage: await getUsage(userId), citations: [], support: { checked: true, removed: 0 } };
+    }
     return withQuestion(userId, async (usage) => {
       // "Explain this": the selected text steers the search and is quoted to the model.
       // Otherwise the request is read first, so only its subject is searched.
@@ -514,6 +523,15 @@ export function createRanganService(deps: RanganDeps) {
       // Something to do goes to the planner, from anywhere in the app. Asked for
       // outright ("add a task", "remind me", "in the planner"), it is a task even
       // if the reading missed it; asked for a page or board, it never is.
+      // Chit-chat the patterns didn't catch: answered by the model with no library or web passages.
+      if (!input.focus && reading?.chat) {
+        const result = await deps.complete([
+          { role: "system", content: RANGAN_SYSTEM_PROMPT },
+          ...(input.history ?? []),
+          { role: "user", content: `${buildLibraryContext([])}\n\nThis is small talk, not a study question: reply briefly and warmly, without a "Beyond your sources" heading.\n\nQuestion: ${input.question}` },
+        ]);
+        return { answer: withoutBeyondCitations(normalizeCitationMarks(result.text)).trim(), provider: result.provider, usage, citations: [], support: { checked: true, removed: 0 } };
+      }
       const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
       // A study plan has its own flow, which reads the material and spreads it over days. The
       // question is given back (this throws inside the allowance) and the panel asks for the plan.

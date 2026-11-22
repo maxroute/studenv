@@ -74,7 +74,8 @@ function spokenTurn(turn: RanganTurn): { text: string; asks: boolean } {
     }
     case "plan": {
       const sessions = planSessions(turn.plan).sessions.length;
-      return { text: `A study plan: ${turn.plan.goal}, in ${sessions} session${sessions === 1 ? "" : "s"}. Should I add it to your planner?`, asks: true };
+      const fromWeb = turn.plan.sources.some((source) => source.kind === "web") ? " Your library had nothing on it, so I used Wikipedia." : "";
+      return { text: `A study plan: ${turn.plan.goal}, in ${sessions} session${sessions === 1 ? "" : "s"}.${fromWeb} Should I add it to your planner?`, asks: true };
     }
     case "page":
       return { text: `I wrote a page: ${turn.draft.title}. Should I create it?`, asks: true };

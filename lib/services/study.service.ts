@@ -1,6 +1,6 @@
 import type { ChatMessage, CompletionOptions, CompletionResult } from "@/lib/ai/providers";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
-import type { StudyPlanRequest, StudyRequest, StudySourceKind } from "@/lib/models/study.model";
+import type { PlanSource, StudyPlanRequest, StudyRequest, StudySourceKind } from "@/lib/models/study.model";
 import { buildLibraryContext, openTarget, type OpenTarget } from "@/lib/rangan/citations";
 import { passageRef } from "@/lib/rangan/ranking";
 import { formatRef, parseRef } from "@/lib/refs/ref-grammar";
@@ -48,6 +48,12 @@ export type StudyDeps = {
   /** The user's note or asset with its text, or null when it is not theirs or has no text. */
   loadSource: (userId: string, ref: { type: "note" | "asset"; id: string }) => Promise<LoadedStudySource | null>;
   complete: (messages: ChatMessage[], options?: CompletionOptions) => Promise<CompletionResult>;
+  /**
+   * Encyclopedia articles about a subject (title, link, opening summary), for
+   * planning when the student's library has nothing on it. Without it, such a
+   * plan is refused.
+   */
+  searchWeb?: (query: string) => Promise<Array<{ title: string; url: string; extract: string }>>;
   /** Replaces the source's unreviewed, unedited AI cards with these; returns how many were added and removed. */
   replaceAiCards: (
     userId: string,
@@ -85,7 +91,7 @@ export type StudyPlanTopic = { title: string; cover: string; effort: Effort; sou
 export type StudyPlanResult = {
   goal: string;
   settings: PlanSettings;
-  sources: StudySource[];
+  sources: PlanSource[];
   topics: StudyPlanTopic[];
   partial: boolean;
   usage: RanganUsageSummary;
@@ -193,82 +199,130 @@ export function createStudyService(deps: StudyDeps) {
    * finish date, time, days) and splits the material into topics. Nothing is
    * saved; the student adds the sessions to the planner.
    */
-  async function makePlan(userId: string, input: StudyPlanRequest): Promise<StudyPlanResult> {
-    if (input.settings && studyDays(input.settings.startDate, input.settings.endDate, input.settings.weekdays).length === 0) {
-      throw httpError("None of your chosen days fall between the start and finish dates.", 400);
-    }
-    let wanted: Array<{ type: "note" | "asset"; id: string }>;
-    if (input.refs) {
-      const refs = [...new Set(input.refs)].map(parseRef);
-      if (refs.some((ref) => !ref || (ref.type !== "note" && ref.type !== "asset"))) throw httpError("Choose pages, PDFs or videos to plan from.", 400);
-      wanted = refs.flatMap((ref) => (ref && (ref.type === "note" || ref.type === "asset") ? [{ type: ref.type, id: ref.id }] : []));
-    } else {
-      const query = planSearchQuery(input.request) || input.request;
-      wanted = (await deps.findSources(userId, query)).slice(0, PLAN_AUTO_SOURCES);
-      if (wanted.length === 0) {
-        throw httpError("Rangan couldn't find anything about that in your library. Choose what to study from.", 404, { needSources: true });
-      }
-    }
-    // Every source found, owned and readable before a question is used.
-    const sources = await Promise.all(wanted.map((ref) => deps.loadSource(userId, ref)));
-    const usable = sources.filter((source): source is LoadedStudySource => source !== null && source.passages.length > 0);
-    if (usable.length === 0 || (input.refs && usable.length !== wanted.length)) {
-      throw httpError("Something you chose wasn't found, or has no text Rangan can read yet.", 404, { needSources: !input.refs });
-    }
+  /** Material a plan is made from: the student's own sources, or articles when they have none on it. */
+  type PlanMaterial =
+    | (LoadedStudySource & { web?: undefined })
+    | { kind: "web"; id: string; title: string; passages: StudyPassage[]; itemId: null; web: { url: string } };
 
-    const budget = Math.floor(STUDY_BUDGET_CHARS / usable.length);
+  const NOTHING_IN_LIBRARY =
+    "Your library doesn't have material on that yet, and Rangan couldn't find it elsewhere either. Add notes, a PDF or a video about it, or choose what to plan from in Planner → Plan with Rangan.";
+
+  /** Up to three encyclopedia articles about the request, as plan material; none without a web search. */
+  async function webMaterial(request: string): Promise<PlanMaterial[]> {
+    if (!deps.searchWeb) return [];
+    const query = planSearchQuery(request) || request;
+    const articles = await deps.searchWeb(query).catch(() => []);
+    return articles
+      .filter((article) => article.extract.trim())
+      .slice(0, PLAN_AUTO_SOURCES)
+      .map((article) => ({
+        kind: "web" as const,
+        id: article.url,
+        title: article.title,
+        passages: [{ anchor: "", heading: "Wikipedia", content: article.extract }],
+        itemId: null,
+        web: { url: article.url },
+      }));
+  }
+
+  function linkFor(material: PlanMaterial, passage: StudyPassage | undefined): StudySourceLink {
+    if (material.kind === "web") return { ref: material.web.url, label: material.title, open: { kind: "web", url: material.web.url } };
+    return sourceLinkFor(material, passage);
+  }
+
+  function planSource(material: PlanMaterial): PlanSource {
+    if (material.kind === "web") return { ref: material.web.url, kind: "web", title: material.title };
+    return { ref: formatRef({ type: material.kind === "note" ? "note" : "asset", id: material.id }), kind: material.kind, title: material.title };
+  }
+
+  /**
+   * A plan made from this material, or null when the model read it and found
+   * nothing about the request (an empty topic list). A reply that can't be read
+   * is an error, so the question is given back.
+   */
+  async function planFrom(material: PlanMaterial[], input: StudyPlanRequest, usage: RanganUsageSummary): Promise<StudyPlanResult | null> {
+    const budget = Math.floor(STUDY_BUDGET_CHARS / material.length);
     let partial = false;
-    const picked = usable.flatMap((source) => {
+    const picked = material.flatMap((source) => {
       const selection = selectStudyPassages(source.passages, budget);
       partial ||= selection.partial;
       return selection.selected.map((passage) => ({ source, passage }));
     });
     const context = buildLibraryContext(picked.map(({ source, passage }) => ({ title: source.title, heading: passage.heading, content: passage.content })));
+    const result = await deps.complete(
+      [
+        { role: "system", content: PLAN_SYSTEM_PROMPT },
+        { role: "user", content: `${context}\n\n${planInstruction(input.request, input.today, material.map((source) => source.title), partial)}` },
+      ],
+      { maxTokens: 2_000, temperature: 0.3 },
+    );
+    const reply = parsePlanReply(result.text, picked.length);
+    if (reply.topics.length === 0) {
+      // An empty topic list means none of the material is about the request: an answer, not a failure.
+      if (Array.isArray(extractJsonObject(result.text)?.topics)) return null;
+      throw httpError("Rangan could not plan from this. Please try again.", 502);
+    }
+
+    const topicSource = (index: number | null): StudySourceLink | null => {
+      const found = index === null ? null : picked[index];
+      const source = found?.source ?? (material.length === 1 ? material[0] : null);
+      if (!source) return null;
+      const link = linkFor(source, found?.passage);
+      // "Title, p. 4" or "Title, Heading"; the title alone when the place has no name of its own.
+      const place = found && source.kind !== "web" && !GENERIC_LABELS.has(link.label) && link.label !== source.title ? link.label : null;
+      return { ...link, label: place ? `${source.title}, ${place}` : source.title };
+    };
+    // Sources Rangan found but made no topic from (it judged them off-topic) are left out of the plan.
+    const used = new Set(reply.topics.flatMap((topic) => (topic.passage === null ? [] : [picked[topic.passage].source.id])));
+    const plannedFrom = input.refs || used.size === 0 ? material : material.filter((source) => used.has(source.id));
+    return {
+      goal: reply.goal ?? input.request.replace(/\s+/g, " ").trim().slice(0, 80),
+      settings: input.settings ?? resolvePlanSettings(input.today, reply),
+      sources: plannedFrom.map(planSource),
+      topics: reply.topics.map((topic) => ({ title: topic.title, cover: topic.cover, effort: topic.effort, source: topicSource(topic.passage) })),
+      partial,
+      usage,
+    };
+  }
+
+  async function makePlan(userId: string, input: StudyPlanRequest): Promise<StudyPlanResult> {
+    if (input.settings && studyDays(input.settings.startDate, input.settings.endDate, input.settings.weekdays).length === 0) {
+      throw httpError("None of your chosen days fall between the start and finish dates.", 400);
+    }
+    let usable: LoadedStudySource[];
+    if (input.refs) {
+      const refs = [...new Set(input.refs)].map(parseRef);
+      if (refs.some((ref) => !ref || (ref.type !== "note" && ref.type !== "asset"))) throw httpError("Choose pages, PDFs or videos to plan from.", 400);
+      const wanted: Array<{ type: "note" | "asset"; id: string }> = refs.flatMap((ref) => (ref && (ref.type === "note" || ref.type === "asset") ? [{ type: ref.type, id: ref.id }] : []));
+      const sources = await Promise.all(wanted.map((ref) => deps.loadSource(userId, ref)));
+      usable = sources.filter((source): source is LoadedStudySource => source !== null && source.passages.length > 0);
+      if (usable.length !== wanted.length) throw httpError("Something you chose wasn't found, or has no text Rangan can read yet.", 404);
+    } else {
+      const query = planSearchQuery(input.request) || input.request;
+      const wanted = (await deps.findSources(userId, query)).slice(0, PLAN_AUTO_SOURCES);
+      const sources = await Promise.all(wanted.map((ref) => deps.loadSource(userId, ref)));
+      usable = sources.filter((source): source is LoadedStudySource => source !== null && source.passages.length > 0);
+    }
+
+    // With nothing in the library at all, articles are looked up before a question is used:
+    // none found means nothing to plan, and that costs nothing.
+    const fromWebFirst = !input.refs && usable.length === 0 ? await webMaterial(input.request) : [];
+    if (!input.refs && usable.length === 0 && fromWebFirst.length === 0) throw httpError(NOTHING_IN_LIBRARY, 404, { needSources: true });
 
     return withQuestion(userId, async (usage) => {
-      const result = await deps.complete(
-        [
-          { role: "system", content: PLAN_SYSTEM_PROMPT },
-          { role: "user", content: `${context}\n\n${planInstruction(input.request, input.today, usable.map((source) => source.title), partial)}` },
-        ],
-        { maxTokens: 2_000, temperature: 0.3 },
-      );
-      const reply = parsePlanReply(result.text, picked.length);
-      if (reply.topics.length === 0) {
-        // A reply with an empty topic list means the model read the material and none of it is
-        // about the request: an answer, not a failure. Saying "try again" would fail the same way.
-        if (Array.isArray(extractJsonObject(result.text)?.topics)) {
-          throw input.refs
-            ? httpError("What you chose doesn't cover that. Choose other material, or say what to plan.", 422)
-            : httpError(
-                "Your library doesn't have material on that yet. Add notes, a PDF or a video about it, or choose what to plan from in Planner → Plan with Rangan.",
-                404,
-                { needSources: true },
-              );
-        }
-        throw httpError("Rangan could not plan from this. Please try again.", 502);
+      if (fromWebFirst.length) {
+        const plan = await planFrom(fromWebFirst, input, usage);
+        if (plan) return plan;
+        throw httpError(NOTHING_IN_LIBRARY, 404, { needSources: true });
       }
-
-      const topicSource = (index: number | null): StudySourceLink | null => {
-        const found = index === null ? null : picked[index];
-        const source = found?.source ?? (usable.length === 1 ? usable[0] : null);
-        if (!source) return null;
-        const link = sourceLinkFor(source, found?.passage);
-        // "Title, p. 4" or "Title, Heading"; the title alone when the place has no name of its own.
-        const place = found && !GENERIC_LABELS.has(link.label) && link.label !== source.title ? link.label : null;
-        return { ...link, label: place ? `${source.title}, ${place}` : source.title };
-      };
-      // Sources Rangan found but made no topic from (it judged them off-topic) are left out of the plan.
-      const used = new Set(reply.topics.flatMap((topic) => (topic.passage === null ? [] : [picked[topic.passage].source.id])));
-      const plannedFrom = input.refs || used.size === 0 ? usable : usable.filter((source) => used.has(source.id));
-      return {
-        goal: reply.goal ?? input.request.replace(/\s+/g, " ").trim().slice(0, 80),
-        settings: input.settings ?? resolvePlanSettings(input.today, reply),
-        sources: plannedFrom.map((source) => ({ ref: formatRef({ type: source.kind === "note" ? "note" : "asset", id: source.id }), kind: source.kind, title: source.title })),
-        topics: reply.topics.map((topic) => ({ title: topic.title, cover: topic.cover, effort: topic.effort, source: topicSource(topic.passage) })),
-        partial,
-        usage,
-      };
+      const plan = await planFrom(usable, input, usage);
+      if (plan) return plan;
+      if (input.refs) throw httpError("What you chose doesn't cover that. Choose other material, or say what to plan.", 422);
+      // The library had something, but not on this: the same question plans from articles instead.
+      const web = await webMaterial(input.request);
+      const fromWeb = web.length ? await planFrom(web, input, usage) : null;
+      if (fromWeb) return fromWeb;
+      throw httpError(NOTHING_IN_LIBRARY, 404, { needSources: true });
     });
   }
 

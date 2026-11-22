@@ -18,6 +18,7 @@ test("a reading gives the subject, a clean search, its names and terms, and acti
     names: ["Operating systems", "operating system", "OS"],
     terms: ["kernel", "process", "scheduler"],
     actions: ["page", "board"],
+    chat: false,
   });
 });
 
@@ -28,6 +29,7 @@ test("a message without a subject keeps every passage; an unreadable reply means
     names: [],
     terms: [],
     actions: [],
+    chat: false,
   });
   assert.equal(parseReading("I think it is about OS."), null);
   assert.equal(parseReading('{"subject": null, "search": ""}'), null);
@@ -62,4 +64,17 @@ test("only passages that name the subject or use two of its terms are kept", () 
 
 test("the quick chain skips the big model", () => {
   assert.deepEqual(QUICK_CHAIN.map((spec) => spec.id), ["groq-small", "cloudflare"]);
+});
+
+test("small talk is read as chat, with no subject to search", () => {
+  assert.deepEqual(parseReading('{"subject": "Hello", "search": "hello", "names": ["hello"], "terms": ["greeting"], "actions": [], "chat": true}'), {
+    subject: null,
+    search: "hello",
+    names: [],
+    terms: [],
+    actions: [],
+    chat: true,
+  });
+  assert.equal(parseReading('{"subject": null, "search": "", "actions": [], "chat": true}')?.chat, true, "chat needs no search");
+  assert.equal(parseReading('{"subject": "graphs", "search": "graphs", "actions": ["page"], "chat": true}')?.chat, false, "asking for something is not chat");
 });
