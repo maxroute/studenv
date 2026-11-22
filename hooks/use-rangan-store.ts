@@ -193,7 +193,7 @@ function channelForUsage(): BroadcastChannel | null {
 }
 
 /** Errors that retrying cannot fix: the daily limit, a bad request, a missing page. */
-const NOT_RETRYABLE = new Set([400, 404, 429]);
+const NOT_RETRYABLE = new Set([400, 404, 422, 429]);
 
 /**
  * Rangan's conversation and panel state. Each chat is saved to the student's
@@ -287,9 +287,12 @@ export const useRanganStore = create<RanganState>((set, get) => {
       }
       if (!response.ok) {
         const retry = NOT_RETRYABLE.has(response.status) ? null : current;
+        const serverSays = typeof body === "object" && body !== null ? (body as { error?: unknown }).error : undefined;
         const content =
-          current.kind === "plan" && response.status === 404
-            ? "Rangan couldn't find notes about that in your library. Name the subject, or choose the material yourself in Planner → Plan with Rangan."
+          current.kind === "plan" && (response.status === 404 || response.status === 422)
+            ? typeof serverSays === "string"
+              ? serverSays
+              : "Rangan couldn't find notes about that in your library. Name the subject, or choose the material yourself in Planner → Plan with Rangan."
             : errorMessage(response.status, body);
         set((state) => ({ turns: [...state.turns, { id: newId(), role: "error", content, retry }] }));
         return;
