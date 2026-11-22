@@ -119,3 +119,48 @@ test("without a title line, the title is null and nothing is lost", () => {
   assert.equal(textOf(blocks[0]), "Just text.");
   assert.deepEqual(convert("").blocks, []);
 });
+
+test("to-do items, highlights and strikethrough become real checklist items and marks", () => {
+  let n = 0;
+  const { blocks } = markdownToNote("- [ ] Revise stacks\n- [x] Read chapter 1\n\nKey: ==LIFO== not ~~FIFO~~", { generateId: () => `b_${String(++n).padStart(10, "0")}` });
+  assert.equal(blocks[0].type, "taskList");
+  assert.deepEqual(blocks[0].content?.map((item) => [item.type, item.attrs?.checked]), [["taskItem", false], ["taskItem", true]]);
+  assert.deepEqual(blocks[1].content?.map((node) => [node.text, node.marks?.[0]?.type ?? null]), [["Key: ", null], ["LIFO", "highlight"], [" not ", null], ["FIFO", "strike"]]);
+});
+
+test("equations, coloured words, callout styles and Shelf cards become real blocks", () => {
+  let n = 0;
+  const { blocks } = markdownToNote(
+    [
+      "Speed is $v = \\frac{d}{t}$ and costs $5 or $10.",
+      "",
+      "$$",
+      "E = mc^2",
+      "$$",
+      "",
+      "$$a^2 + b^2 = c^2$$",
+      "",
+      "Watch {{red:this part}} and {{nocolour:that}}.",
+      "",
+      "> [!key] Remember LIFO",
+      "",
+      "> [!idea] Think of plates",
+      "",
+      "[[embed:item:abc123]]",
+      "",
+      "[[embed:javascript:alert(1)]]",
+    ].join("\n"),
+    { generateId: () => `b_${String(++n).padStart(10, "0")}` },
+  );
+  assert.deepEqual(blocks.map((block) => block.type), ["paragraph", "blockMath", "blockMath", "paragraph", "callout", "callout", "embed", "paragraph"]);
+  const first = blocks[0].content ?? [];
+  assert.deepEqual(first.find((node) => node.type === "inlineMath")?.attrs, { latex: "v = \\frac{d}{t}" });
+  assert.match(first.map((node) => node.text ?? "").join(""), /costs \$5 or \$10\./, "money stays text");
+  assert.equal(blocks[1].attrs?.latex, "E = mc^2");
+  assert.equal(blocks[2].attrs?.latex, "a^2 + b^2 = c^2");
+  const coloured = blocks[3].content?.find((node) => node.text === "this part");
+  assert.deepEqual(coloured?.marks, [{ type: "textStyle", attrs: { color: "var(--note-color-red)", fontFamily: null } }]);
+  assert.ok(blocks[3].content?.some((node) => (node.text ?? "").includes("that") && !node.marks), "an unknown colour is plain text");
+  assert.deepEqual([blocks[4].attrs?.variant, blocks[5].attrs?.variant], ["success", "idea"]);
+  assert.equal(blocks[6].attrs?.ref, "item:abc123");
+});

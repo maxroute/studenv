@@ -6,8 +6,8 @@ import { localDay } from "@/lib/client/study-plan";
 import type { RanganUsageSummary } from "@/lib/models/rangan.model";
 import { mergeUsage, pickUsage, usageFromBody } from "@/lib/rangan/usage";
 import { onUsage } from "@/lib/client/usage-bus";
-import { pageBlocks, useOpenPage } from "@/hooks/use-open-page";
-import type { PageBlock } from "@/lib/rangan/page";
+import { pageBlocks, pageSelection, useOpenPage } from "@/hooks/use-open-page";
+import type { PageToolBlock } from "@/lib/rangan/page-ops";
 import { openBoard, openBoardSummary } from "@/components/rangan/board-actions";
 import type { BoardSummary } from "@/lib/workspace/board-edit";
 import type { RanganBoardEdit, RanganExplore, RanganMap, RanganPageDraft, RanganPageEdit, RanganTaskReply } from "@/lib/services/rangan.service";
@@ -67,7 +67,7 @@ export type RanganTurn =
   /** A new page Rangan wrote; `noteId` once the student created it. */
   | { id: string; role: "page"; draft: RanganPageDraft; noteId: string | null; boardId?: string | null }
   /** A change to the open page; `planned` is the page as it was when Rangan planned it. */
-  | { id: string; role: "edit"; edit: RanganPageEdit; planned: PageBlock[]; applied: boolean }
+  | { id: string; role: "edit"; edit: RanganPageEdit; planned: PageToolBlock[]; applied: boolean }
   /** A new map board Rangan drafted; `boardId` once the student created it. */
   | { id: string; role: "map"; map: RanganMap; boardId: string | null }
   /** Additions to the open board; `planned` is the board as it was when Rangan planned them. */
@@ -223,6 +223,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
     const boardPlanned = board ? openBoardSummary() : null;
     const open = request.kind === "ask" && !request.focus && !board ? useOpenPage.getState().page : null;
     const planned = open ? pageBlocks(open.editor) : null;
+    const selection = open ? pageSelection(open.editor) : null;
 
     // A plan about "this" uses the page open in front of the student.
     const openPageId = useOpenPage.getState().page?.noteId ?? null;
@@ -247,7 +248,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
                 clock: localClock(),
                 ...(history.length ? { history } : {}),
                 ...(current.focus ? { focus: current.focus } : {}),
-                ...(open && planned ? { page: { ref: `note:${open.noteId}`, title: open.title.slice(0, 500), blocks: planned } } : {}),
+                ...(open && planned ? { page: { ref: `note:${open.noteId}`, title: open.title.slice(0, 500), blocks: planned, ...(selection ? { selection } : {}) } } : {}),
                 ...(board && boardPlanned
                   ? {
                       board: {

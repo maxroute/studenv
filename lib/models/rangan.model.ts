@@ -41,8 +41,22 @@ export const ranganAskSchema = z
         ref: z.string().trim().min(1).max(420),
         title: z.string().max(500),
         blocks: z
-          .array(z.object({ type: z.string().min(1).max(40), text: z.string().max(4_000), locked: z.boolean() }).strict())
+          .array(
+            z
+              .object({
+                /** The block's id, so Rangan's steps can name it (older panels send none). */
+                id: z.string().min(1).max(80).optional(),
+                type: z.string().min(1).max(40),
+                text: z.string().max(4_000),
+                /** The text with formatting and links in light Markdown. */
+                marked: z.string().max(4_000).optional(),
+                locked: z.boolean(),
+              })
+              .strict(),
+          )
           .max(400),
+        /** Text the student has selected on the page, and the block it is in. */
+        selection: z.object({ block: z.string().min(1).max(80), text: z.string().max(2_000) }).strict().optional(),
       })
       .strict()
       .optional(),

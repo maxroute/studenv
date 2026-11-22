@@ -10,6 +10,9 @@ import { useVoiceAction } from "@/hooks/use-voice-action";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { citationLabel, type PageChange } from "@/lib/rangan/page";
 import { applyPageEdit, createPageFromDraft, flashcardsFromPage } from "./page-actions";
+import { applyPageOps } from "./page-ops-apply";
+import { describePageOp } from "@/lib/rangan/page-ops";
+import { PAGE_KIND_LABEL } from "@/lib/rangan/page";
 import { CreateBoardButton, MapOutline } from "./rangan-map-card";
 
 /**
@@ -17,11 +20,18 @@ import { CreateBoardButton, MapOutline } from "./rangan-map-card";
  * listed under it) and callout markers as words, as the page will show them
  * as callouts.
  */
-const withoutMarks = (markdown: string) =>
+const withoutMarks = (markdown: string, video?: { title: string } | null) =>
   markdown
     .replace(/\s*\[\d{1,2}\]/g, "")
     .replace(/\[!(?:warning|mistake|caution|important)\]\s*/gi, "⚠️ ")
-    .replace(/\[!(?:tip|note|info)\]\s*/gi, "💡 ");
+    .replace(/\[!(?:tip|note|info)\]\s*/gi, "💡 ")
+    .replace(/\[!(?:key|remember|success)\]\s*/gi, "✅ ")
+    .replace(/\[!(?:idea|example|fun|why)\]\s*/gi, "✨ ")
+    // Marks the preview can't show are shown as the page will read: highlights and colours as bold, equations as code.
+    .replace(/==([^=\n]+?)==/g, "**$1**")
+    .replace(/\{\{[a-z]{3,10}:([^}\n]+?)\}\}/g, "**$1**")
+    .replace(/\$\$\s*([\s\S]+?)\s*\$\$/g, (_whole, latex: string) => `\`${latex.replace(/\s+/g, " ")}\``)
+    .replace(/^[ \t]*\[\[embed:[^\]]+\]\][ \t]*$/gm, () => `▶️ **Video:** ${video?.title ?? "a lesson video"} (it will be saved to your Shelf)`);
 
 function Sources({ citations }: { citations: ReadonlyArray<Parameters<typeof citationLabel>[0] & { n: number; sourceType: string }> }) {
   if (citations.length === 0) return <p className="rangan-plan-meta">No sources found: written from general knowledge, so check it.</p>;
@@ -88,7 +98,9 @@ export function RanganPageDraftCard({ turn, onBoard, onNavigate }: { turn: Extra
         <FilePlus2 size={16} aria-hidden />
         <span className="rangan-plan-goal">{draft.title}</span>
       </div>
-      <p className="rangan-plan-meta">A new page written by Rangan. Nothing is saved until you create it.</p>
+      <p className="rangan-plan-meta">
+        {draft.pageKind ? `${PAGE_KIND_LABEL[draft.pageKind]} · ` : ""}A new page written by Rangan{draft.video ? ", with a lesson video" : ""}. Nothing is saved until you create it.
+      </p>
       {draft.outline.length ? (
         <ol className="rangan-page-outline">
           {draft.outline.map((heading, index) => (
@@ -102,7 +114,7 @@ export function RanganPageDraftCard({ turn, onBoard, onNavigate }: { turn: Extra
       {showAll ? (
         <div className="rangan-answer rangan-page-preview">
           <ReactMarkdown disallowedElements={["img", "a"]} unwrapDisallowed>
-            {withoutMarks(draft.markdown)}
+            {withoutMarks(draft.markdown, draft.video)}
           </ReactMarkdown>
         </div>
       ) : null}
@@ -161,14 +173,19 @@ export function RanganPageEditCard({ turn }: { turn: Extract<RanganTurn, { role:
     if (busy) return;
     setBusy(true);
     setProblem(null);
-    const result = await applyPageEdit(edit, planned);
+    const result = edit.ops?.length ? await applyPageOps({ pageRef: edit.pageRef, ops: edit.ops, citations: edit.citations }, planned) : await applyPageEdit(edit, planned);
     setBusy(false);
     if (!result.ok) {
       setProblem(result.message);
       return;
     }
     markEditApplied(turn.id);
-    toast.success("Change applied. Your earlier text is saved in History.");
+    const skipped = "skipped" in result ? result.skipped : 0;
+    toast.success(
+      skipped
+        ? `Applied. ${skipped} step${skipped === 1 ? "" : "s"} no longer fit the page and ${skipped === 1 ? "was" : "were"} left out. Your earlier text is saved in History.`
+        : "Change applied. Your earlier text is saved in History.",
+    );
   };
 
   return (
@@ -178,27 +195,50 @@ export function RanganPageEditCard({ turn }: { turn: Extract<RanganTurn, { role:
         <span className="rangan-plan-goal">Suggested change</span>
       </div>
       <p className="rangan-plan-meta">{edit.summary}</p>
-      <ol className="rangan-edit-list">
-        {edit.changes.map((change, index) => (
-          <li key={index} className="rangan-edit">
-            <span className="rangan-edit-label">{changeLabel(change, planned)}</span>
-            {change.kind === "replace" ? (
-              <div className="rangan-edit-old" aria-label="Removed">
-                {planned.slice(change.from - 1, change.to).map((block, offset) => (
-                  <p key={offset}>{block.text || "(empty)"}</p>
-                ))}
+      {edit.ops?.length ? (
+        <ol className="rangan-edit-list">
+          {edit.ops.map((op, index) => (
+            <li key={index} className="rangan-edit">
+              <span className="rangan-edit-label">{describePageOp(op, planned)}</span>
+              {op.op === "insert" || op.op === "replace" ? (
+                <div className="rangan-edit-new rangan-answer" aria-label="Added">
+                  <ReactMarkdown disallowedElements={["img", "a"]} unwrapDisallowed>
+                    {withoutMarks(op.markdown)}
+                  </ReactMarkdown>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {edit.changes.length ? (
+        <ol className="rangan-edit-list">
+          {edit.changes.map((change, index) => (
+            <li key={index} className="rangan-edit">
+              <span className="rangan-edit-label">{changeLabel(change, planned)}</span>
+              {change.kind === "replace" ? (
+                <div className="rangan-edit-old" aria-label="Removed">
+                  {planned.slice(change.from - 1, change.to).map((block, offset) => (
+                    <p key={offset}>{block.text || "(empty)"}</p>
+                  ))}
+                </div>
+              ) : null}
+              <div className="rangan-edit-new rangan-answer" aria-label="Added">
+                <ReactMarkdown disallowedElements={["img", "a"]} unwrapDisallowed>
+                  {withoutMarks(change.markdown)}
+                </ReactMarkdown>
               </div>
-            ) : null}
-            <div className="rangan-edit-new rangan-answer" aria-label="Added">
-              <ReactMarkdown disallowedElements={["img", "a"]} unwrapDisallowed>
-                {withoutMarks(change.markdown)}
-              </ReactMarkdown>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <Sources citations={edit.citations} />
-      <SupportNote support={edit.support} />
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {/* Formatting, links, embeds and ticks write nothing new, so there is nothing to source. */}
+      {!edit.ops?.length || edit.ops.some((op) => op.op === "insert" || op.op === "replace") ? (
+        <>
+          <Sources citations={edit.citations} />
+          <SupportNote support={edit.support} />
+        </>
+      ) : null}
       {problem ? (
         <p className="rangan-plan-note" role="alert">
           {problem}

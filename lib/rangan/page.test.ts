@@ -12,8 +12,8 @@ const PDF_CITATION: PageCitation = { n: 2, ref: "asset:a1#page4", sourceType: "p
 const WEB_CITATION: PageCitation = { n: 3, ref: "https://en.wikipedia.org/wiki/Kernel", sourceType: "web", title: "Kernel (operating system)", heading: "Wikipedia", open: { kind: "web", url: "https://en.wikipedia.org/wiki/Kernel" } };
 
 test("the page instruction asks for the teaching structure and the Markdown the converter reads", () => {
-  const text = pageInstruction("make a note on OS so i can revise", "operating systems");
-  for (const part of ["# and a clear page title", "## Revision", "### Test yourself", "Q: … followed by a line A: …", "> [!tip]", "> [!mistake]", "| Term | Meaning |"]) {
+  const text = pageInstruction("make a note on OS so i can revise", "operating systems", { kind: "revision" });
+  for (const part of ["# and a clear, inviting page title", "## Test yourself: 5 Q:/A: lines", "> [!key]", "> [!mistake]", "summary table", "==highlight==", "Q:/A: lines", "- [ ] to-dos"]) {
     assert.ok(text.includes(part), part);
   }
 });
@@ -112,4 +112,61 @@ test("changes apply from the bottom up, and only to a page that hasn't changed u
   assert.equal(pageUnchanged(PAGE, edited, changes), false, "the student edited a block the change replaces");
   const extended = [...PAGE, { type: "paragraph", text: "new last line", locked: false }];
   assert.equal(pageUnchanged(PAGE, extended, [{ kind: "replace", from: 2, to: 2, markdown: "x" }]), true, "edits elsewhere don't block it");
+});
+
+// --- New pages: kinds, video, links -------------------------------------------------
+
+import { draftEmbeds, draftLinks, embedsToShelf, finishDraft, guessPageKind, pageInstruction as instructionFor, unlinkMissing } from "./page";
+
+test("the kind of page comes from the request's words, or is left to Rangan", () => {
+  assert.equal(guessPageKind("make me a cheat sheet for SQL joins"), "cheatsheet");
+  assert.equal(guessPageKind("notes to prepare for my DBMS exam"), "exam");
+  assert.equal(guessPageKind("quick revision notes on stacks"), "revision");
+  assert.equal(guessPageKind("make notes from this lecture"), "lecture");
+  assert.equal(guessPageKind("explain how photosynthesis works"), "explainer");
+  assert.equal(guessPageKind("create some notes on graphs"), null, "a vague request lets Rangan choose");
+});
+
+test("a vague request gets every recipe and is asked to name its kind; a clear one gets its own", () => {
+  const vague = instructionFor("create some notes on graphs", "graphs");
+  assert.match(vague, /<!-- kind: explainer -->/);
+  for (const recipe of ["Explainer", "Revision sheet", "Exam prep", "Cheat sheet", "Lecture notes"]) assert.match(vague, new RegExp(recipe));
+  const clear = instructionFor("cheat sheet for SQL", "SQL", { kind: "cheatsheet", video: { title: "SQL in 10 minutes" } });
+  assert.match(clear, /Cheat sheet \(everything at a glance\)/);
+  assert.doesNotMatch(clear, /Explainer \(to understand/);
+  assert.match(clear, /\[\[video\]\] once/);
+  assert.match(instructionFor("x", "x"), /Do not mention videos/);
+});
+
+test("a draft loses its kind line, gets the video once, and keeps the kind", () => {
+  const draft = "<!-- kind: revision -->\n# Stacks\n\n[[video]]\n\nText\n\n[[video]]";
+  assert.deepEqual(finishDraft(draft, { kind: null, videoUrl: "https://www.youtube.com/watch?v=abc12345678" }), {
+    markdown: "# Stacks\n\n[[embed:https://www.youtube.com/watch?v=abc12345678]]\n\nText",
+    kind: "revision",
+  });
+  assert.deepEqual(finishDraft("# T\n\n[[video]]\n\nBody", { kind: "exam", videoUrl: null }), { markdown: "# T\n\nBody", kind: "exam" });
+  assert.equal(finishDraft("<!-- kind: poem -->\n# T", { kind: null, videoUrl: null }).kind, "explainer", "an unknown kind falls back");
+});
+
+test("made-up links become plain words; videos to embed are found and swapped for Shelf items", () => {
+  const markdown = "See [Stacks](https://en.wikipedia.org/wiki/Stack) and [fake](https://en.wikipedia.org/wiki/Nope).\n\n[[embed:https://www.youtube.com/watch?v=abc12345678]]\n\n[[embed:https://example.com/gone]]";
+  assert.deepEqual(draftLinks(markdown), ["https://en.wikipedia.org/wiki/Stack", "https://en.wikipedia.org/wiki/Nope"]);
+  assert.match(unlinkMissing(markdown, new Set(["https://en.wikipedia.org/wiki/Nope"])), /\[Stacks\]\(https:\/\/en\.wikipedia\.org\/wiki\/Stack\) and fake\./);
+  assert.deepEqual(draftEmbeds(markdown), ["https://www.youtube.com/watch?v=abc12345678", "https://example.com/gone"]);
+  const saved = embedsToShelf(markdown, new Map([["https://www.youtube.com/watch?v=abc12345678", "item9"]]));
+  assert.match(saved, /^\[\[embed:item:item9\]\]$/m);
+  assert.doesNotMatch(saved, /example\.com\/gone/, "a card that couldn't be saved is left out");
+});
+
+import { newPageTopic } from "./page";
+
+test("any wording that asks for notes on a topic is a request for a new page", () => {
+  assert.equal(newPageTopic("notes on sql joins"), "sql joins");
+  assert.equal(newPageTopic("create some notes on graphs"), "graphs");
+  assert.equal(newPageTopic("make me quick revision notes about photosynthesis."), "photosynthesis");
+  assert.equal(newPageTopic("cheat sheet for git commands"), "git commands");
+  assert.equal(newPageTopic("I need a study guide for thermodynamics"), "thermodynamics");
+  for (const message of ["what do my notes on graphs say?", "summarize my notes on sql", "what is a graph", "search notes on trees", "hello"]) {
+    assert.equal(newPageTopic(message), null, message);
+  }
 });

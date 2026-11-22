@@ -52,22 +52,34 @@ export async function embedFromUrl(editor: Editor, onCreated?: () => void) {
   });
   const href = address ? normalizeWebAddress(address) : null;
   if (!href || href.startsWith("mailto:")) return;
+  const saved = await saveLinkToShelf(href);
+  if (!saved.ok) {
+    toast.error(saved.message);
+    return;
+  }
+  onCreated?.();
+  insertEmbed(editor, `item:${saved.itemId}`, at);
+}
+
+/**
+ * Saves a web address to the Shelf as a link, video or PDF item (a video's
+ * transcript is fetched in the background), for showing it as a card.
+ */
+export async function saveLinkToShelf(href: string): Promise<{ ok: true; itemId: string } | { ok: false; message: string }> {
   const url = new URL(href);
   const type = inferItemTypeFromUrl(href) ?? "article";
   const response = await fetch("/api/items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type: type === "note" ? "article" : type, title: titleForUrl(url), url: href }),
-  });
-  const json = await response.json().catch(() => null);
+  }).catch(() => null);
+  const json = await response?.json().catch(() => null);
   const item = Array.isArray(json?.data) ? json.data[0] : json?.data;
-  if (!response.ok || typeof item?.id !== "string") {
-    toast.error(typeof json?.error === "string" ? json.error : "The link could not be added.");
-    return;
+  if (!response?.ok || typeof item?.id !== "string") {
+    return { ok: false, message: typeof json?.error === "string" ? json.error : "The link could not be added." };
   }
-  onCreated?.();
   if (type === "video") requestVideoTranscript({ itemId: item.id }, href);
-  insertEmbed(editor, `item:${item.id}`, at);
+  return { ok: true, itemId: item.id };
 }
 
 /** Uploads files (PDF, image, video, audio) and shows each in the note at `at`. */

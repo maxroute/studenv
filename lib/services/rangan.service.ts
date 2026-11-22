@@ -14,8 +14,9 @@ import {
 import { snippet } from "@/lib/rangan/ranking";
 import { spendQuestion, usageSummary, utcDayStart } from "@/lib/rangan/usage";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
-import { editInstruction, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, type PageChange } from "@/lib/rangan/page";
+import { draftLinks, editInstruction, finishDraft, guessPageKind, newPageTopic, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, unlinkMissing, type PageChange, type PageKind } from "@/lib/rangan/page";
 import { smallTalk, smallTalkReply } from "@/lib/rangan/small-talk";
+import { looksLikePageEdit, pageToolsInstruction, parsePageOps, PAGE_TOOLS_SYSTEM_PROMPT, type PageOp, type PageToolBlock } from "@/lib/rangan/page-ops";
 import { asksForTask, clockOrUtc, parseTaskDrafts, TASK_SYSTEM_PROMPT, taskInstruction, type RanganTaskDraft } from "@/lib/rangan/task";
 import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
 import { openBoardPassages, openPagePassages, pickOpenPassages, type PassageOrigin } from "@/lib/rangan/open-source";
@@ -62,6 +63,8 @@ export type RanganDeps = {
   findImage?: (query: string) => Promise<Omit<MapImage, "target"> | null>;
   /** A lesson video for a YouTube search whose title names the subject, or null. Without it, maps have no video. */
   findVideo?: (query: string, subject: string) => Promise<{ videoId: string; title: string; channel: string } | null>;
+  /** False when a YouTube video or Wikipedia article in a link doesn't exist; such links are left out of page edits. */
+  linkExists?: (href: string) => Promise<boolean>;
   /** A quick call on the smaller models, for reading a request's subject. Without it, the question is searched whole. */
   completeQuick?: (messages: ChatMessage[], options?: CompletionOptions) => Promise<CompletionResult>;
 };
@@ -97,6 +100,8 @@ export type RanganPageDraft = Omit<RanganAnswer, "answer" | "kind"> & {
   markdown: string;
   /** The page's ## and ### headings, for the preview. */
   outline: string[];
+  /** The kind of page written: explainer, revision sheet, exam prep, cheat sheet or lecture notes. */
+  pageKind?: PageKind;
   /** A map of the same subject, when the request asked for a board too. */
   map?: RanganMap;
 };
@@ -145,8 +150,10 @@ export type RanganPageEdit = Omit<RanganAnswer, "answer" | "kind"> & {
   /** The page the change is for, `note:<id>`. */
   pageRef: string;
   summary: string;
-  /** Numbered against the blocks the request sent (1-based); [n] marks match `citations`. */
+  /** Numbered against the blocks the request sent (1-based); [n] marks match `citations`. Empty when `ops` is used. */
   changes: PageChange[];
+  /** Page tools, step by step, naming blocks by id; [n] marks in their Markdown match `citations`. */
+  ops?: PageOp[];
 };
 
 /** Tasks Rangan drafted for the planner, for the student to look over and add. Nothing is saved yet. */
@@ -386,22 +393,39 @@ export function createRanganService(deps: RanganDeps) {
   /** A new teaching page on the request's subject, cited from the library or Wikipedia. Nothing is saved. */
   async function writePage(input: RanganAskInput, reading: RequestReading, passages: LibraryPassage[], usage: RanganUsageSummary): Promise<RanganPageDraft> {
     const subject = reading.subject ?? reading.search;
+    const kind = guessPageKind(input.question);
+    // A real lesson video, found first so the page can place it; none is fine.
+    // Searched with the subject's core terms, so "graphs" finds graph theory, not graphing on a coordinate plane.
+    const videoQuery = [subject, ...reading.terms.slice(0, 2)].join(" ");
+    const video = deps.findVideo ? await deps.findVideo(`${videoQuery} explained`, subject).catch(() => null) : null;
     const result = await deps.complete(
       [
         { role: "system", content: PAGE_SYSTEM_PROMPT },
-        { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageInstruction(input.question, subject)}` },
+        { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageInstruction(input.question, subject, { kind, video })}` },
       ],
-      { maxTokens: 3_500, temperature: 0.3 },
+      { maxTokens: 4_000, temperature: 0.4 },
     );
-    const draft = normalizeCitationMarks(result.text).trim();
-    if (!/^#{1,3}\s/m.test(draft)) throw Object.assign(new Error("Rangan couldn't write that page. Please try again."), { status: 502 });
-    const { answer: markdown, support } = await checkSupport(draft, passages);
+    const finished = finishDraft(normalizeCitationMarks(result.text).trim(), { kind, videoUrl: video ? `https://www.youtube.com/watch?v=${video.videoId}` : null });
+    if (!/^#{1,3}\s/m.test(finished.markdown)) throw Object.assign(new Error("Rangan couldn't write that page. Please try again."), { status: 502 });
+    // A made-up video or article link becomes plain words.
+    const links = draftLinks(finished.markdown).slice(0, 12);
+    const missing = new Set<string>();
+    if (deps.linkExists && links.length) {
+      const found = await Promise.all(links.map((href) => deps.linkExists?.(href) ?? Promise.resolve(true)));
+      links.forEach((href, index) => {
+        if (!found[index]) missing.add(href);
+      });
+    }
+    const { answer: markdown, support } = await checkSupport(unlinkMissing(finished.markdown, missing), passages);
+    const placedVideo = video && markdown.includes(`[[embed:https://www.youtube.com/watch?v=${video.videoId}]]`) ? video : null;
     const title = /^#\s+(.+)$/m.exec(markdown)?.[1].replace(/\[\d{1,2}\]/g, "").replace(/[*_`]/g, "").trim() || subject;
     return {
       kind: "page",
       title: title.slice(0, 300),
       markdown,
       outline: outline(markdown),
+      pageKind: finished.kind,
+      ...(placedVideo ? { video: placedVideo } : {}),
       provider: result.provider,
       usage,
       citations: citationsFor(markdown, passages),
@@ -429,6 +453,50 @@ export function createRanganService(deps: RanganDeps) {
     const ref = parseRef(page.ref);
     if (!ref || ref.type !== "note" || !(await deps.loadSource(userId, "note", ref.id))) throw notFound();
     const blocks = page.blocks.map((block) => ({ ...block, locked: block.locked || LOCKED_TYPES.has(block.type) }));
+    // A panel that sends block ids gets page tools: formatting, links, embeds, moves and the rest.
+    if (blocks.length > 0 && blocks.every((block) => block.id)) {
+      const toolBlocks: PageToolBlock[] = blocks.map((block) => ({ id: block.id ?? "", type: block.type, text: block.text, ...(block.marked ? { marked: block.marked } : {}), locked: block.locked }));
+      const result = await deps.complete(
+        [
+          { role: "system", content: PAGE_TOOLS_SYSTEM_PROMPT },
+          { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageToolsInstruction(input.question, page.title, toolBlocks, page.selection ?? null)}` },
+        ],
+        { maxTokens: 3_000, temperature: 0.2 },
+      );
+      const parsed = parsePageOps(normalizeCitationMarks(result.text), toolBlocks);
+      if (!parsed) throw Object.assign(new Error("Rangan couldn't work out a safe change to this page. Try saying exactly what to change."), { status: 502 });
+      // A made-up video or article is left out rather than linked.
+      const addresses = [...new Set(parsed.ops.flatMap((op) => (op.op === "embed" ? [op.url] : op.op === "link" && op.href ? [op.href] : [])))].slice(0, 10);
+      const missing = new Set<string>();
+      if (deps.linkExists && addresses.length) {
+        const found = await Promise.all(addresses.map((href) => deps.linkExists?.(href) ?? Promise.resolve(true)));
+        addresses.forEach((href, index) => {
+          if (!found[index]) missing.add(href);
+        });
+      }
+      const kept = parsed.ops.filter((op) => !((op.op === "embed" && missing.has(op.url)) || (op.op === "link" && op.href && missing.has(op.href))));
+      if (!kept.length) throw Object.assign(new Error("Rangan couldn't find a real page or video for that. Try giving the address."), { status: 422 });
+      const plan = {
+        summary: missing.size ? `${parsed.summary} (${missing.size === 1 ? "One link" : `${missing.size} links`} couldn't be confirmed, so ${missing.size === 1 ? "it was" : "they were"} left out.)` : parsed.summary,
+        ops: kept,
+      };
+      // New writing is checked against the passages it cites, like an answer.
+      const ops: PageOp[] = [];
+      let removed = 0;
+      let checked = true;
+      for (const op of plan.ops) {
+        if (op.op !== "insert" && op.op !== "replace") {
+          ops.push(op);
+          continue;
+        }
+        const verified = await checkSupport(op.markdown, passages);
+        removed += verified.support.removed;
+        checked &&= verified.support.checked;
+        ops.push({ ...op, markdown: verified.answer });
+      }
+      const written = ops.flatMap((op) => (op.op === "insert" || op.op === "replace" ? [op.markdown] : [])).join("\n");
+      return { kind: "edit", pageRef: `note:${ref.id}`, summary: plan.summary, changes: [], ops, provider: result.provider, usage, citations: citationsFor(written, passages), support: { checked, removed } };
+    }
     const result = await deps.complete(
       [
         { role: "system", content: PAGE_SYSTEM_PROMPT },
@@ -519,7 +587,20 @@ export function createRanganService(deps: RanganDeps) {
     return withQuestion(userId, async (usage) => {
       // "Explain this": the selected text steers the search and is quoted to the model.
       // Otherwise the request is read first, so only its subject is searched.
-      const reading = input.focus ? null : await readRequest(input.question, input.history, input.page?.title, input.board?.title, input.where);
+      const read = input.focus ? null : await readRequest(input.question, input.history, input.page?.title, input.board?.title, input.where);
+      // "notes on sql joins" asks for a page however it's worded, even when the reading missed it.
+      const pageTopic = input.focus ? null : newPageTopic(input.question);
+      const reading: RequestReading | null =
+        pageTopic && !read?.actions.includes("page") && !read?.actions.includes("edit")
+          ? {
+              subject: read?.subject ?? pageTopic,
+              search: read?.search || pageTopic,
+              names: read?.names.length ? read.names : [read?.subject ?? pageTopic],
+              terms: read?.terms ?? [],
+              actions: [...(read?.actions ?? []).filter((action) => action !== "task" && action !== "plan"), "page"],
+              chat: false,
+            }
+          : read;
       // Something to do goes to the planner, from anywhere in the app. Asked for
       // outright ("add a task", "remind me", "in the planner"), it is a task even
       // if the reading missed it; asked for a page or board, it never is.
@@ -533,20 +614,22 @@ export function createRanganService(deps: RanganDeps) {
         return { answer: withoutBeyondCitations(normalizeCitationMarks(result.text)).trim(), provider: result.provider, usage, citations: [], support: { checked: true, removed: 0 } };
       }
       const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
+      // With a page open, its tools come first: "bold this", "tick off revise stacks", "embed a video here".
+      const editsPage = Boolean(!input.focus && input.page && !makesOther && (reading?.actions.includes("edit") || looksLikePageEdit(input.question, Boolean(input.page.selection))));
       // A study plan has its own flow, which reads the material and spreads it over days. The
       // question is given back (this throws inside the allowance) and the panel asks for the plan.
-      if (!input.focus && reading?.actions.includes("plan") && !reading.actions.includes("task") && !makesOther && !asksForTask(input.question)) {
+      if (!editsPage && !input.focus && reading?.actions.includes("plan") && !reading.actions.includes("task") && !makesOther && !asksForTask(input.question)) {
         throw Object.assign(new Error("That's a request for a study plan."), { status: 409, details: { reroute: "plan" } });
       }
-      if (!input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
+      if (!editsPage && !input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)
         : (reading?.search ?? retrievalQuery(input.question, input.history));
       // A change to the open page or board already sends it whole; otherwise it is the first place to look.
-      const editing = Boolean(reading?.actions.includes("edit") && (input.board || input.page));
+      const editing = Boolean((reading?.actions.includes("edit") && (input.board || input.page)) || editsPage);
       const passages = await passagesFor(userId, query, reading, editing ? null : { question: input.question, page: input.page, board: input.board });
       if (reading?.actions.includes("edit") && input.board) return editBoard(userId, input, input.board, usage);
-      if (reading?.actions.includes("edit") && input.page) return editPage(userId, input, input.page, passages, usage);
+      if (editsPage && input.page) return editPage(userId, input, input.page, passages, usage);
       if (reading?.actions.includes("page")) {
         const page = await writePage(input, reading, passages, usage);
         if (!reading.actions.includes("board")) return page;
