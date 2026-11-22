@@ -9,6 +9,8 @@ import { onUsage } from "@/lib/client/usage-bus";
 import { pageBlocks, pageSelection, useOpenPage } from "@/hooks/use-open-page";
 import type { PageToolBlock } from "@/lib/rangan/page-ops";
 import { openBoard, openBoardSummary } from "@/components/rangan/board-actions";
+import { useWorkspaceStore } from "@/hooks/use-workspace-store";
+import { elementStyle } from "@/lib/workspace/board-ops";
 import type { BoardSummary } from "@/lib/workspace/board-edit";
 import type { RanganBoardEdit, RanganExplore, RanganMap, RanganPageDraft, RanganPageEdit, RanganTaskReply } from "@/lib/services/rangan.service";
 import { appArea, type RanganTaskDraft } from "@/lib/rangan/task";
@@ -221,6 +223,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
     // The open board or page as it is right now, so Rangan can add to it or change it when asked.
     const board = request.kind === "ask" && !request.focus ? openBoard() : null;
     const boardPlanned = board ? openBoardSummary() : null;
+    const boardItems = new Map(board ? useWorkspaceStore.getState().items.map((item) => [item.id, item] as const) : []);
     const open = request.kind === "ask" && !request.focus && !board ? useOpenPage.getState().page : null;
     const planned = open ? pageBlocks(open.editor) : null;
     const selection = open ? pageSelection(open.editor) : null;
@@ -254,7 +257,10 @@ export const useRanganStore = create<RanganState>((set, get) => {
                       board: {
                         ref: `workspace:${board.id}`,
                         title: board.title.slice(0, 500),
-                        elements: boardPlanned.elements.map(({ key, type, text, selected, locked }) => ({ key, type: type.slice(0, 40), text: text.slice(0, 400), selected, locked })),
+                        elements: boardPlanned.elements.map(({ id, key, type, text, selected, locked }) => {
+                          const item = boardItems.get(id);
+                          return { key, type: type.slice(0, 40), text: text.slice(0, 400), selected, locked, style: item ? elementStyle(item).slice(0, 80) : "" };
+                        }),
                         edges: boardPlanned.edges.slice(0, 400).map((edge) => ({ ...edge, label: edge.label.slice(0, 60) })),
                       },
                     }

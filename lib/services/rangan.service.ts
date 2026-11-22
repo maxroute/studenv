@@ -22,6 +22,7 @@ import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM
 import { openBoardPassages, openPagePassages, pickOpenPassages, type PassageOrigin } from "@/lib/rangan/open-source";
 import { extractJsonObject } from "@/lib/study/plan";
 import { boardEditInstruction, parseBoardPlan, type BoardChange } from "@/lib/workspace/board-edit";
+import { asksForNewBoard, BOARD_TOOLS_SYSTEM_PROMPT, boardToolsInstruction, looksLikeBoardEdit, parseBoardOps, type BoardCard, type BoardOp } from "@/lib/workspace/board-ops";
 import { MAP_MAX_READING, mapInstruction, mapOutline, parseMapReply, type MapDraft, type MapImage } from "@/lib/workspace/mind-map";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
@@ -59,6 +60,8 @@ export type RanganDeps = {
   searchWeb?: (query: string) => Promise<LibraryPassage[]>;
   /** True when the board is the user's; checked before Rangan plans changes to it. */
   ownsBoard?: (userId: string, boardId: string) => Promise<boolean>;
+  /** A page or file of the user's as a board card, or null when it isn't theirs. */
+  findBoardCard?: (userId: string, ref: { type: "note" | "asset"; id: string }) => Promise<BoardCard | null>;
   /** A freely licensed picture for a Wikipedia article title, or null. Without it, maps have no pictures. */
   findImage?: (query: string) => Promise<Omit<MapImage, "target"> | null>;
   /** A lesson video for a YouTube search whose title names the subject, or null. Without it, maps have no video. */
@@ -138,8 +141,10 @@ export type RanganBoardEdit = Omit<RanganAnswer, "answer" | "kind"> & {
   /** The board, `workspace:<id>`. */
   boardRef: string;
   summary: string;
-  /** Keys match the elements the request described. */
+  /** Keys match the elements the request described. Empty when `ops` is used. */
   changes: BoardChange[];
+  /** Board tools, step by step; keys match the elements the request described (new ones are n1, n2…). */
+  ops?: BoardOp[];
 };
 
 /** A change Rangan suggests to the open page, for the student to look over and apply. Nothing is saved yet. */
@@ -560,12 +565,40 @@ export function createRanganService(deps: RanganDeps) {
   }
 
   /** Additions to the open board as the student described them. Nothing is applied: the student sees them first. */
-  async function editBoard(userId: string, input: RanganAskInput, board: NonNullable<RanganAskInput["board"]>, usage: RanganUsageSummary): Promise<RanganBoardEdit> {
+  async function editBoard(userId: string, input: RanganAskInput, board: NonNullable<RanganAskInput["board"]>, usage: RanganUsageSummary, passages: LibraryPassage[] = []): Promise<RanganBoardEdit> {
     const ref = parseRef(board.ref);
     if (!ref || ref.type !== "workspace" || !deps.ownsBoard || !(await deps.ownsBoard(userId, ref.id))) {
       throw Object.assign(new Error("That board wasn't found."), { status: 404 });
     }
     const summary = { elements: board.elements.map((element) => ({ ...element, id: element.key, x: 0, y: 0, w: 1, h: 1 })), edges: board.edges };
+    // A panel that describes styles gets the board tools: shapes, colours, layouts, moves and the rest.
+    if (board.elements.some((element) => element.style !== undefined) || board.elements.length === 0) {
+      // Library pages and files the passages came from, checked as the user's, can be added as cards.
+      const cards = new Map<string, BoardCard>();
+      if (deps.findBoardCard) {
+        const refs = [...new Set(passages.filter((passage) => passage.origin === "library").map((passage) => passage.ref.split("#")[0]))].slice(0, 6);
+        for (const cardRef of refs) {
+          const parsed = parseRef(cardRef);
+          if (!parsed || (parsed.type !== "note" && parsed.type !== "asset")) continue;
+          const card = await deps.findBoardCard(userId, { type: parsed.type, id: parsed.id }).catch(() => null);
+          if (card) cards.set(`${parsed.type}:${parsed.id}`, card);
+        }
+      }
+      const styles = new Map(board.elements.flatMap((element) => (element.style ? [[element.key, element.style] as [string, string]] : [])));
+      const result = await deps.complete(
+        [
+          { role: "system", content: BOARD_TOOLS_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `${passages.length ? `${buildLibraryContext(passages)}\n\n` : ""}${boardToolsInstruction(input.question, board.title, summary, styles, [...cards].map(([cardRef, card]) => ({ ref: cardRef, title: card.title })))}`,
+          },
+        ],
+        { maxTokens: 2_500, temperature: 0.2 },
+      );
+      const plan = parseBoardOps(extractJsonObject(result.text), summary, cards);
+      if (!plan) throw Object.assign(new Error("Rangan couldn't work out a safe change to this board. Try saying exactly what to change."), { status: 502 });
+      return { kind: "board-edit", boardRef: `workspace:${ref.id}`, summary: plan.summary, changes: [], ops: plan.ops, provider: result.provider, usage, citations: [], support: { checked: true, removed: 0 } };
+    }
     const result = await deps.complete(
       [
         { role: "system", content: MAP_SYSTEM_PROMPT },
@@ -615,20 +648,29 @@ export function createRanganService(deps: RanganDeps) {
       }
       const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
       // With a page open, its tools come first: "bold this", "tick off revise stacks", "embed a video here".
+      // With a board open, its tools come first too: "arrange these as a tree", "make the stickies blue".
+      // A "board" reading on an open board is a change to it, unless a new board or mind map was asked for.
+      const editsBoard = Boolean(
+        !input.focus &&
+          input.board &&
+          !reading?.actions.includes("page") &&
+          !asksForNewBoard(input.question) &&
+          (reading?.actions.includes("edit") || looksLikeBoardEdit(input.question, input.board.elements.some((element) => element.selected))),
+      );
       const editsPage = Boolean(!input.focus && input.page && !makesOther && (reading?.actions.includes("edit") || looksLikePageEdit(input.question, Boolean(input.page.selection))));
       // A study plan has its own flow, which reads the material and spreads it over days. The
       // question is given back (this throws inside the allowance) and the panel asks for the plan.
-      if (!editsPage && !input.focus && reading?.actions.includes("plan") && !reading.actions.includes("task") && !makesOther && !asksForTask(input.question)) {
+      if (!editsPage && !editsBoard && !input.focus && reading?.actions.includes("plan") && !reading.actions.includes("task") && !makesOther && !asksForTask(input.question)) {
         throw Object.assign(new Error("That's a request for a study plan."), { status: 409, details: { reroute: "plan" } });
       }
-      if (!editsPage && !input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
+      if (!editsPage && !editsBoard && !input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)
         : (reading?.search ?? retrievalQuery(input.question, input.history));
       // A change to the open page or board already sends it whole; otherwise it is the first place to look.
-      const editing = Boolean((reading?.actions.includes("edit") && (input.board || input.page)) || editsPage);
+      const editing = Boolean((reading?.actions.includes("edit") && (input.board || input.page)) || editsPage || editsBoard);
       const passages = await passagesFor(userId, query, reading, editing ? null : { question: input.question, page: input.page, board: input.board });
-      if (reading?.actions.includes("edit") && input.board) return editBoard(userId, input, input.board, usage);
+      if (editsBoard && input.board) return editBoard(userId, input, input.board, usage, passages);
       if (editsPage && input.page) return editPage(userId, input, input.page, passages, usage);
       if (reading?.actions.includes("page")) {
         const page = await writePage(input, reading, passages, usage);

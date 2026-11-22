@@ -8,8 +8,9 @@ import { useVoiceAction } from "@/hooks/use-voice-action";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import type { RanganMap } from "@/lib/services/rangan.service";
 import { describeBoardChange } from "@/lib/workspace/board-edit";
+import { describeBoardOp } from "@/lib/workspace/board-ops";
 import { mapElementCount } from "@/lib/workspace/mind-map";
-import { applyBoardEdit, createMapBoard } from "./board-actions";
+import { applyBoardEdit, applyBoardTools, createMapBoard } from "./board-actions";
 
 /** The map's branches and sub-nodes, as a preview. */
 export function MapOutline({ map }: { map: RanganMap }) {
@@ -179,30 +180,41 @@ export function RanganBoardEditCard({ turn }: { turn: Extract<RanganTurn, { role
 
   const apply = () => {
     setProblem(null);
-    const result = applyBoardEdit(edit.boardRef, edit.changes, planned);
+    const result = edit.ops?.length ? applyBoardTools(edit.boardRef, edit.ops, planned) : applyBoardEdit(edit.boardRef, edit.changes, planned);
     if (!result.ok) {
       setProblem(result.message);
       return;
     }
     markEditApplied(turn.id);
-    toast.success("Added to the board. The new stickies are selected.");
+    const skipped = "skipped" in result ? result.skipped : 0;
+    toast.success(
+      edit.ops?.length
+        ? `Done. What changed is selected${skipped ? `; ${skipped} step${skipped === 1 ? "" : "s"} no longer fit the board and ${skipped === 1 ? "was" : "were"} left out` : ""}.`
+        : "Added to the board. The new stickies are selected.",
+    );
   };
 
   return (
     <div className="rangan-plan rangan-page">
       <div className="rangan-plan-head">
         <Plus size={16} aria-hidden />
-        <span className="rangan-plan-goal">Suggested additions</span>
+        <span className="rangan-plan-goal">{edit.ops?.length ? "Suggested changes" : "Suggested additions"}</span>
       </div>
       <p className="rangan-plan-meta">{edit.summary}</p>
       <ul className="rangan-edit-list">
-        {edit.changes.map((change, index) => (
-          <li key={index} className="rangan-edit-new">
-            {describeBoardChange(change, planned)}
-          </li>
-        ))}
+        {edit.ops?.length
+          ? edit.ops.map((op, index) => (
+              <li key={index} className="rangan-edit-new">
+                {describeBoardOp(op, planned)}
+              </li>
+            ))
+          : edit.changes.map((change, index) => (
+              <li key={index} className="rangan-edit-new">
+                {describeBoardChange(change, planned)}
+              </li>
+            ))}
       </ul>
-      <p className="rangan-plan-meta">Rangan only adds: nothing on the board is moved or removed.</p>
+      {edit.ops?.length ? null : <p className="rangan-plan-meta">Rangan only adds: nothing on the board is moved or removed.</p>}
       {problem ? (
         <p className="rangan-plan-note" role="alert">
           {problem}
@@ -211,11 +223,11 @@ export function RanganBoardEditCard({ turn }: { turn: Extract<RanganTurn, { role
       <div className="rangan-plan-actions">
         {turn.applied ? (
           <span className="rangan-plan-saved">
-            <Check size={15} aria-hidden /> Added. Undo it with the board&apos;s undo button or Ctrl/⌘ Z.
+            <Check size={15} aria-hidden /> {edit.ops?.length ? "Applied" : "Added"}. Undo it with the board&apos;s undo button or Ctrl/⌘ Z.
           </span>
         ) : (
           <button type="button" className="rangan-plan-add" onClick={apply}>
-            <Check size={15} aria-hidden /> Add to the board
+            <Check size={15} aria-hidden /> {edit.ops?.length ? "Apply to the board" : "Add to the board"}
           </button>
         )}
       </div>

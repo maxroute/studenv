@@ -66,7 +66,19 @@ export const ranganAskSchema = z
         ref: z.string().trim().min(1).max(420),
         title: z.string().max(500),
         elements: z
-          .array(z.object({ key: z.string().regex(/^e\d{1,4}$/), type: z.string().min(1).max(40), text: z.string().max(400), selected: z.boolean(), locked: z.boolean() }).strict())
+          .array(
+            z
+              .object({
+                key: z.string().regex(/^e\d{1,4}$/),
+                type: z.string().min(1).max(40),
+                text: z.string().max(400),
+                selected: z.boolean(),
+                locked: z.boolean(),
+                /** Colour, shape and grouping in a few words ("green, grouped"), so Rangan can tell elements apart. */
+                style: z.string().max(80).optional(),
+              })
+              .strict(),
+          )
           .max(200),
         edges: z.array(z.object({ from: z.string().max(8), to: z.string().max(8), label: z.string().max(60) }).strict()).max(400),
       })
