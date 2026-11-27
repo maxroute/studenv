@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { apiError, apiSuccess } from "@/lib/security/headers";
@@ -10,17 +8,13 @@ import {
   getRateLimitIdentifier,
   getRequestContext,
 } from "@/lib/security/request";
+import { avatarContentType, imageExtension } from "@/lib/storage/avatar";
+import { uploadBuffer } from "@/lib/storage/s3";
 import * as authService from "@/lib/services/auth.service";
 
 export const runtime = "nodejs";
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = new Map<string, string>([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
-  ["image/gif", "gif"],
-]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,28 +28,24 @@ export async function POST(request: NextRequest) {
       return apiError("Select an image to upload.", 400);
     }
 
-    const extension = ALLOWED_IMAGE_TYPES.get(file.type);
+    if (file.size > MAX_AVATAR_SIZE) {
+      return apiError("Profile photos must be 5 MB or smaller.", 400);
+    }
+
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const extension = imageExtension(bytes);
 
     if (!extension) {
       return apiError("Upload a JPG, PNG, GIF, or WebP image.", 400);
     }
 
-    if (file.size > MAX_AVATAR_SIZE) {
-      return apiError("Profile photos must be 5 MB or smaller.", 400);
-    }
-
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
-    await mkdir(uploadDir, { recursive: true });
-
     const filename = `${user.id}-${randomUUID()}.${extension}`;
-    const filePath = path.join(uploadDir, filename);
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    await writeFile(filePath, fileBuffer);
+    // Stored with the other uploads: the live host can't write to its own folders.
+    await uploadBuffer(`avatars/${filename}`, bytes, avatarContentType(extension));
 
     const profile = await authService.updateAvatar(
       user.id,
-      `/uploads/avatars/${filename}`,
+      `/avatars/${filename}`,
       getRequestContext(request),
     );
 

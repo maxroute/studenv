@@ -1,0 +1,44 @@
+/* One calm column, like the Planner: the next thing, where you left off, and what needs attention. */
+.home { display: flex; width: 100%; max-width: 660px; flex-direction: column; gap: 32px; margin: 0 auto; padding: 56px 24px 48px; color: var(--text); }
+
+.home header h1 { margin: 0; font-family: var(--font-fraunces), serif; font-size: 30px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; }
+.home header p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+.home h2 { margin: 0 0 8px; color: var(--muted); font-family: var(--font-dm-sans), sans-serif; font-size: 12px; font-weight: 600; }
+
+/* The only card on the page. */
+.card { display: flex; min-height: 76px; align-items: center; gap: 10px; border: 1px solid #34342b; border-radius: 14px; background: #161612; padding: 14px; }
+.cardText { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.cardText strong { font-size: 15.5px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.cardText small { color: var(--muted); font-size: 12px; }
+.quiet { flex: 1; margin: 0; color: var(--muted); font-size: 13.5px; }
+.start { display: inline-flex; min-height: 38px; flex-shrink: 0; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 9px; background: var(--amber); padding: 0 16px; color: #11110f; font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.start:hover { filter: brightness(0.95); }
+.plain { display: inline-flex; min-height: 36px; flex-shrink: 0; align-items: center; border: 1px solid var(--border2); border-radius: 9px; background: transparent; padding: 0 14px; color: var(--text); font: inherit; font-size: 13px; text-decoration: none; cursor: pointer; }
+.plain:hover { border-color: var(--amber-dim); color: var(--amber); }
+.loading { display: flex; height: 200px; overflow: hidden; border-radius: 14px; }
+.loading > div { min-height: 200px; }
+
+.rows { margin: 0; padding: 0; list-style: none; }
+.rows li + li { border-top: 1px solid #23231d; }
+.rows button { display: flex; width: 100%; min-height: 48px; align-items: center; gap: 12px; border: 0; background: transparent; padding: 0 4px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.rows svg { flex-shrink: 0; color: var(--muted2); }
+.rows span { min-width: 0; flex: 1; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.rows small { flex-shrink: 0; color: var(--muted2); font-size: 11.5px; }
+.rows button:hover span { color: var(--amber); }
+
+.overdue { display: flex; min-height: 52px; align-items: center; gap: 10px; border-top: 1px solid #23231d; border-bottom: 1px solid #23231d; padding: 0 4px; color: var(--text); font-size: 13.5px; text-decoration: none; }
+.overdue i { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--red); }
+.overdue span { flex: 1; }
+.overdue small { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; }
+.overdue:hover small { color: var(--amber); }
+
+@media (pointer: coarse) {
+  .start, .plain { min-height: 44px; }
+}
+
+@media (max-width: 767px) {
+  .home { gap: 26px; padding: 22px 14px 32px; }
+  .home header h1 { font-size: 25px; }
+  .rows button { min-height: 54px; }
+  .rows small { display: none; }
+}

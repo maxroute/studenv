@@ -12,8 +12,11 @@ function preloadRanganPanel() {
   void import("./rangan-panel");
 }
 
-/** Rangan's floating button, and its panel once opened (loaded on demand). */
-export function RanganHost() {
+/**
+ * Rangan's panel once opened (loaded on demand). `launcher={false}` leaves out
+ * the floating button where the frame already has its own Rangan entry.
+ */
+export function RanganHost({ launcher = true }: { launcher?: boolean }) {
   const open = useRanganStore((state) => state.open);
 
   // Coming back to this tab or device with the panel open shows the true count
@@ -31,5 +34,6 @@ export function RanganHost() {
     };
   }, []);
 
-  return open ? <RanganPanel /> : <RanganLauncher onPreload={preloadRanganPanel} />;
+  if (open) return <RanganPanel />;
+  return launcher ? <RanganLauncher onPreload={preloadRanganPanel} /> : null;
 }

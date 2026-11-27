@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
+import { AppIntro } from "@/components/intro/app-intro";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth/auth.config";
 
@@ -22,6 +23,7 @@ export default async function AuthenticatedLayout({
       }}
     >
       {children}
+      <AppIntro />
     </AppShell>
   );
 }

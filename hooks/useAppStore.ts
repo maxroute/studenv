@@ -18,7 +18,7 @@ type AppState = {
 const defaultFilters: ItemFilters = {
   nav: "all",
   sort: "newest",
-  view: "grid",
+  view: "list",
 };
 
 export const useAppStore = create<AppState>((set) => ({

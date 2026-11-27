@@ -1,0 +1,64 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 14px;
+  overflow: hidden;
+  background: #141310;
+  color: #e4dfcf;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
+  /* The whole card drags; the buttons opt out below. */
+  -webkit-app-region: drag;
+}
+
+.ring { width: 44px; height: 44px; flex: none; }
+.ring circle { fill: none; stroke-width: 4; }
+.ring-track { stroke: rgba(255, 255, 255, 0.08); }
+.ring-left {
+  stroke: #c97d0c;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.ring-done { fill: none; stroke: #1a9e75; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; display: none; }
+
+.text { flex: 1; min-width: 0; }
+.time { font-size: 24px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line { font-size: 12px; color: #9c9788; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.buttons { display: flex; align-items: center; gap: 2px; flex: none; }
+button { -webkit-app-region: no-drag; font: inherit; border: 0; cursor: pointer; }
+button:focus-visible { outline: 2px solid #c97d0c; outline-offset: 1px; }
+
+.icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: transparent;
+  color: #9c9788;
+}
+.icon:hover { background: rgba(255, 255, 255, 0.07); color: #e4dfcf; }
+.icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.toggle { background: rgba(255, 255, 255, 0.07); color: #e4dfcf; }
+.toggle .i-play { display: none; fill: currentColor; }
+
+.break { display: none; padding: 6px 10px; border-radius: 8px; background: #c97d0c; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+body[data-status="paused"] .ring-left { stroke: #6f6a5e; }
+body[data-status="paused"] .time { color: #9c9788; }
+body[data-status="paused"] .toggle .i-play { display: block; }
+body[data-status="paused"] .toggle .i-pause { display: none; }
+
+body[data-status="finished"] .ring-done { display: block; }
+body[data-status="finished"] .ring-left { display: none; }
+body[data-status="finished"] .time { font-size: 15px; line-height: 1.4; }
+body[data-status="finished"] .toggle { display: none; }
+body[data-status="finished"][data-break="yes"] .break { display: block; }

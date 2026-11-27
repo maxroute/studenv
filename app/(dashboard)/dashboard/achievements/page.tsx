@@ -1,7 +1,15 @@
 "use client";
 
+import { PageLoader } from "@/components/ui/page-loader";
 import { useMemo } from "react";
-import { Flame, Lock, Medal, Sparkles, AlertCircle } from "lucide-react";
+import {
+  Flame,
+  Lock,
+  Medal,
+  Sparkles,
+  AlertCircle,
+  Trophy,
+} from "lucide-react";
 import useSWR from "swr";
 
 const fetcher = async (url: string) => {
@@ -17,29 +25,7 @@ const fetcher = async (url: string) => {
 };
 
 function AchievementsSkeleton() {
-  return (
-    <div className="min-h-full px-10 py-9 animate-pulse">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          <div className="h-8 w-64 bg-white/5 rounded-md mb-2"></div>
-          <div className="h-4 w-48 bg-white/5 rounded-md"></div>
-        </div>
-
-        <div className="mb-8 grid max-w-[620px] gap-3 md:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="rounded-[14px] border border-white/[0.065] bg-[#1b1b16] px-5 py-[18px]"
-            >
-              <div className="mb-3 h-[34px] w-[34px] rounded-[9px] bg-white/5"></div>
-              <div className="h-3 w-16 bg-white/5 rounded mb-2"></div>
-              <div className="h-7 w-24 bg-white/5 rounded"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return <PageLoader label="Opening achievements" />;
 }
 
 export default function AchievementsPage() {
@@ -51,14 +37,15 @@ export default function AchievementsPage() {
 
   const totals = useMemo(() => {
     if (!data?.stats) {
-      return { sessions: 0, focusMinutes: 0, streak: 0 };
+      return { sessions: 0, focusMinutes: 0, streak: 0, xp: 0 };
     }
 
-    const { focusSessions, totalFocusMs, currentStreak } = data.stats;
+    const { focusSessions, totalFocusMs, currentStreak, totalXp } = data.stats;
     return {
       sessions: focusSessions || 0,
       focusMinutes: Math.round((totalFocusMs || 0) / 60000),
       streak: currentStreak || 0,
+      xp: totalXp || 0,
     };
   }, [data]);
 
@@ -134,8 +121,14 @@ export default function AchievementsPage() {
           </p>
         </div>
 
-        <div className="mb-8 grid max-w-[620px] gap-3 md:grid-cols-3">
+        <div className="mb-8 grid max-w-[820px] grid-cols-2 gap-3 lg:grid-cols-4">
           {[
+            {
+              label: "Total XP",
+              value: totals.xp.toLocaleString(),
+              icon: Trophy,
+              iconClass: "bg-[rgba(90,191,122,0.14)] text-[#5abf7a]",
+            },
             {
               label: "Unlocked",
               value: unlocked.length,

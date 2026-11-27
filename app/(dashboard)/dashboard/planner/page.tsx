@@ -1,24 +1,23 @@
 "use client";
 
+import { usePlannerTasks } from "@/hooks/use-planner-tasks";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useSWR from "swr";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
-import {
-  Calendar,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardCheck,
-  Copy,
-  Edit2,
-  Plus,
-  Search,
-  Tag,
-  Trash2,
-} from "lucide-react";
+import { CalendarDays, ChevronDown, ClipboardCheck, Play, Plus, Search, X } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { RanganLogo } from "@/components/rangan/rangan-launcher";
+import { AddMenu } from "@/components/planner/add-menu";
+import { PlannerFocusCard } from "@/components/planner/planner-focus-card";
+import { StudyCalendar, StudyWeek } from "@/components/planner/study-calendar";
+import { TaskMenu } from "@/components/planner/task-menu";
+import { FilterField, FilterPopover } from "@/components/ui/filter-popover";
+import { PageLoader } from "@/components/ui/page-loader";
+import { TaskCheck } from "@/components/ui/task-check";
 import { useStudyPlanDraft } from "@/hooks/use-study-plan-draft";
+import { prepareFocusOnTask } from "@/lib/client/focus-task";
+import { groupOpenTasks, isDueOn, isOverdueTask, taskDueAt } from "@/lib/client/planner-tasks";
+import { dayToDueDate, moveTask, previousDates, SPREAD_DAYS, spreadTasks, type DueChange } from "@/lib/client/reschedule";
+import { focusLabel } from "@/lib/client/study-calendar";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { StudyPlanDialog } from "./StudyPlanDialog";
 import { TaskDialog } from "./TaskDialog";
@@ -36,6 +35,7 @@ interface Task {
   estimatedDuration: number | null;
   trackedDuration: number;
   notificationEnabled: boolean;
+  missedDueDates: string[];
   repeat: string;
   color: string | null;
   icon: string | null;
@@ -43,19 +43,10 @@ interface Task {
   order: number;
 }
 
-const TASKS_KEY = "/api/planner/tasks";
-
 async function readApi<T>(response: Response): Promise<T> {
   const json = await response.json().catch(() => null);
   if (!response.ok || !json?.ok) throw new Error(json?.error || "Planner request failed.");
   return json.data as T;
-}
-
-function taskDueAt(task: Task): number | null {
-  if (!task.dueDate) return null;
-  const date = new Date(task.dueDate);
-  const [hours, minutes] = (task.dueTime || "23:59").split(":").map(Number);
-  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hours, minutes).getTime();
 }
 
 const CATEGORIES = [
@@ -69,36 +60,20 @@ const CATEGORIES = [
   "Custom",
 ];
 
-const PRIORITIES = {
-  low: { label: "Low", color: "#9c9788", bg: "bg-white/[0.04] text-[#9c9788]" },
-  medium: { label: "Medium", color: "#1a9e75", bg: "bg-[#1a9e75]/10 text-[#1a9e75]" },
-  high: { label: "High", color: "#c97d0c", bg: "bg-[#c97d0c]/10 text-[#c97d0c]" },
-  urgent: { label: "Urgent", color: "#e05555", bg: "bg-[#e05555]/10 text-[#e05555]" },
-};
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "today", label: "Today" },
-  { value: "upcoming", label: "Upcoming" },
-  { value: "completed", label: "Completed" },
-  { value: "overdue", label: "Overdue" },
-  { value: "high", label: "High priority" },
-];
+/** The day view, or every task in one list (where they can be dragged into order). */
+type PlannerView = "today" | "all";
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
 export default function PlannerPage() {
-  const { data: tasks = [], isLoading, mutate: mutateTasks } = useSWR<Task[]>(
-    TASKS_KEY,
-    async (url) => {
-      const res = await fetch(url);
-      return readApi<Task[]>(res);
-    },
-    { revalidateOnFocus: true, refreshInterval: 30_000 },
-  );
+  const { data: tasks = [], isLoading, mutate: mutateTasks } = usePlannerTasks<Task>({ revalidateOnFocus: true, refreshInterval: 30_000 });
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [view, setView] = useState<PlannerView>("today");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [category, setCategory] = useState("all");
+  const [highOnly, setHighOnly] = useState(false);
+  const router = useRouter();
   const [sortBy, setSortBy] = useState("manual");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -113,7 +88,12 @@ export default function PlannerPage() {
   }, [pendingDraft]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+  // The folded lines under today's work.
+  const [shown, setShown] = useState({ overdue: false, upcoming: false, done: false });
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [moving, setMoving] = useState(false);
+  // What the last bulk move did, with the way back.
+  const [moved, setMoved] = useState<{ text: string; undo: DueChange[] } | null>(null);
   const remindedTaskIds = useRef<Set<string>>(new Set());
 
   const playReminderSound = useCallback(() => {
@@ -168,7 +148,8 @@ export default function PlannerPage() {
       }
       if (e.key === "/") {
         e.preventDefault();
-        document.getElementById("planner-search")?.focus();
+        setSearchOpen(true);
+        window.setTimeout(() => document.getElementById("planner-search")?.focus(), 0);
       }
     };
 
@@ -176,8 +157,30 @@ export default function PlannerPage() {
     return () => window.removeEventListener("keydown", handleGlobalShortcuts);
   }, []);
 
+  // New task and Make a plan, asked for from Home or the New button.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wantsTask = params.get("new") !== null;
+    const wantsPlan = params.get("plan") !== null;
+    if (!wantsTask && !wantsPlan) return;
+    if (wantsTask) {
+      setEditingTask(null);
+      setIsDialogOpen(true);
+    } else setIsPlanOpen(true);
+    router.replace("/dashboard/planner", { scroll: false });
+  }, [router]);
+
+  // Reordering only makes sense on the whole list in its own order.
+  const canReorder = view === "all" && category === "all" && !highOnly && sortBy === "manual" && !searchQuery.trim() && !selectedDate;
+
+  const handleFocus = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!prepareFocusOnTask(task)) toast("A focus session is already running.");
+    router.push("/dashboard/focus");
+  };
+
   const handleReorder = async (reorderedTasks: Task[]) => {
-    if (sortBy !== "manual" || activeFilter !== "all" || searchQuery.trim() || selectedDate) return;
+    if (!canReorder) return;
     const previousTasks = tasks;
     void mutateTasks(reorderedTasks, { revalidate: false });
 
@@ -261,14 +264,14 @@ export default function PlannerPage() {
 
   const handleShiftDate = async (task: Task, days: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + days);
+    const now = new Date();
+    const change = moveTask(task, new Date(now.getFullYear(), now.getMonth(), now.getDate() + days), now);
 
     try {
       const res = await fetch(`/api/planner/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dueDate: targetDate.toISOString() }),
+        body: JSON.stringify({ dueDate: change.dueDate, dueTime: change.dueTime, today: dayToDueDate(now) }),
       });
       const updated = await readApi<Task>(res);
       void mutateTasks((current = []) => current.map((item) => item.id === updated.id ? updated : item), { revalidate: false });
@@ -278,24 +281,45 @@ export default function PlannerPage() {
     }
   };
 
-  const isToday = (dateStr: string | null) => {
-    if (!dateStr) return false;
-    const d = new Date(dateStr);
-    const today = new Date();
-    return d.getUTCDate() === today.getDate() && d.getUTCMonth() === today.getMonth() && d.getUTCFullYear() === today.getFullYear();
+  /** Gives many tasks new dates in one request; returns whether it worked. */
+  const reschedule = async (changes: DueChange[]) => {
+    const byId = new Map(changes.map((change) => [change.id, change]));
+    const previousTasks = tasks;
+    setMoving(true);
+    void mutateTasks(tasks.map((task) => ({ ...task, ...byId.get(task.id) })), { revalidate: false });
+    try {
+      const res = await fetch("/api/planner/tasks/reschedule", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes, today: dayToDueDate(new Date()) }),
+      });
+      await readApi(res);
+      void mutateTasks();
+      return true;
+    } catch (error) {
+      void mutateTasks(previousTasks, { revalidate: false });
+      toast.error(error instanceof Error ? error.message : "The tasks could not be moved.");
+      return false;
+    } finally {
+      setMoving(false);
+    }
   };
 
-  const isOverdue = (task: Task) => {
-    if (task.status === "completed" || !task.dueDate) return false;
-    const dueAt = taskDueAt(task);
-    return dueAt !== null && dueAt < Date.now();
+  const clearBacklog = async (overdue: Task[], spread: boolean) => {
+    const now = new Date();
+    const changes = spread ? spreadTasks(overdue, now) : overdue.map((task) => moveTask(task, now, now));
+    const count = `${overdue.length} task${overdue.length === 1 ? "" : "s"}`;
+    const undo = previousDates(overdue);
+    setMoved(null);
+    if (await reschedule(changes)) setMoved({ text: spread ? `Spread ${count} over ${SPREAD_DAYS} days.` : `Moved ${count} to today.`, undo });
   };
 
-  const isUpcoming = (task: Task) => {
-    if (task.status === "completed" || !task.dueDate) return false;
-    const dueAt = taskDueAt(task);
-    return dueAt !== null && dueAt >= Date.now();
+  const undoMove = async () => {
+    if (!moved) return;
+    if (await reschedule(moved.undo)) setMoved(null);
   };
+
+  const isOverdue = (task: Task) => isOverdueTask(task, Date.now());
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -312,22 +336,10 @@ export default function PlannerPage() {
       );
     }
 
-    if (selectedDate) {
-      filtered = filtered.filter((t) => {
-        if (!t.dueDate) return false;
-        const d = new Date(t.dueDate);
-        return d.getUTCDate() === selectedDate.getDate() && d.getUTCMonth() === selectedDate.getMonth() && d.getUTCFullYear() === selectedDate.getFullYear();
-      });
-    }
+    if (category !== "all") filtered = filtered.filter((t) => t.category.toLowerCase() === category.toLowerCase());
+    if (highOnly) filtered = filtered.filter((t) => t.priority === "high" || t.priority === "urgent");
 
-    if (!selectedDate) {
-      if (activeFilter === "today") filtered = filtered.filter((t) => isToday(t.dueDate) && t.status !== "completed");
-      else if (activeFilter === "upcoming") filtered = filtered.filter((t) => isUpcoming(t) && !isToday(t.dueDate));
-      else if (activeFilter === "completed") filtered = filtered.filter((t) => t.status === "completed");
-      else if (activeFilter === "overdue") filtered = filtered.filter((t) => isOverdue(t));
-      else if (activeFilter === "high") filtered = filtered.filter((t) => (t.priority === "high" || t.priority === "urgent") && t.status !== "completed");
-      else if (CATEGORIES.includes(activeFilter)) filtered = filtered.filter((t) => t.category.toLowerCase() === activeFilter.toLowerCase());
-    }
+    if (selectedDate) filtered = filtered.filter((t) => isDueOn(t.dueDate, selectedDate));
 
     if (sortBy === "priority") {
       const priorityOrder: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
@@ -343,103 +355,168 @@ export default function PlannerPage() {
     else if (sortBy === "alpha") filtered.sort((a, b) => a.title.localeCompare(b.title));
 
     return filtered;
-  }, [tasks, searchQuery, activeFilter, sortBy, selectedDate]);
+  }, [tasks, searchQuery, category, highOnly, sortBy, selectedDate]);
 
-  const stats = useMemo(() => {
-    if (!tasks) return { today: 0, completed: 0, upcoming: 0, overdue: 0, percent: 0, workload: 0 };
-    const todayTasks = tasks.filter((t) => isToday(t.dueDate));
-    const completedTasks = tasks.filter((t) => t.status === "completed");
-    const upcomingTasks = tasks.filter((t) => isUpcoming(t));
-    const overdueTasks = tasks.filter((t) => isOverdue(t));
-    const todayCompletedCount = todayTasks.filter((t) => t.status === "completed").length;
-    const percent = todayTasks.length > 0 ? Math.round((todayCompletedCount / todayTasks.length) * 100) : 0;
-    const workload = todayTasks.reduce((acc, curr) => acc + (curr.estimatedDuration || 0), 0);
+  // Searching, filtering, picking a day or asking for everything gives one plain list.
+  const filtering = searchQuery.trim() !== "" || category !== "all" || highOnly || sortBy !== "manual";
+  const asList = selectedDate !== null || view === "all" || filtering;
 
+  const day = useMemo(() => {
+    const groups = groupOpenTasks(tasks, new Date());
+    const find = (key: string) => groups.find((group) => group.key === key)?.tasks ?? [];
     return {
-      today: todayTasks.length,
-      completed: completedTasks.length,
-      upcoming: upcomingTasks.length,
-      overdue: overdueTasks.length,
-      percent,
-      workload,
+      today: find("today"),
+      overdue: find("overdue"),
+      upcoming: groups.filter((group) => group.key === "tomorrow" || group.key === "later" || group.key === "someday"),
+      done: tasks.filter((task) => task.status === "completed"),
     };
   }, [tasks]);
+  const upcomingCount = day.upcoming.reduce((total, group) => total + group.tasks.length, 0);
+  const plannedMs = day.today.reduce((total, task) => total + (task.estimatedDuration ?? 0), 0) * 60_000;
 
-  const calendarDays = useMemo(() => {
-    const year = currentCalendarDate.getFullYear();
-    const month = currentCalendarDate.getMonth();
-    const firstDayIndex = new Date(year, month, 1).getDay();
-    const lastDayDate = new Date(year, month + 1, 0).getDate();
-    const daysArr: Array<Date | null> = [];
-
-    for (let i = 0; i < firstDayIndex; i += 1) daysArr.push(null);
-    for (let d = 1; d <= lastDayDate; d += 1) daysArr.push(new Date(year, month, d));
-
-    return daysArr;
-  }, [currentCalendarDate]);
-
-  const getTasksForDay = (date: Date) => {
-    if (!tasks) return [];
-    return tasks.filter((t) => {
-      if (!t.dueDate) return false;
-      const d = new Date(t.dueDate);
-      return d.getUTCDate() === date.getDate() && d.getUTCMonth() === date.getMonth() && d.getUTCFullYear() === date.getFullYear();
-    });
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setCategory("all");
+    setHighOnly(false);
+    setSortBy("manual");
+    setView("today");
   };
 
-  const timelineTasks = useMemo(() => {
-    const target = selectedDate || new Date();
-    if (!tasks) return { morning: [], afternoon: [], evening: [], night: [] };
-
-    const dayTasks = tasks.filter((t) => {
-      if (!t.dueDate || t.status === "completed" || t.status === "cancelled") return false;
-      const d = new Date(t.dueDate);
-      return d.getUTCDate() === target.getDate() && d.getUTCMonth() === target.getMonth() && d.getUTCFullYear() === target.getFullYear();
-    });
-
-    const morning: Task[] = [];
-    const afternoon: Task[] = [];
-    const evening: Task[] = [];
-    const night: Task[] = [];
-
-    dayTasks.forEach((t) => {
-      if (!t.dueTime) {
-        morning.push(t);
-        return;
-      }
-      const hour = parseInt(t.dueTime.split(":")[0], 10);
-      if (hour >= 5 && hour < 12) morning.push(t);
-      else if (hour >= 12 && hour < 17) afternoon.push(t);
-      else if (hour >= 17 && hour < 21) evening.push(t);
-      else night.push(t);
-    });
-
-    const timeSorter = (a: Task, b: Task) => (a.dueTime || "").localeCompare(b.dueTime || "");
-    return {
-      morning: morning.sort(timeSorter),
-      afternoon: afternoon.sort(timeSorter),
-      evening: evening.sort(timeSorter),
-      night: night.sort(timeSorter),
-    };
-  }, [tasks, selectedDate]);
-
-  const statusValue = STATUS_OPTIONS.some((option) => option.value === activeFilter) ? activeFilter : "all";
-  const categoryValue = CATEGORIES.includes(activeFilter) ? activeFilter : "all";
-  const remainingTasks = Math.max(stats.today - Math.round(stats.today * (stats.percent / 100)), 0);
-  const currentMonthLabel = currentCalendarDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
-  const todayLabel = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const shortDate = (date: Date) => date.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
+  const title = selectedDate ? shortDate(selectedDate) : view === "all" ? "All tasks" : filtering ? "Search" : "Today";
+  const subtitle = asList
+    ? `${filteredTasks.length} task${filteredTasks.length === 1 ? "" : "s"}`
+    : [shortDate(new Date()), plannedMs > 0 ? `${focusLabel(plannedMs)} planned` : null].filter(Boolean).join(" · ");
 
   const openCreateDialog = () => {
     setEditingTask(null);
     setIsDialogOpen(true);
   };
 
-  const renderTimelineLine = (label: string, toneClass: string, slotTasks: Task[]) => (
-    <div className={styles.timelineLine}>
-      <span className={cx(styles.timelineDot, toneClass)} />
-      <span>{label}</span>
-      <span className={styles.timelineText}>{slotTasks.length === 0 ? "no tasks" : `${slotTasks.length} task${slotTasks.length === 1 ? "" : "s"}`}</span>
-    </div>
+  const renderTask = (task: Task, next = false) => {
+    const isExpanded = expandedTaskId === task.id;
+    const hasStudyTime = task.estimatedDuration && task.estimatedDuration > 0;
+    const focusProgress = hasStudyTime
+      ? Math.min(Math.round((task.trackedDuration / (task.estimatedDuration! * 60 * 1000)) * 100), 100)
+      : 0;
+
+    return (
+      <Reorder.Item
+        key={task.id}
+        value={task}
+        dragListener={canReorder}
+        // A finger scrolls the list unless the cards can be dragged.
+        style={{ touchAction: canReorder ? "none" : "auto" }}
+        className={cx(styles.taskRow, next && styles.nextTask, isExpanded && styles.openRow, task.status === "completed" && styles.completedTask)}
+      >
+        <div className={styles.taskTopline}>
+          <TaskCheck
+            checked={task.status === "completed"}
+            label={task.status === "completed" ? `Mark not done: ${task.title}` : `Mark done: ${task.title}`}
+            onToggle={(e) => void handleComplete(task, e)}
+          />
+
+          <div
+            className={styles.taskBody}
+            role="button"
+            tabIndex={0}
+            aria-expanded={isExpanded}
+            onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              setExpandedTaskId(isExpanded ? null : task.id);
+            }}
+          >
+            <h3>{task.title}</h3>
+            <div className={styles.taskMeta}>
+              {task.dueDate ? (
+                <span className={isOverdue(task) ? styles.overdueMeta : undefined}>
+                  {[
+                    isDueOn(task.dueDate, new Date()) ? "Today" : new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+                    task.dueTime,
+                  ].filter(Boolean).join(", ")}
+                </span>
+              ) : null}
+              <span>{task.category.charAt(0).toUpperCase() + task.category.slice(1)}</span>
+              {task.estimatedDuration ? <span>{task.estimatedDuration} min</span> : null}
+              {task.priority === "high" || task.priority === "urgent" ? (
+                <span className={task.priority === "urgent" ? styles.urgentMeta : styles.highMeta}>{task.priority === "urgent" ? "Urgent" : "High priority"}</span>
+              ) : null}
+              {task.repeat !== "none" ? <span>Repeats {task.repeat}</span> : null}
+            </div>
+          </div>
+
+          {task.status !== "completed" ? (
+            <button type="button" className={next ? styles.startButton : styles.focusButton} onClick={(e) => handleFocus(task, e)} aria-label={`Focus on ${task.title}`}>
+            <Play aria-hidden="true" />
+            {next ? <span>Start</span> : null}
+          </button>
+          ) : null}
+
+          <div className={styles.more}>
+          <TaskMenu
+            title={task.title}
+            onEdit={(e) => {
+              e.stopPropagation();
+              setEditingTask(task);
+              setIsDialogOpen(true);
+            }}
+            onDuplicate={(e) => void handleDuplicate(task, e)}
+            onToday={(e) => void handleShiftDate(task, 0, e)}
+            onTomorrow={(e) => void handleShiftDate(task, 1, e)}
+            onDelete={(e) => void handleDelete(task.id, e)}
+          />
+        </div>
+        </div>
+
+        <AnimatePresence>
+          {isExpanded && (task.description || hasStudyTime || task.notes) ? (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className={styles.expandedPanel}
+            >
+              {task.description ? <p>{task.description}</p> : null}
+              {hasStudyTime ? (
+                <div className={styles.progressBlock}>
+                  <div>
+                    <span>Focus Study Duration:</span>
+                    <strong>{Math.round(task.trackedDuration / 60000)} Min / {task.estimatedDuration} Min ({focusProgress}%)</strong>
+                  </div>
+                  <div className={styles.progressTrack}><span style={{ width: `${focusProgress}%` }} /></div>
+                </div>
+              ) : null}
+              {task.notes ? (
+                <div className={styles.notesBlock}>
+                  <h4>Notes / Checklists</h4>
+                  <p>{task.notes}</p>
+                </div>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </Reorder.Item>
+    );
+  };
+
+  const renderList = (list: Task[], highlight = false) => (
+    <Reorder.Group axis="y" values={list} onReorder={handleReorder} className={styles.taskList}>
+      {list.map((task, index) => renderTask(task, highlight && index === 0))}
+    </Reorder.Group>
+  );
+
+  const fold = (key: keyof typeof shown, label: React.ReactNode, action: string) => (
+    <button type="button" className={styles.foldLine} aria-expanded={shown[key]} onClick={() => setShown((current) => ({ ...current, [key]: !current[key] }))}>
+      <span className={styles.foldLabel}>{label}</span>
+      <span className={styles.foldAction}>
+        {shown[key] ? "Hide" : action}
+        <ChevronDown size={14} aria-hidden="true" />
+      </span>
+    </button>
   );
 
   return (
@@ -452,287 +529,185 @@ export default function PlannerPage() {
       >
         <header className={styles.header}>
           <div>
-            <div className={styles.titleRow}>
-              <h1>Planner</h1>
-            </div>
-            <p>Organize your day and never miss an important task.</p>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
           </div>
 
           <div className={styles.headerActions}>
-            <div className={styles.dateChip}>{todayLabel}</div>
-            <button className={styles.secondaryButton} onClick={() => setIsPlanOpen(true)}>
-              <RanganLogo size={20} className={styles.ranganIcon} />
-              Plan with Rangan
+            <button
+              type="button"
+              className={cx(styles.iconButton, searchOpen && styles.iconOn)}
+              aria-label={searchOpen ? "Close search and filters" : "Search and filters"}
+              aria-expanded={searchOpen}
+              onClick={() => {
+                if (searchOpen) closeSearch();
+                else {
+                  setSearchOpen(true);
+                  window.setTimeout(() => document.getElementById("planner-search")?.focus(), 0);
+                }
+              }}
+            >
+              <Search size={17} aria-hidden="true" />
             </button>
-            <button className={styles.primaryButton} onClick={openCreateDialog}>
-              <Plus className={styles.buttonIcon} />
-              Add task
+            <button
+              type="button"
+              className={cx(styles.iconButton, monthOpen && styles.iconOn)}
+              aria-label={monthOpen ? "Show only this week" : "Show whole month"}
+              aria-pressed={monthOpen}
+              onClick={() => setMonthOpen((open) => !open)}
+            >
+              <CalendarDays size={17} aria-hidden="true" />
             </button>
+            <AddMenu onNewTask={openCreateDialog} onPlan={() => setIsPlanOpen(true)} />
           </div>
         </header>
 
-        <section className={styles.statsGrid}>
-          <article className={styles.statCard}>
-            <span>Today's Tasks</span>
-            <strong>{stats.today}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <span>Completed</span>
-            <strong className={styles.greenText}>{stats.completed}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <span>Upcoming</span>
-            <strong className={styles.purpleText}>{stats.upcoming}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <span>Overdue</span>
-            <strong className={styles.redText}>{stats.overdue}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <span>Completion</span>
-            <strong className={styles.orangeText}>{stats.percent}%</strong>
-          </article>
-        </section>
-
-        <section className={styles.controlsGrid}>
-          <label className={styles.compactControl}>
-            <span>Status :</span>
-            <select
-              value={statusValue}
-              onChange={(e) => {
-                setSelectedDate(null);
-                setActiveFilter(e.target.value);
-              }}
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.compactControl}>
-            <span>Category :</span>
-            <select
-              value={categoryValue}
-              onChange={(e) => {
-                setSelectedDate(null);
-                setActiveFilter(e.target.value === "all" ? "all" : e.target.value);
-              }}
-            >
-              <option value="all">All</option>
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </label>
-
-          <div className={styles.searchSortControl}>
+        {searchOpen ? (
+          <div className={styles.filterRow}>
             <div className={styles.searchBox}>
               <Search className={styles.searchIcon} />
               <input
                 id="planner-search"
+                aria-label="Search tasks"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by title, category, priority..."
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") closeSearch();
+                }}
+                placeholder="Search tasks..."
               />
             </div>
-            <label className={styles.sortControl}>
-              <span>Sort:</span>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                <option value="manual">Manual Order</option>
-                <option value="priority">Priority</option>
-                <option value="dueDate">Due Date</option>
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="alpha">Alphabetical</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
-        {selectedDate ? (
-          <div className={styles.dateFilterNotice}>
-            <span>Showing tasks for {selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-            <button onClick={() => setSelectedDate(null)}>Clear date filter</button>
+            <FilterPopover
+              active={[view === "all", category !== "all", highOnly, sortBy !== "manual"].filter(Boolean).length}
+              onClear={() => {
+                setView("today");
+                setCategory("all");
+                setHighOnly(false);
+                setSortBy("manual");
+              }}
+            >
+              <FilterField label="Show">
+                <select
+                  value={view}
+                  onChange={(e) => {
+                    setSelectedDate(null);
+                    setView(e.target.value === "all" ? "all" : "today");
+                  }}
+                >
+                  <option value="today">Today</option>
+                  <option value="all">All tasks (drag to reorder)</option>
+                </select>
+              </FilterField>
+              <FilterField label="Category">
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="all">All</option>
+                  {CATEGORIES.map((entry) => (
+                    <option key={entry} value={entry}>{entry}</option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="Priority">
+                <select value={highOnly ? "high" : "all"} onChange={(e) => setHighOnly(e.target.value === "high")}>
+                  <option value="all">Any priority</option>
+                  <option value="high">High and urgent only</option>
+                </select>
+              </FilterField>
+              <FilterField label="Sort by">
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                  <option value="manual">Manual Order</option>
+                  <option value="priority">Priority</option>
+                  <option value="dueDate">Due Date</option>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="alpha">Alphabetical</option>
+                </select>
+              </FilterField>
+            </FilterPopover>
           </div>
         ) : null}
 
-        <main className={styles.mainGrid}>
-          <section className={styles.taskSurface}>
-            {isLoading ? (
-              <div className={styles.loadingStack}>
-                <div />
-                <div />
-                <div />
-              </div>
-            ) : filteredTasks.length === 0 ? (
-              <div className={styles.emptyState}>
-                <ClipboardCheck className={styles.emptyIcon} />
-                <h2>No Tasks Scheduled</h2>
-                <p>Create high-impact goals, tasks, and reminders<br />to structure your workspace.</p>
-                <button className={styles.quickButton} onClick={openCreateDialog}>
-                  <Plus className={styles.quickIcon} />
-                  Quick add task
-                </button>
-              </div>
-            ) : (
-              <Reorder.Group axis="y" values={filteredTasks} onReorder={handleReorder} className={styles.taskList}>
-                {filteredTasks.map((task) => {
-                  const isExpanded = expandedTaskId === task.id;
-                  const priority = PRIORITIES[task.priority as keyof typeof PRIORITIES] || PRIORITIES.medium;
-                  const hasStudyTime = task.estimatedDuration && task.estimatedDuration > 0;
-                  const focusProgress = hasStudyTime
-                    ? Math.min(Math.round((task.trackedDuration / (task.estimatedDuration! * 60 * 1000)) * 100), 100)
-                    : 0;
+        <main className={styles.column}>
+          <PlannerFocusCard />
 
-                  return (
-                    <Reorder.Item
-                      key={task.id}
-                      value={task}
-                      dragListener={sortBy === "manual" && activeFilter === "all" && !searchQuery.trim() && !selectedDate}
-                      style={{ touchAction: "none" }}
-                      className={cx(styles.taskCard, task.status === "completed" && styles.completedTask, isExpanded && styles.expandedTask)}
-                    >
-                      <div className={styles.taskTopline}>
-                        <button
-                          onClick={(e) => void handleComplete(task, e)}
-                          className={cx(styles.checkButton, task.status === "completed" && styles.checkedButton)}
-                          aria-label="Toggle complete"
-                        >
-                          <CheckCircle />
-                        </button>
+          {monthOpen ? (
+            <StudyCalendar tasks={tasks} selectedDate={selectedDate} onSelect={setSelectedDate} />
+          ) : (
+            <StudyWeek tasks={tasks} selectedDate={selectedDate} onSelect={setSelectedDate} />
+          )}
 
-                        <div className={styles.taskBody} onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}>
-                          <h3>{task.title}</h3>
-                          <div className={styles.taskMeta}>
-                            <span className={priority.bg}>{priority.label}</span>
-                            <span><Tag />{task.category}</span>
-                            {task.dueDate ? (
-                              <span className={isOverdue(task) ? styles.overdueMeta : undefined}>
-                                <Calendar />
-                                {new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                {task.dueTime ? ` @ ${task.dueTime}` : ""}
-                              </span>
-                            ) : null}
-                            {task.repeat !== "none" ? <span className={styles.repeatMeta}>{task.repeat}</span> : null}
+          {moved ? (
+            <div className={styles.movedNotice} role="status">
+              <span>{moved.text}</span>
+              <button type="button" disabled={moving} onClick={() => void undoMove()}>Undo</button>
+              <button type="button" aria-label="Dismiss" onClick={() => setMoved(null)}><X size={14} aria-hidden="true" /></button>
+            </div>
+          ) : null}
+
+          {isLoading ? (
+            <PageLoader label="Opening your planner" />
+          ) : tasks.length === 0 || (asList && filteredTasks.length === 0) ? (
+            <div className={styles.emptyState}>
+              <ClipboardCheck className={styles.emptyIcon} />
+              <h2>{tasks.length === 0 ? "No Tasks Scheduled" : "Nothing here"}</h2>
+              <p>{tasks.length === 0 ? "Create goals, tasks and reminders to plan your study." : "Try another day, or clear the search and filters."}</p>
+              {selectedDate ? (
+                <button type="button" className={styles.quietButton} onClick={() => setSelectedDate(null)}>Back to today</button>
+              ) : null}
+              <button className={styles.quickButton} onClick={openCreateDialog}>
+                <Plus className={styles.quickIcon} />
+                Quick add task
+              </button>
+            </div>
+          ) : asList ? (
+            <section>
+              {selectedDate ? (
+                <button type="button" className={styles.quietButton} onClick={() => setSelectedDate(null)}>Back to today</button>
+              ) : null}
+              {renderList(filteredTasks)}
+            </section>
+          ) : (
+            <>
+              <section aria-label="Due today">
+                {day.today.length ? renderList(day.today, true) : <p className={styles.clearDay}>Nothing due today.</p>}
+              </section>
+
+              <div className={styles.folds}>
+                {day.overdue.length ? (
+                  <section>
+                    {fold("overdue", <><i className={styles.attention} aria-hidden="true" />{day.overdue.length} overdue task{day.overdue.length === 1 ? "" : "s"}</>, "Review")}
+                    {shown.overdue ? (
+                      <>
+                        <div className={styles.backlog}>
+                          <button type="button" disabled={moving} onClick={() => void clearBacklog(day.overdue, false)}>Move to today</button>
+                          <button type="button" disabled={moving} onClick={() => void clearBacklog(day.overdue, true)}>Spread over {SPREAD_DAYS} days</button>
+                        </div>
+                        {renderList(day.overdue)}
+                      </>
+                    ) : null}
+                  </section>
+                ) : null}
+                {upcomingCount ? (
+                  <section>
+                    {fold("upcoming", `${upcomingCount} upcoming`, "Show")}
+                    {shown.upcoming
+                      ? day.upcoming.map((group) => (
+                          <div key={group.key}>
+                            <h2 className={styles.groupLabel}>{group.label}</h2>
+                            {renderList(group.tasks)}
                           </div>
-                        </div>
-
-                        <div className={styles.taskActions}>
-                          <button onClick={(e) => { e.stopPropagation(); setEditingTask(task); setIsDialogOpen(true); }} title="Edit"><Edit2 /></button>
-                          <button onClick={(e) => void handleDuplicate(task, e)} title="Duplicate"><Copy /></button>
-                          <button onClick={(e) => void handleShiftDate(task, 0, e)}>Today</button>
-                          <button onClick={(e) => void handleShiftDate(task, 1, e)}>Tomorrow</button>
-                          <button onClick={(e) => void handleDelete(task.id, e)} title="Delete"><Trash2 /></button>
-                        </div>
-                      </div>
-
-                      <AnimatePresence>
-                        {isExpanded ? (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className={styles.expandedPanel}
-                          >
-                            {task.description ? <p>{task.description}</p> : null}
-                            {hasStudyTime ? (
-                              <div className={styles.progressBlock}>
-                                <div>
-                                  <span>Focus Study Duration:</span>
-                                  <strong>{Math.round(task.trackedDuration / 60000)} Min / {task.estimatedDuration} Min ({focusProgress}%)</strong>
-                                </div>
-                                <div className={styles.progressTrack}><span style={{ width: `${focusProgress}%` }} /></div>
-                              </div>
-                            ) : null}
-                            {task.notes ? (
-                              <div className={styles.notesBlock}>
-                                <h4>Notes / Checklists</h4>
-                                <p>{task.notes}</p>
-                              </div>
-                            ) : null}
-                          </motion.div>
-                        ) : null}
-                      </AnimatePresence>
-                    </Reorder.Item>
-                  );
-                })}
-              </Reorder.Group>
-            )}
-          </section>
-
-          <aside className={styles.sidebarRail}>
-            <section className={styles.calendarCard}>
-              <div className={styles.cardHeaderRow}>
-                <h2>{currentMonthLabel}</h2>
-                <div>
-                  <button
-                    onClick={() => {
-                      const d = new Date(currentCalendarDate);
-                      d.setMonth(d.getMonth() - 1);
-                      setCurrentCalendarDate(d);
-                    }}
-                    aria-label="Previous month"
-                  >
-                    <ChevronLeft />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const d = new Date(currentCalendarDate);
-                      d.setMonth(d.getMonth() + 1);
-                      setCurrentCalendarDate(d);
-                    }}
-                    aria-label="Next month"
-                  >
-                    <ChevronRight />
-                  </button>
-                </div>
+                        ))
+                      : null}
+                  </section>
+                ) : null}
+                {day.done.length ? (
+                  <section>
+                    {fold("done", `${day.done.length} done`, "Show")}
+                    {shown.done ? renderList(day.done) : null}
+                  </section>
+                ) : null}
               </div>
-
-              <div className={styles.calendarGrid}>
-                {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
-                {calendarDays.map((day, index) => {
-                  if (!day) return <i key={`empty-${index}`} />;
-
-                  const isSelected = selectedDate && day.getDate() === selectedDate.getDate() && day.getMonth() === selectedDate.getMonth() && day.getFullYear() === selectedDate.getFullYear();
-                  const isTodayDay = day.getDate() === new Date().getDate() && day.getMonth() === new Date().getMonth() && day.getFullYear() === new Date().getFullYear();
-                  const dayTasks = getTasksForDay(day);
-
-                  return (
-                    <button
-                      key={day.toISOString()}
-                      onClick={() => setSelectedDate(isSelected ? null : day)}
-                      className={cx(isSelected && styles.selectedDay, isTodayDay && !isSelected && styles.todayDay)}
-                    >
-                      {day.getDate()}
-                      {dayTasks.length > 0 && !isSelected ? <em /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className={styles.sideCard}>
-              <h2>Timeline</h2>
-              <div className={styles.timelineList}>
-                {renderTimelineLine("Morning", styles.greenDot, timelineTasks.morning)}
-                {renderTimelineLine("Afternoon", styles.orangeDot, timelineTasks.afternoon)}
-                {renderTimelineLine("Evening", styles.purpleDot, timelineTasks.evening)}
-                {renderTimelineLine("Night", styles.redDot, timelineTasks.night)}
-              </div>
-            </section>
-
-            <section className={styles.sideCard}>
-              <h2>Productivity</h2>
-              <div className={styles.productivityRows}>
-                <div><span>Completed today</span><strong className={styles.greenText}>{stats.percent}%</strong></div>
-                <div><span>Remaining tasks</span><strong>{remainingTasks}</strong></div>
-                <div><span>Overdue tasks</span><strong className={styles.redText}>{stats.overdue}</strong></div>
-                <div><span>Workload today</span><strong>{stats.workload} min</strong></div>
-              </div>
-            </section>
-          </aside>
+            </>
+          )}
         </main>
       </motion.div>
 

@@ -1,7 +1,9 @@
 "use client";
 
+import { usePlannerTasks } from "@/hooks/use-planner-tasks";
+import { useSessionTitle } from "@/hooks/use-session-title";
 import { useEffect, useRef, useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
 import { toast } from "react-hot-toast";
 import {
   useFocusStore,
@@ -92,16 +94,12 @@ function playCompletionAlert() {
 
 // ─── Global Focus Session Manager ────────────────────────────
 export function FocusSessionManager() {
+  useSessionTitle();
   const pendingCompletion = useFocusStore((s) => s.pendingCompletion);
   const completionProcessed = useRef(false);
 
   // Fetch tasks to cross-reference completed study time
-  const { data: tasks } = useSWR<Task[]>("/api/planner/tasks", async (url: string) => {
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.ok ? json.data : [];
-  });
+  const { data: tasks } = usePlannerTasks<Task>();
 
   const [completedTaskPrompt, setCompletedTaskPrompt] = useState<Task | null>(null);
   const [isPromptSubmitting, setIsPromptSubmitting] = useState(false);

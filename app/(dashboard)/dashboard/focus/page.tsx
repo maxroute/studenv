@@ -1,7 +1,7 @@
 "use client";
 
+import { usePlannerTasks } from "@/hooks/use-planner-tasks";
 import { ChangeEvent, useEffect, useRef, useState, useMemo } from "react";
-import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   Clock3,
@@ -20,13 +20,14 @@ import {
   Compass,
   SlidersHorizontal,
   X,
-  PictureInPicture,
   Pencil,
   Check,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import useSWR, { mutate } from "swr";
+import { ClockDigits } from "@/components/ui/clock-digits";
 import { useFocusStore } from "@/hooks/useFocusStore";
+import { useZenMode } from "@/hooks/use-zen-mode";
 import { flushPendingSessions } from "@/lib/client/focus-persist";
 
 const fetcher = async (url: string) => {
@@ -40,6 +41,8 @@ const fetcher = async (url: string) => {
 };
 
 type SessionType = "focus" | "shortBreak" | "longBreak";
+/** What the task picker needs from a planner task. */
+type PlannerTaskOption = { id: string; title: string; category: string; status: string };
 type AmbientTrack = "Rain" | "White Noise" | "Custom";
 
 type SessionLogEntry = {
@@ -201,12 +204,8 @@ export default function FocusPage() {
   const customAmbientAudioRef = useRef<HTMLAudioElement | null>(null);
   const endAlertCleanupRef = useRef<(() => void) | null>(null);
   const customAmbientInputRef = useRef<HTMLInputElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasStreamRef = useRef<MediaStream | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
-  const [pipWindow, setPipWindow] = useState<Window | null>(null);
   // ─── Timer state from global store (survives navigation) ──
   const activeSession = useFocusStore((s) => s.activeSession);
   const selectedType = useFocusStore((s) => s.selectedType);
@@ -220,8 +219,7 @@ export default function FocusPage() {
   const setTaskId = useFocusStore((s) => s.setTaskId);
   
   // Fetch tasks for linking
-  const { data: tasksData } = useSWR<any>("/api/planner/tasks", fetcher);
-  const plannerTasks = tasksData?.ok ? (tasksData.data as any[]) : [];
+  const { data: plannerTasks = [] } = usePlannerTasks<PlannerTaskOption>();
   const activeTasks = plannerTasks.filter((t) => t.status !== "completed");
 
   const isActive = activeSession !== null && activeSession.pausedAt === null;
@@ -251,7 +249,7 @@ export default function FocusPage() {
   const [customAmbientSrc, setCustomAmbientSrc] = useState("");
   const [customAmbientName, setCustomAmbientName] = useState("");
   const [activeTab, setActiveTab] = useState<"session" | "sounds" | "stats">("session");
-  const [isZenMode, setIsZenMode] = useState(false);
+  const { zen: isZenMode, toggle: toggleZenMode } = useZenMode();
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const autoStartBreaks = useFocusStore((s) => s.autoStartBreaks);
   const setAutoStartBreaks = useFocusStore((s) => s.setAutoStartBreaks);
@@ -375,84 +373,6 @@ export default function FocusPage() {
       }
     };
   }, [customAmbientSrc]);
-
-  // Live Canvas drawing for background auto Picture-in-Picture
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Draw dark premium background
-    ctx.fillStyle = "#0e0e0d";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Header styling
-    ctx.fillStyle = selectedType === "focus" ? "#c97d0c" : (selectedType === "shortBreak" ? "#1a9e75" : "#8878d4");
-    ctx.font = "bold 13px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(selectedType === "focus" ? "FOCUS BLOCK" : (selectedType === "shortBreak" ? "SHORT BREAK" : "LONG BREAK"), canvas.width / 2, 45);
-
-    // Render Intention/Goal if focus mode
-    ctx.fillStyle = "#9c9788";
-    ctx.font = "italic 11px sans-serif";
-    if (selectedType === "focus" && (sessionGoal || goal)) {
-      const displayGoal = (sessionGoal || goal).length > 25 ? (sessionGoal || goal).substring(0, 22) + "..." : (sessionGoal || goal);
-      ctx.fillText(`"${displayGoal}"`, canvas.width / 2, 70);
-    } else {
-      ctx.fillText("Second Brain Session", canvas.width / 2, 70);
-    }
-
-    // Time display
-    ctx.fillStyle = "#e4dfcf";
-    ctx.font = "bold 44px monospace";
-    const minStr = String(Math.floor(timeLeft / 60)).padStart(2, "0");
-    const secStr = String(timeLeft % 60).padStart(2, "0");
-    ctx.fillText(`${minStr}:${secStr}`, canvas.width / 2, 130);
-
-    // Premium border
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
-  }, [timeLeft, selectedType, goal, sessionGoal]);
-
-  // Capture canvas stream into hidden video
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    try {
-      const stream = canvas.captureStream(5); // 5 FPS
-      canvasStreamRef.current = stream;
-      
-      const video = videoRef.current;
-      if (video) {
-        video.srcObject = stream;
-        video.play().catch(() => {});
-      }
-    } catch (e) {
-      console.error("Canvas stream capture failed:", e);
-    }
-  }, []);
-
-  // Auto-PiP on Visibility Change
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "hidden" && isActive && !pipWindow) {
-        const video = videoRef.current;
-        if (video && !document.pictureInPictureElement) {
-          try {
-            await video.requestPictureInPicture();
-          } catch (e) {
-            console.log("Auto-PiP on visibility change blocked/failed:", e);
-          }
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [isActive, pipWindow]);
 
   useEffect(() => {
     async function syncAmbient() {
@@ -620,83 +540,6 @@ export default function FocusPage() {
     useFocusStore.getState().skipSession();
   }
 
-  const startPictureInPicture = async () => {
-    if (!("documentPictureInPicture" in window)) {
-      // Document PiP fallback to standard canvas-video PiP
-      const video = videoRef.current;
-      if (video) {
-        try {
-          await video.requestPictureInPicture();
-          toast.success("Opened standard Picture-in-Picture");
-        } catch (err) {
-          console.error("Video PiP failed:", err);
-          toast.error("Picture-in-Picture is not supported in your browser.");
-        }
-      } else {
-        toast.error("Picture-in-Picture is not supported in your browser.");
-      }
-      return;
-    }
-
-    if (pipWindow) {
-      pipWindow.close();
-      return;
-    }
-
-    try {
-      const w = await (window as any).documentPictureInPicture.requestWindow({
-        width: 380,
-        height: 280,
-      });
-
-      // Copy style sheets
-      Array.from(document.styleSheets).forEach((styleSheet) => {
-        try {
-          let cssRules = "";
-          try {
-            cssRules = Array.from(styleSheet.cssRules)
-              .map((rule) => rule.cssText)
-              .join("");
-          } catch (e) {
-            console.warn("CORS issue accessing stylesheet rules:", styleSheet.href);
-          }
-
-          if (cssRules) {
-            const style = w.document.createElement("style");
-            style.textContent = cssRules;
-            w.document.head.appendChild(style);
-          } else if (styleSheet.href) {
-            const link = w.document.createElement("link");
-            link.rel = "stylesheet";
-            link.href = styleSheet.href;
-            w.document.head.appendChild(link);
-          }
-        } catch (e) {
-          console.error("Failed to copy stylesheet:", e);
-        }
-      });
-      document.querySelectorAll("style").forEach((styleEl) => {
-        try {
-          w.document.head.appendChild(styleEl.cloneNode(true));
-        } catch (e) {
-          console.error(e);
-        }
-      });
-
-      w.document.body.className = "bg-[#0e0e0d] text-[#ddd8cc] flex flex-col items-center justify-between h-full w-full overflow-hidden p-4 select-none";
-      w.document.title = "Focus Timer";
-
-      w.addEventListener("pagehide", () => {
-        setPipWindow(null);
-      });
-
-      setPipWindow(w);
-      toast.success("Picture-in-Picture opened");
-    } catch (err) {
-      console.error("Failed to open Document PiP:", err);
-      toast.error("Failed to open Picture-in-Picture window.");
-    }
-  };
 
   const { data: analyticsData } = useSWR("/api/analytics", fetcher, {
     revalidateOnFocus: true,
@@ -808,7 +651,7 @@ export default function FocusPage() {
           style={{ right: isZenMode ? "1.5rem" : "26rem" }}
         >
           <button
-            onClick={() => setIsZenMode(!isZenMode)}
+            onClick={toggleZenMode}
             className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-[#161612]/60 px-3.5 py-2 text-[11px] font-medium tracking-[0.06em] text-[#9c9788] backdrop-blur-md transition-all duration-300 hover:border-white/[0.18] hover:bg-[#161612]/90 hover:text-[#e4dfcf]"
             aria-label={isZenMode ? "Exit Zen Mode" : "Enter Zen Mode"}
           >
@@ -839,7 +682,7 @@ export default function FocusPage() {
         </button>
 
         <button
-          onClick={() => setIsZenMode(!isZenMode)}
+          onClick={toggleZenMode}
           className="focus-mobile-zen absolute bottom-6 right-6 z-10 flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-[#161612]/60 px-3.5 py-2 text-[11px] font-medium tracking-[0.06em] text-[#9c9788] backdrop-blur-md transition-all duration-300 hover:border-white/[0.18] hover:bg-[#161612]/90 hover:text-[#e4dfcf] lg:hidden"
           aria-label={isZenMode ? "Exit Zen Mode" : "Enter Zen Mode"}
           title={isZenMode ? "Exit Zen Mode" : "Zen Mode"}
@@ -877,7 +720,7 @@ export default function FocusPage() {
 
           {/* Mode Selector Pill: Fades out in Zen Mode */}
           <div 
-            className={`focus-mode-selector mb-10 flex w-full max-w-[380px] overflow-hidden rounded-full border border-white/[0.06] bg-[#1b1b16]/75 p-[3px] backdrop-blur-sm transition-all duration-500 ${
+            className={`focus-mode-selector mb-10 flex w-full max-w-[380px] shrink-0 overflow-hidden rounded-full border border-white/[0.06] bg-[#1b1b16]/75 p-[3px] backdrop-blur-sm transition-all duration-500 ${
               isZenMode ? "opacity-0 -translate-y-4 pointer-events-none" : "opacity-100"
             }`}
           >
@@ -932,7 +775,7 @@ export default function FocusPage() {
                 {selectedType === "focus" ? "Work / Focus" : SESSION_LABELS[selectedType]}
               </div>
               <div className="focus-timer-time font-[family:var(--font-fraunces)] text-[56px] font-normal leading-none tracking-tight text-[#e4dfcf]">
-                {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+                <ClockDigits value={`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`} />
               </div>
               <div className="mt-2 text-[10.5px] font-medium text-[#5c5a52]">
                 {durations[selectedType]} min
@@ -966,13 +809,6 @@ export default function FocusPage() {
               title="Skip session"
             >
               <SkipForward className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => void startPictureInPicture()}
-              className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-white/[0.08] bg-[#161612]/40 text-[#9c9788] backdrop-blur-sm transition-all duration-200 hover:border-white/[0.18] hover:bg-white/[0.04] hover:text-[#e4dfcf] active:scale-95"
-              title="Picture in Picture"
-            >
-              <PictureInPicture className="h-4 w-4" />
             </button>
           </div>
 
@@ -1070,7 +906,7 @@ export default function FocusPage() {
                           const val = e.target.value || null;
                           setTaskId(val);
                           if (val) {
-                            const task = activeTasks.find((t: any) => t.id === val);
+                            const task = activeTasks.find((t) => t.id === val);
                             if (task) {
                               setGoal(task.title);
                             }
@@ -1080,7 +916,7 @@ export default function FocusPage() {
                         className="w-full appearance-none rounded-[10px] border border-white/[0.06] bg-[#1b1b16]/80 px-3.5 py-2.5 text-[12.5px] text-[#e4dfcf] focus:border-[rgba(201,125,12,0.35)] focus:outline-none transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">None / General Focus</option>
-                        {activeTasks.map((t: any) => (
+                        {activeTasks.map((t) => (
                           <option key={t.id} value={t.id}>
                             [{t.category}] {t.title}
                           </option>
@@ -1533,45 +1369,6 @@ export default function FocusPage() {
           </div>
         </aside>
         
-        {/* Hidden canvas and video for fallback and auto PiP */}
-        <canvas 
-          ref={canvasRef} 
-          width={300} 
-          height={200} 
-          style={{ display: "none" }} 
-        />
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{ 
-            position: "fixed", 
-            top: 0, 
-            left: 0, 
-            width: "1px", 
-            height: "1px", 
-            opacity: 0.001, 
-            pointerEvents: "none" 
-          }}
-        />
-
-        {pipWindow && (
-          <PictureInPicturePortal pipWindow={pipWindow}>
-            <FocusPipUI
-              selectedType={selectedType}
-              timeLeft={timeLeft}
-              isActive={isActive}
-              goal={goal}
-              sessionGoal={sessionGoal}
-              toggleTimer={toggleTimer}
-              resetTimer={resetTimer}
-              skipSession={skipSession}
-              onClose={() => pipWindow.close()}
-            />
-          </PictureInPicturePortal>
-        )}
-
         {/* History Modal Overlay */}
         {isHistoryOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
@@ -1930,103 +1727,3 @@ function playTimerEndAlert(
     });
   };
 }
-
-function PictureInPicturePortal({
-  pipWindow,
-  children,
-}: {
-  pipWindow: Window;
-  children: React.ReactNode;
-}) {
-  return createPortal(children, pipWindow.document.body);
-}
-
-const FocusPipUI = ({
-  selectedType,
-  timeLeft,
-  isActive,
-  goal,
-  sessionGoal,
-  toggleTimer,
-  resetTimer,
-  skipSession,
-  onClose,
-}: {
-  selectedType: SessionType;
-  timeLeft: number;
-  isActive: boolean;
-  goal: string;
-  sessionGoal: string;
-  toggleTimer: () => void;
-  resetTimer: () => void;
-  skipSession: () => void;
-  onClose: () => void;
-}) => {
-  const minStr = String(Math.floor(timeLeft / 60)).padStart(2, "0");
-  const secStr = String(timeLeft % 60).padStart(2, "0");
-
-  return (
-    <div className="w-full h-full flex flex-col justify-between bg-[#0e0e0d] text-[#ddd8cc] p-4 select-none font-sans">
-      <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2 w-full text-left">
-        <span className="text-xs font-semibold text-[#ffd000] truncate max-w-[200px]">Focus Session</span>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono uppercase font-bold ${
-          selectedType === "focus"
-            ? "bg-[rgba(201,125,12,0.13)] text-[#c97d0c] border border-[rgba(201,125,12,0.25)]"
-            : "bg-[rgba(26,158,117,0.13)] text-[#1a9e75] border border-[rgba(26,158,117,0.25)]"
-        }`}>
-          {selectedType === "focus" ? "Focus" : "Break"}
-        </span>
-      </div>
-
-      <div className="flex-1 w-full min-h-0 flex flex-col items-center justify-center py-2">
-        {selectedType === "focus" && (sessionGoal || goal) && (
-          <p className="text-[11px] text-[#9c9788] italic mb-2 text-center truncate w-full">
-            "{sessionGoal || goal}"
-          </p>
-        )}
-        <span className="text-4xl font-extrabold tracking-tight font-mono text-[#e4dfcf]">
-          {minStr}:{secStr}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-center gap-3 mt-2 w-full border-t border-white/5 pt-2">
-        <button
-          onClick={resetTimer}
-          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-[#ddd8cc] transition-all"
-          title="Reset Timer"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-        </button>
-        <button
-          onClick={toggleTimer}
-          className={`p-2.5 rounded-full transition-all ${
-            isActive
-              ? "bg-white/10 hover:bg-white/20 text-[#e4dfcf]"
-              : "bg-[#c97d0c] hover:bg-[#b56d09] text-black"
-          }`}
-          title={isActive ? "Pause" : "Start"}
-        >
-          {isActive ? (
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
-          ) : (
-            <svg className="h-4 w-4 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          )}
-        </button>
-        <button
-          onClick={skipSession}
-          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-[#ddd8cc] transition-all"
-          title="Skip Session"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-        </button>
-        <button
-          onClick={onClose}
-          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all ml-auto"
-          title="Close PiP"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M10 14l-7 7"/></svg>
-        </button>
-      </div>
-    </div>
-  );
-};

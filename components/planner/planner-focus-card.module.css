@@ -1,0 +1,17 @@
+/* One slim strip: time and task, then its two controls. */
+.card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; border: 1px solid var(--amber-dim); border-radius: 12px; background: var(--surface); padding: 10px 14px; color: var(--text); }
+.head { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 10px; }
+.head h2 { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.head a { display: inline-flex; min-height: 24px; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; text-decoration: none; }
+.head a:hover { color: var(--amber); }
+.time { font-size: 24px; font-weight: 600; line-height: 1; }
+.goal { margin: 0; overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.track { order: 1; grid-column: 1 / -1; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 2px; background: var(--surface3); }
+.track span { display: block; height: 100%; background: var(--amber); }
+.actions { display: flex; gap: 6px; }
+.actions button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; border: 1px solid var(--border2); border-radius: 8px; background: transparent; padding: 0 11px; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+
+/* On phones the bar above the tabs already shows the running session. */
+@media (max-width: 767px) {
+  .card.card { display: none; }
+}

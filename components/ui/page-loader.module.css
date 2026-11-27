@@ -1,0 +1,87 @@
+.loader { position: relative; width: 100%; height: 100%; min-height: 320px; flex: 1; overflow: hidden; }
+.full { height: 100vh; height: 100dvh; background: var(--bg); }
+
+.outlines, .center { opacity: 0; animation: fadeIn 0.25s ease 0.15s forwards; }
+
+.outlines { display: flex; max-width: 1080px; flex-direction: column; gap: 22px; margin: 0 auto; padding: 36px 32px; }
+.outlines span { position: relative; display: block; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 14px; background: rgba(255, 255, 255, 0.018); }
+.outlines span::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.035) 50%, transparent 65%); transform: translateX(-100%); animation: sweep 1.8s ease-in-out infinite; }
+.outlines .title { width: min(220px, 50%); height: 30px; border-radius: 8px; }
+.outlines div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.outlines div span { height: 128px; }
+
+.center { position: absolute; top: 50%; left: 50%; display: flex; width: max-content; max-width: 90%; flex-direction: column; align-items: center; gap: 16px; transform: translate(-50%, -50%); }
+.label { color: var(--muted); font-family: var(--font-dm-mono), monospace; font-size: 10.5px; letter-spacing: 0.16em; text-align: center; text-transform: uppercase; }
+
+.mark { overflow: visible; }
+.disc { fill: #ffd814; transform-box: fill-box; transform-origin: center; animation: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.15s both; }
+.spin { transform-origin: 141px 141px; animation: turn 2.2s cubic-bezier(0.65, 0, 0.25, 1) 0.15s infinite; }
+.arrow { fill: none; stroke: #050505; stroke-width: 13; stroke-linecap: round; stroke-dasharray: 1; animation: draw 2.2s ease-in-out 0.15s infinite; }
+/* Each head leads its arm: it rides the tip and turns with the curve. Linear here,
+   because the keyframes already follow the arm's own ease. */
+.head { fill: none; stroke: #050505; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; animation: leadTop 2.2s linear 0.15s infinite; }
+.head + .head { animation-name: leadBottom; }
+.dot { fill: #050505; }
+
+@keyframes fadeIn { to { opacity: 1; } }
+@keyframes sweep { to { transform: translateX(100%); } }
+@keyframes pop { from { opacity: 0; transform: scale(0.14); } to { opacity: 1; transform: scale(1); } }
+@keyframes turn { 0%, 55% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes draw { 0% { stroke-dashoffset: 1; } 40%, 100% { stroke-dashoffset: 0; } }
+/* Worked out from the arm's curve by lib/client/arrow-lead.ts. */
+@keyframes leadTop {
+  0% { opacity: 0; transform: translate(111.5px, 142.5px) rotate(-167.92deg) translate(-151px, -54px); }
+  2% { transform: translate(110.84px, 142.28px) rotate(-166.98deg) translate(-151px, -54px); }
+  4% { transform: translate(108.82px, 141.52px) rotate(-163.83deg) translate(-151px, -54px); }
+  6% { opacity: 1; transform: translate(105.48px, 139.96px) rotate(-158.16deg) translate(-151px, -54px); }
+  8% { transform: translate(101px, 137.17px) rotate(-150.03deg) translate(-151px, -54px); }
+  10% { transform: translate(95.84px, 132.63px) rotate(-139.42deg) translate(-151px, -54px); }
+  12% { transform: translate(90.75px, 125.93px) rotate(-127.07deg) translate(-151px, -54px); }
+  14% { transform: translate(86.7px, 116.97px) rotate(-113.66deg) translate(-151px, -54px); }
+  16% { transform: translate(84.66px, 106.12px) rotate(-99.64deg) translate(-151px, -54px); }
+  18% { transform: translate(85.44px, 94.24px) rotate(-84.98deg) translate(-151px, -54px); }
+  20% { transform: translate(89.41px, 82.52px) rotate(-69.59deg) translate(-151px, -54px); }
+  22% { transform: translate(96.32px, 72.26px) rotate(-55.04deg) translate(-151px, -54px); }
+  24% { transform: translate(105.13px, 64.25px) rotate(-41.76deg) translate(-151px, -54px); }
+  26% { transform: translate(114.73px, 58.79px) rotate(-29.8deg) translate(-151px, -54px); }
+  28% { transform: translate(124.05px, 55.6px) rotate(-20.27deg) translate(-151px, -54px); }
+  30% { transform: translate(132.34px, 54.06px) rotate(-13.16deg) translate(-151px, -54px); }
+  32% { transform: translate(139.19px, 53.53px) rotate(-7.87deg) translate(-151px, -54px); }
+  34% { transform: translate(144.47px, 53.54px) rotate(-4.21deg) translate(-151px, -54px); }
+  36% { transform: translate(148.16px, 53.74px) rotate(-1.69deg) translate(-151px, -54px); }
+  38% { transform: translate(150.3px, 53.93px) rotate(-0.42deg) translate(-151px, -54px); }
+  40%, 100% { opacity: 1; transform: translate(151px, 54px) rotate(0deg) translate(-151px, -54px); }
+}
+@keyframes leadBottom {
+  0% { opacity: 0; transform: translate(170.5px, 139.5px) rotate(-167.92deg) translate(-131px, -228px); }
+  2% { transform: translate(171.16px, 139.72px) rotate(-166.98deg) translate(-131px, -228px); }
+  4% { transform: translate(173.18px, 140.48px) rotate(-163.83deg) translate(-131px, -228px); }
+  6% { opacity: 1; transform: translate(176.52px, 142.04px) rotate(-158.16deg) translate(-131px, -228px); }
+  8% { transform: translate(181px, 144.83px) rotate(-150.03deg) translate(-131px, -228px); }
+  10% { transform: translate(186.16px, 149.37px) rotate(-139.42deg) translate(-131px, -228px); }
+  12% { transform: translate(191.25px, 156.07px) rotate(-127.07deg) translate(-131px, -228px); }
+  14% { transform: translate(195.3px, 165.03px) rotate(-113.66deg) translate(-131px, -228px); }
+  16% { transform: translate(197.34px, 175.88px) rotate(-99.64deg) translate(-131px, -228px); }
+  18% { transform: translate(196.56px, 187.76px) rotate(-84.98deg) translate(-131px, -228px); }
+  20% { transform: translate(192.59px, 199.48px) rotate(-69.59deg) translate(-131px, -228px); }
+  22% { transform: translate(185.68px, 209.74px) rotate(-55.04deg) translate(-131px, -228px); }
+  24% { transform: translate(176.87px, 217.75px) rotate(-41.76deg) translate(-131px, -228px); }
+  26% { transform: translate(167.27px, 223.21px) rotate(-29.8deg) translate(-131px, -228px); }
+  28% { transform: translate(157.95px, 226.4px) rotate(-20.27deg) translate(-131px, -228px); }
+  30% { transform: translate(149.66px, 227.94px) rotate(-13.16deg) translate(-131px, -228px); }
+  32% { transform: translate(142.81px, 228.47px) rotate(-7.87deg) translate(-131px, -228px); }
+  34% { transform: translate(137.53px, 228.46px) rotate(-4.21deg) translate(-131px, -228px); }
+  36% { transform: translate(133.84px, 228.26px) rotate(-1.69deg) translate(-131px, -228px); }
+  38% { transform: translate(131.7px, 228.07px) rotate(-0.42deg) translate(-131px, -228px); }
+  40%, 100% { opacity: 1; transform: translate(131px, 228px) rotate(0deg) translate(-131px, -228px); }
+}
+
+@media (max-width: 767px) {
+  .outlines { padding: 20px 16px; }
+  .outlines div { grid-template-columns: minmax(0, 1fr); }
+  .outlines div span { height: 84px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outlines span::after, .disc, .spin, .arrow, .head, .head + .head { animation: none; }
+}

@@ -1,7 +1,8 @@
 "use client";
 
+import { usePlannerTasks } from "@/hooks/use-planner-tasks";
 import React, { useEffect, useState, useRef } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Clock, Check, X, Volume2, VolumeX } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -115,18 +116,9 @@ function playChimeSound() {
 }
 
 export function ReminderManager() {
-  const { data: tasks } = useSWR<Task[]>(
-    "/api/planner/tasks",
-    async (url) => {
-      const res = await fetch(url);
-      if (!res.ok) return [];
-      const json = await res.json();
-      return json.ok ? json.data : [];
-    },
-    {
-      refreshInterval: 10000, // Sync tasks from server every 10 seconds
-    },
-  );
+  const { data: tasks } = usePlannerTasks<Task>({
+    refreshInterval: 10000, // Sync tasks from server every 10 seconds
+  });
 
   const [activeReminder, setActiveReminder] = useState<Task | null>(null);
   const [reminderType, setReminderType] = useState<

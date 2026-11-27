@@ -1,4 +1,5 @@
 import React from "react";
+import { AppIntro } from "@/components/intro/app-intro";
 import { auth } from "@/lib/auth/auth.config";
 import { redirect } from "next/navigation";
 import { instrumentSans, instrumentSerif } from "@/lib/fonts/app-fonts";
@@ -20,6 +21,7 @@ export default async function DashboardLayout({
   return (
     <div className={`${instrumentSans.variable} ${instrumentSerif.variable}`}>
       <DashboardLayoutClient>{children}</DashboardLayoutClient>
+      <AppIntro />
     </div>
   );
 }

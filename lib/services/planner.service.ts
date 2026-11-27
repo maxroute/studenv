@@ -1,5 +1,13 @@
 import { prisma } from "@/lib/db/prisma";
-import type { CreateTaskInput } from "@/lib/models/planner.model";
+import type { CreateTaskInput, RescheduleInput } from "@/lib/models/planner.model";
+import { nextMissedDays, studentToday } from "@/lib/planner/missed-days";
+import { ValidationHttpError } from "@/lib/security/validate";
+
+function requireToday(sent: string | undefined): Date {
+  const today = studentToday(sent, new Date());
+  if (!today) throw new ValidationHttpError("Check your device's date and try again.", 400);
+  return today;
+}
 
 function calculateNextDueDate(currentDate: Date, repeat: string): Date {
   const next = new Date(currentDate);
@@ -70,9 +78,18 @@ export async function updateTask(userId: string, taskId: string, data: any) {
   const updatedStatus = data.status;
   const isCompleting = updatedStatus === "completed" && existingTask.status !== "completed";
 
-  const updatePayload = {
-    ...data,
-  };
+  // `today` only tells which days have passed for this student; it is not a task field.
+  const { today: sentToday, ...updatePayload } = data;
+  if (updatePayload.dueDate !== undefined) {
+    updatePayload.missedDueDates = nextMissedDays({
+      missed: existingTask.missedDueDates,
+      status: existingTask.status,
+      nextStatus: updatedStatus,
+      from: existingTask.dueDate,
+      to: updatePayload.dueDate,
+      today: requireToday(sentToday),
+    });
+  }
 
   if (isCompleting) {
     updatePayload.completedAt = new Date();
@@ -152,4 +169,40 @@ export async function reorderTasks(userId: string, taskIds: string[]) {
   });
   await prisma.$transaction(updates);
   return { success: true };
+}
+
+/** Gives several of the user's tasks new dates, all or none, remembering the days they were missed on. */
+export async function rescheduleTasks(userId: string, changes: RescheduleInput["changes"], sentToday?: string) {
+  const ids = changes.map((change) => change.id);
+  if (new Set(ids).size !== ids.length) throw new Error("A task is listed twice");
+  const today = requireToday(sentToday);
+  const owned = await prisma.task.findMany({
+    where: { userId, id: { in: ids } },
+    select: { id: true, status: true, dueDate: true, missedDueDates: true },
+  });
+  if (owned.length !== ids.length) throw new Error("One or more tasks were not found or unauthorized");
+  const before = new Map(owned.map((task) => [task.id, task]));
+
+  await prisma.$transaction(
+    changes.map((change) => {
+      const task = before.get(change.id)!;
+      const dueDate = change.dueDate ? new Date(change.dueDate) : null;
+      const missedDueDates = nextMissedDays({ missed: task.missedDueDates, status: task.status, from: task.dueDate, to: dueDate, today });
+      return prisma.task.updateMany({
+        where: { id: change.id, userId },
+        data: { dueDate, dueTime: change.dueTime, missedDueDates },
+      });
+    }),
+  );
+  return { updated: ids.length };
+}
+
+/** The user's completed focus sessions that started in `[from, to)`, for the study calendar. */
+export async function listFocusHistory(userId: string, from: Date, to: Date) {
+  return prisma.focusSession.findMany({
+    where: { userId, type: "focus", status: "completed", startedAt: { gte: from, lt: to } },
+    select: { startedAt: true, durationMs: true },
+    orderBy: { startedAt: "asc" },
+    take: 5000,
+  });
 }

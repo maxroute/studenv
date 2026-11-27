@@ -1,0 +1,49 @@
+.calendar { display: flex; width: 100%; max-width: 400px; min-width: 0; align-self: center; flex-direction: column; gap: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 14px; color: var(--text); }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.head h2 { margin: 0; font-family: var(--font-dm-sans), sans-serif; font-size: 13px; font-weight: 600; }
+.head div { display: flex; gap: 2px; }
+.head button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 7px; background: transparent; padding: 0; color: var(--muted); cursor: pointer; }
+.head button:hover { background: var(--surface2); color: var(--text); }
+
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.weekday { padding-bottom: 2px; color: var(--muted2); font-size: 10px; font-weight: 600; text-align: center; }
+
+/* A day is a rounded square; focus time fills it more strongly the longer it was. */
+.day { position: relative; display: flex; min-width: 0; aspect-ratio: 1; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid var(--border); border-radius: 7px; background: transparent; padding: 0; color: var(--text); font: inherit; font-size: 11.5px; box-shadow: none; cursor: pointer; }
+.day:hover { border-color: var(--border2); }
+.level0 { background: transparent; }
+.level1 { border-color: transparent; background: rgba(245, 166, 35, 0.18); }
+.level2 { border-color: transparent; background: rgba(245, 166, 35, 0.42); }
+.level3 { border-color: transparent; background: #f5a623; color: #17130b; font-weight: 700; }
+/* How the day went is its edge; today and the picked day are rings around it, so both show. */
+.done, .done:hover { border: 2px solid #3cc873; }
+.today { box-shadow: 0 0 0 1.5px var(--text); }
+.selected { box-shadow: 0 0 0 2.5px var(--amber); }
+.dot { position: absolute; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--amber); }
+.level3 .dot { background: #17130b; }
+.dot.missed { background: var(--red); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 10.5px; }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.keyDone { width: 9px; height: 9px; border: 2px solid #3cc873; border-radius: 3px; }
+.keyFocus { width: 9px; height: 9px; border-radius: 3px; background: rgba(245, 166, 35, 0.6); }
+.keyDot { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); }
+.keyLeft { width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
+
+.detail { display: flex; flex-direction: column; gap: 2px; margin: 0; border-top: 1px solid var(--border); padding-top: 10px; color: var(--muted); font-size: 12px; }
+.detail strong { color: var(--text); font-size: 12.5px; font-weight: 600; }
+.totals { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; color: var(--muted); font-size: 11.5px; }
+.totals span { display: inline-flex; align-items: center; gap: 5px; }
+.totals svg { color: var(--amber); }
+
+/* The week stays quiet: plain days have no box until pointed at. */
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.week .day { min-height: 54px; aspect-ratio: auto; border-radius: 10px; font-size: 14px; font-weight: 600; }
+.week .level0:not(.done) { border-color: transparent; }
+.week .level0:not(.done):hover { border-color: var(--border2); }
+.week .day small { color: var(--muted); font-size: 10px; font-weight: 600; }
+.week .level3 small { color: inherit; }
+.week .today { background-color: rgba(245, 166, 35, 0.14); box-shadow: none; }
+.week .today.level3 { background-color: #f5a623; }
+.week .selected { box-shadow: 0 0 0 2px var(--amber); }
+.week .dot { bottom: 5px; }

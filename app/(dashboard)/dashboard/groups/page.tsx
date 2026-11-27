@@ -1,4 +1,5 @@
 "use client";
+import { PageLoader } from "@/components/ui/page-loader";
 import "./study-groups.css";
 import {
   ChangeEvent,
@@ -143,56 +144,7 @@ function saveGroupReadMarkers(markers: Record<string, string>) {
 }
 
 function StudyGroupsContentSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1 animate-pulse flex-col">
-      <div className="chat-head">
-        <div className="chat-avatar bg-[var(--raised)] text-transparent" />
-        <div className="chat-head-left">
-          <div className="h-4 w-44 rounded bg-white/[0.06]" />
-          <div className="chat-pills">
-            <span className="pill h-5 w-16 bg-white/[0.05]" />
-            <span className="pill h-5 w-20 bg-white/[0.05]" />
-            <span className="pill h-5 w-16 bg-white/[0.05]" />
-          </div>
-        </div>
-        <div className="chat-head-right">
-          <span className="pill h-7 w-24 bg-white/[0.05]" />
-          <div className="btn btn-primary h-10 w-36 border-0 opacity-60" />
-        </div>
-      </div>
-
-      <div className="messages">
-        <div className="msg theirs">
-          <div className="avatar me bg-white/[0.05]" />
-          <div className="msg-body max-w-[58%]">
-            <div className="mb-2 h-3 w-24 rounded bg-white/[0.05]" />
-            <div className="h-12 rounded-[14px] rounded-bl-[4px] bg-[var(--raised)]" />
-          </div>
-        </div>
-        <div className="msg mine">
-          <div className="avatar me bg-white/[0.05]" />
-          <div className="msg-body max-w-[52%]">
-            <div className="h-10 rounded-[14px] rounded-br-[4px] bg-[var(--amber-bg)]" />
-          </div>
-        </div>
-        <div className="msg theirs">
-          <div className="avatar me bg-white/[0.05]" />
-          <div className="msg-body max-w-[64%]">
-            <div className="mb-2 h-3 w-20 rounded bg-white/[0.05]" />
-            <div className="h-20 rounded-[12px] border border-[var(--border)] bg-[var(--raised)]" />
-          </div>
-        </div>
-      </div>
-
-      <div className="composer">
-        <div className="composer-wrap">
-          <div className="attach-btn bg-white/[0.04]" />
-          <div className="composer-input min-h-[38px] bg-white/[0.04]" />
-          <div className="send-btn bg-[#f5a623]/70" />
-        </div>
-      </div>
-    </div>
-  );
+  return <PageLoader label="Opening your groups" />;
 }
 
 function StudyGroupsMembersSkeleton() {
@@ -1000,14 +952,10 @@ export default function StudyGroupsPage() {
             </div>
           ) : null}
           <div className="group-list">
+            {/* On phones only the list is on screen; wider, the chat panel beside it shows the loader. */}
             {loading ? (
-              <div className="space-y-2 p-3">
-                {[0, 1, 2].map((item) => (
-                  <div
-                    key={item}
-                    className="h-[62px] animate-pulse rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--raised)]"
-                  />
-                ))}
+              <div className="flex h-[55dvh] md:hidden">
+                <PageLoader label="Opening your groups" />
               </div>
             ) : null}
 

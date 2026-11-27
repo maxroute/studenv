@@ -3967,10 +3967,9 @@ textarea {
 
 .stat-card {
   display: flex;
-  min-height: 122px;
+  min-width: 0;
   flex-direction: column;
-  gap: 10px;
-  justify-content: space-between;
+  gap: 4px;
 }
 
 .stat-label {
@@ -3981,10 +3980,11 @@ textarea {
 }
 
 .stat-value {
-  margin-top: 8px;
+  margin-top: 4px;
   font-family: var(--font-fraunces), serif;
   font-size: 28px;
   font-weight: 600;
+  line-height: 1.15;
 }
 
 .stats-grid .stat-sub {
@@ -3992,7 +3992,7 @@ textarea {
 }
 
 .stats-grid .stat-sub-placeholder {
-  visibility: hidden;
+  display: none;
 }
 
 .profile-edit-panel {
@@ -4906,7 +4906,7 @@ textarea {
 
   .focus-side-panel {
     position: fixed !important;
-    top: 52px;
+    top: 0;
     right: 0;
     bottom: 0;
     z-index: 82;
@@ -4933,7 +4933,7 @@ textarea {
 
   .focus-side-backdrop {
     position: fixed;
-    inset: 52px 0 0;
+    inset: 0;
     z-index: 78;
     display: block;
     border: 0;
@@ -5481,7 +5481,8 @@ textarea {
   }
 
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 }
 

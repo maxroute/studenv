@@ -1,24 +1,19 @@
 "use client";
 
 import type { PropsWithChildren } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { FocusSessionManager } from "@/components/focus/FocusSessionManager";
 import { VideoPlayerOverlay } from "@/components/items/video-player-overlay";
-import { Sidebar } from "@/components/layout/sidebar";
 import { RanganHost } from "@/components/rangan/rangan-host";
-import { Topbar } from "@/components/layout/topbar";
+import { AppSidebar } from "@/components/shell/app-sidebar";
+import type { ShellUser } from "@/components/shell/account-menu";
+import { GlobalSearch } from "@/components/shell/global-search";
+import { PhoneHeader, PhoneTabBar } from "@/components/shell/phone-bars";
 
-type AppShellProps = PropsWithChildren<{
-  user: {
-    name?: string | null;
-    email?: string | null;
-    avatarUrl?: string | null;
-    image?: string | null;
-  };
-}>;
+type AppShellProps = PropsWithChildren<{ user: ShellUser }>;
 
 export function AppShell({ user, children }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const isShelfRoute = pathname === "/shelf";
   // Pages that own their scroll area: the document and the main area must not
@@ -37,14 +32,22 @@ export function AppShell({ user, children }: AppShellProps) {
   }, [ownsScroll]);
 
   return (
-    <div className={`app-shell${ownsScroll ? " shelf-shell" : ""}`}>
-      <Topbar user={user} onOpenSidebar={() => setSidebarOpen(true)} />
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className={`app-main${ownsScroll ? " shelf-scroll-layout" : ""}`}>
-        {children}
+    <div className={`studenv-frame${ownsScroll ? " shelf-shell" : ""}`}>
+      <div className="shell-sidebar-slot">
+        <AppSidebar user={user} />
       </div>
+      <div className="studenv-frame-column">
+        <PhoneHeader user={user} />
+        <div className={`app-main${ownsScroll ? " shelf-scroll-layout" : ""}`}>
+          {children}
+        </div>
+        <PhoneTabBar />
+      </div>
+      {/* The timer keeps running while the student is in the library. */}
+      <FocusSessionManager />
       <VideoPlayerOverlay />
-      <RanganHost />
+      <GlobalSearch />
+      <RanganHost launcher={false} />
     </div>
   );
 }

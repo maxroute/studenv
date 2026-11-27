@@ -1,9 +1,5 @@
-import { SecondBrainLoader } from "@/components/ui/second-brain-loader";
+import { PageLoader } from "@/components/ui/page-loader";
 
 export default function Loading() {
-  return (
-    <div className="boot-loader-overlay">
-      <SecondBrainLoader />
-    </div>
-  );
+  return <PageLoader label="Opening Studenv" full />;
 }
