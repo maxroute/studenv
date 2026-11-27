@@ -65,6 +65,9 @@ type PlannerView = "today" | "all";
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
+/** How many overdue tasks show before "Show more". */
+const OVERDUE_PREVIEW = 3;
+
 export default function PlannerPage() {
   const { data: tasks = [], isLoading, mutate: mutateTasks } = usePlannerTasks<Task>({ revalidateOnFocus: true, refreshInterval: 30_000 });
 
@@ -88,8 +91,10 @@ export default function PlannerPage() {
   }, [pendingDraft]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  // The folded lines under today's work.
-  const [shown, setShown] = useState({ overdue: false, upcoming: false, done: false });
+  // The folded lines under today's work. Overdue work starts open: it needs attention.
+  const [shown, setShown] = useState({ overdue: true, upcoming: false, done: false });
+  // A long backlog shows a few at first, so Upcoming and Done stay within reach.
+  const [allOverdue, setAllOverdue] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   // What the last bulk move did, with the way back.
@@ -674,14 +679,19 @@ export default function PlannerPage() {
               <div className={styles.folds}>
                 {day.overdue.length ? (
                   <section>
-                    {fold("overdue", <><i className={styles.attention} aria-hidden="true" />{day.overdue.length} overdue task{day.overdue.length === 1 ? "" : "s"}</>, "Review")}
+                    {fold("overdue", <><i className={styles.attention} aria-hidden="true" />{day.overdue.length} overdue task{day.overdue.length === 1 ? "" : "s"}</>, "Show")}
                     {shown.overdue ? (
                       <>
                         <div className={styles.backlog}>
                           <button type="button" disabled={moving} onClick={() => void clearBacklog(day.overdue, false)}>Move to today</button>
                           <button type="button" disabled={moving} onClick={() => void clearBacklog(day.overdue, true)}>Spread over {SPREAD_DAYS} days</button>
                         </div>
-                        {renderList(day.overdue)}
+                        {renderList(allOverdue ? day.overdue : day.overdue.slice(0, OVERDUE_PREVIEW))}
+                        {day.overdue.length > OVERDUE_PREVIEW ? (
+                          <button type="button" className={styles.showMore} aria-expanded={allOverdue} onClick={() => setAllOverdue((all) => !all)}>
+                            {allOverdue ? "Show fewer" : `Show ${day.overdue.length - OVERDUE_PREVIEW} more`}
+                          </button>
+                        ) : null}
                       </>
                     ) : null}
                   </section>

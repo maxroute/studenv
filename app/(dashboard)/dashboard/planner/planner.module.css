@@ -369,6 +369,21 @@
   background: #ed5958;
 }
 
+.showMore {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.showMore:hover {
+  color: var(--amber);
+}
+
 .backlog {
   display: flex;
   flex-wrap: wrap;
