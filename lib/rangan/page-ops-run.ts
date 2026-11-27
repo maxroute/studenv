@@ -4,7 +4,8 @@ import type { Editor } from "@tiptap/core";
 import type { Mark, MarkType, Node as ProseMirrorNode, Schema } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import { blockKey, blockText } from "@/hooks/use-open-page";
-import { toEditorContent } from "@/lib/notes/editor-bridge";
+import { fromEditorJSON, toEditorContent } from "@/lib/notes/editor-bridge";
+import { fixMath } from "@/lib/notes/fix-math";
 import { markdownToNote } from "@/lib/notes/markdown-to-note";
 import { NOTE_DOC_FORMAT, NOTE_DOC_VERSION, parseNoteDoc, type NoteNode } from "@/lib/notes/note-format";
 import { noteColorValue, noteFontValue } from "@/lib/notes/text-styles";
@@ -193,6 +194,12 @@ export function runPageOps(
   for (const op of ops) {
     if (op.op === "title") {
       rename = op.title;
+      continue;
+    }
+    if (op.op === "fixMath") {
+      // The same repair as the page menu's "Fix formulas"; block ids are kept, so later steps still find their blocks.
+      const { doc, found } = fixMath(fromEditorJSON(tr.doc.toJSON()).doc);
+      if (found) tr.replaceWith(0, tr.doc.content.size, schema.nodeFromJSON(doc).content);
       continue;
     }
     if (op.op === "insert" || op.op === "embed") {

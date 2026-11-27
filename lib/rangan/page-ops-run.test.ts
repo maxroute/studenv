@@ -131,3 +131,28 @@ test("an embed becomes a Shelf card, delete removes a block, and a rename is ret
   assert.equal(result.rename, "Stacks and queues");
   editor.destroy();
 });
+
+test("fixing formulas turns raw maths into equations, and later steps still find their blocks", () => {
+  const editor = new Editor({
+    extensions: createNoteExtensions({}),
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", attrs: { id: "b_math000001" }, content: [{ type: "text", text: "$$\\sin^2\\theta+\\cos^2\\theta=1$$" }] },
+        { type: "paragraph", attrs: { id: "b_math000002" }, content: [{ type: "text", text: "Use $$\\tan\\theta$$ for slopes." }] },
+      ],
+    },
+  });
+  const plan = parsePageOps(JSON.stringify({ summary: "x", ops: [{ op: "fixMath" }, { op: "fixMath" }, { op: "format", block: 2, text: "slopes", bold: true }] }), pageBlocks(editor));
+  assert.ok(plan);
+  assert.deepEqual(plan.ops.map((op) => op.op), ["fixMath", "format"], "asked twice, done once");
+  const result = runPageOps(editor, plan.ops, { citations: [], embeds: new Map() });
+  editor.view.dispatch(result.tr);
+  const json = editor.getJSON();
+  assert.equal(json.content?.[0].type, "blockMath");
+  assert.equal(json.content?.[0].attrs?.latex, "\\sin^2\\theta+\\cos^2\\theta=1");
+  assert.match(JSON.stringify(json.content?.[1]), /"type":"inlineMath","attrs":\{"latex":"\\\\tan\\\\theta"\}/);
+  assert.deepEqual(marksOn(editor, "slopes"), ["bold"]);
+  assert.equal(result.skipped, 0);
+  editor.destroy();
+});

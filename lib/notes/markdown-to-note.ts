@@ -12,7 +12,9 @@
 //   - [ ] / - [x] item    to-do items, open or done
 //   | a | b |             tables (the first row is the header)
 //   > [!tip] / [!warning] callouts (blue tip, amber mistake; [!key] green, [!idea] purple)
-//   $$ … $$               a block equation (LaTeX); $…$ inline when it holds maths symbols
+//   $$ … $$  \[ … \]       a block equation (LaTeX) on its own line; inside a sentence, list
+//                         or table cell, $$…$$, \(…\) and \[…\] are inline equations;
+//                         $…$ is inline when it holds maths symbols
 //   [[embed:item:<id>]]   a card for a Shelf item (links are saved to the Shelf first)
 //   Q: … / A: …           self-test toggles: the answer is hidden until opened
 //   ```                   code blocks
@@ -43,7 +45,7 @@ const MAX_HEADING_LEVEL = 3;
 // ── inline ───────────────────────────────────────────────────────────────────
 
 const INLINE =
-  /(\*\*([^*\n]+?)\*\*)|(`([^`\n]+)`)|(\[(\d{1,2})\])|(\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\))|(\*([^*\s][^*\n]*?)\*)|((?<![\p{L}\p{N}])_([^_\s][^_\n]*?)_(?![\p{L}\p{N}]))|(==([^=\n]+?)==)|(~~([^~\n]+?)~~)|(\{\{([a-z]{3,10}):([^}\n]+?)\}\})|((?<![\p{L}\p{N}$\\])\$([^$\s](?:[^$\n]*?[^$\s])?)\$(?![\p{N}]))/gu;
+  /(\*\*([^*\n]+?)\*\*)|(`([^`\n]+)`)|(\[(\d{1,2})\])|(\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\))|(\*([^*\s][^*\n]*?)\*)|((?<![\p{L}\p{N}])_([^_\s][^_\n]*?)_(?![\p{L}\p{N}]))|(==([^=\n]+?)==)|(~~([^~\n]+?)~~)|(\{\{([a-z]{3,10}):([^}\n]+?)\}\})|((?<![\p{L}\p{N}$\\])\$([^$\s](?:[^$\n]*?[^$\s])?)\$(?![\p{N}]))|(\$\$([^$\n]+?)\$\$)|(\\\(([^\n]+?)\\\))|(\\\[([^\n]+?)\\\])/gu;
 
 function text(value: string, marks?: NoteNode["marks"]): NoteNode[] {
   return value ? [{ type: "text", text: value, ...(marks?.length ? { marks } : {}) }] : [];
@@ -78,6 +80,10 @@ export function inlineNodes(source: string, citation: CitationNodes = () => null
       // Only maths becomes an equation: "$5 and $10" stays text.
       if (/[\\^_{}=+*/<>]|[a-z]\s*\(/i.test(match[22])) nodes.push({ type: "inlineMath", attrs: { latex: match[22] } });
       else nodes.push(...text(match[0]));
+    } else if (match[23] || match[25] || match[27]) {
+      // $$…$$, \(…\) and \[…\] inside text: always maths, never money.
+      const latex = (match[24] ?? match[26] ?? match[28] ?? "").trim();
+      if (latex) nodes.push({ type: "inlineMath", attrs: { latex } });
     }
     last = index + match[0].length;
   }
@@ -200,7 +206,28 @@ function blocks(ctx: Ctx, lines: string[]): NoteNode[] {
       continue;
     }
 
-    if (trimmed.startsWith("$$")) {
+    // A whole line of one equation is a block; "$$a$$ $$b$$" is two inline ones.
+    const oneLine = /^(?:\$\$([^$]+)\$\$|\\\[(.+)\\\])$/.exec(trimmed);
+    if (oneLine) {
+      flush();
+      index += 1;
+      const value = (oneLine[1] ?? oneLine[2] ?? "").trim();
+      if (value) out.push({ type: "blockMath", attrs: { id: ctx.id(), latex: value } });
+      continue;
+    }
+
+    if (trimmed === "\\[") {
+      flush();
+      const latex: string[] = [];
+      index += 1;
+      while (index < lines.length && lines[index].trim() !== "\\]") latex.push(lines[index++]);
+      index += 1;
+      const value = latex.join("\n").trim();
+      if (value) out.push({ type: "blockMath", attrs: { id: ctx.id(), latex: value } });
+      continue;
+    }
+
+    if (trimmed.startsWith("$$") && !/^\$\$[^$]*\$\$.*\$\$/.test(trimmed)) {
       flush();
       const latex: string[] = [];
       const rest = trimmed.slice(2);
