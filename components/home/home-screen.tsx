@@ -5,16 +5,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
-import { ArrowRight, FileText, LayoutGrid, Play } from "lucide-react";
+import { ArrowRight, FileText, Flame, LayoutGrid, Play } from "lucide-react";
 import { FocusClock } from "@/components/shell/focus-clock";
 import { PageLoader } from "@/components/ui/page-loader";
 import { TaskCheck } from "@/components/ui/task-check";
+import { useFocusHistory } from "@/hooks/use-focus-history";
 import { useFocusStore } from "@/hooks/useFocusStore";
 import { useItems } from "@/hooks/useItems";
 import { usePlannerTasks } from "@/hooks/use-planner-tasks";
 import { prepareFocusOnTask } from "@/lib/client/focus-task";
+import { focusTotals, oldestOverdueLabel, weekSoFar } from "@/lib/client/home-summary";
 import { openItemPage } from "@/lib/client/open-item-page";
 import { groupOpenTasks } from "@/lib/client/planner-tasks";
+import { focusLabel } from "@/lib/client/study-calendar";
 import styles from "./home.module.css";
 
 type HomeTask = {
@@ -31,8 +34,8 @@ type ContinueEntry = { key: string; kind: "Page" | "Board" | "PDF" | "Video" | "
 
 const CONTINUE_LIMIT = 2;
 
-/** Only the student's first name is shown here; the numbers live on Focus and Achievements. */
-async function viewerFetcher(url: string): Promise<{ viewer?: { firstName?: string } }> {
+/** The student's first name and streak. The fuller numbers live on Focus and Achievements. */
+async function viewerFetcher(url: string): Promise<{ viewer?: { firstName?: string }; stats?: { streak: number } }> {
   const response = await fetch(url);
   if (!response.ok) throw new Error("Not available");
   return response.json();
@@ -64,7 +67,7 @@ function ago(value: string, now: Date) {
 const taskDetail = (task: HomeTask) =>
   [task.dueTime, task.estimatedDuration ? `${task.estimatedDuration} min` : null, task.category.charAt(0).toUpperCase() + task.category.slice(1)].filter(Boolean).join(" · ");
 
-/** Home answers one question: what should I do now? The Planner holds the rest. */
+/** Home answers: what needs attention, and what should I do now? The Planner holds the rest. */
 export function HomeScreen() {
   const router = useRouter();
   const viewer = useSWR("/api/dashboard", viewerFetcher);
@@ -76,12 +79,15 @@ export function HomeScreen() {
   // The date and greeting follow the student's clock, so they wait for the browser.
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
+  const week = weekSoFar(now ?? new Date());
+  const history = useFocusHistory(week.from, week.to);
 
   const { next, overdue } = useMemo(() => {
     const groups = now ? groupOpenTasks(tasks.data ?? [], now) : [];
     const find = (key: string) => groups.find((group) => group.key === key)?.tasks ?? [];
     // An overdue task never stands in as the next one: it has its own line.
-    return { next: find("today")[0] ?? null, overdue: find("overdue").length };
+    const late = find("overdue");
+    return { next: find("today")[0] ?? null, overdue: { count: late.length, since: now ? oldestOverdueLabel(late, now) : null } };
   }, [tasks.data, now]);
 
   const continueEntries = useMemo<ContinueEntry[]>(() => {
@@ -128,6 +134,9 @@ export function HomeScreen() {
 
   const name = viewer.data?.viewer?.firstName;
   const paused = Boolean(session?.pausedAt);
+  const streak = viewer.data?.stats?.streak;
+  // Shown only when every number is known, so none is ever a placeholder zero.
+  const stats = now && streak !== undefined && !history.loading && !history.error ? { streak, ...focusTotals(history.days, now) } : null;
 
   return (
     <div className={styles.home}>
@@ -137,7 +146,44 @@ export function HomeScreen() {
           {name ? `, ${name}` : ""}
         </h1>
         <p>{now ? now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" }) : " "}</p>
+        <div className={styles.statsSlot}>
+          {stats ? (
+            <Link href="/dashboard/planner" className={styles.stats} aria-label="Your study progress. Opens the Planner.">
+              {stats.streak === 0 && stats.weekMs === 0 ? (
+                <span>Start a focus session to begin your streak.</span>
+              ) : (
+                <>
+                  <span>
+                    <Flame size={14} aria-hidden="true" />
+                    <b>{stats.streak}</b> day streak
+                  </span>
+                  <span>
+                    <b>{focusLabel(stats.todayMs)}</b> today
+                  </span>
+                  <span>
+                    <b>{focusLabel(stats.weekMs)}</b> this week
+                  </span>
+                </>
+              )}
+            </Link>
+          ) : null}
+        </div>
       </header>
+
+      {overdue.count > 0 ? (
+        <Link href="/dashboard/planner" className={styles.alert}>
+          <i aria-hidden="true" />
+          <span>
+            <strong>
+              {overdue.count} task{overdue.count === 1 ? " is" : "s are"} overdue
+            </strong>
+            {overdue.since ? <small>Oldest from {overdue.since}</small> : null}
+          </span>
+          <em>
+            Review <ArrowRight size={13} aria-hidden="true" />
+          </em>
+        </Link>
+      ) : null}
 
       <section aria-labelledby="homeNext">
         <h2 id="homeNext">{session ? (paused ? "Focus paused" : "In focus") : "Next up"}</h2>
@@ -199,18 +245,6 @@ export function HomeScreen() {
             ))}
           </ul>
         </section>
-      ) : null}
-
-      {overdue > 0 ? (
-        <Link href="/dashboard/planner" className={styles.overdue}>
-          <i aria-hidden="true" />
-          <span>
-            {overdue} overdue task{overdue === 1 ? "" : "s"}
-          </span>
-          <small>
-            Open planner <ArrowRight size={13} aria-hidden="true" />
-          </small>
-        </Link>
       ) : null}
     </div>
   );
