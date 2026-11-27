@@ -246,3 +246,15 @@ test("a picture for a title that isn't on the map is left out", () => {
   const items = layoutMap(draft, { images: [PICTURE("Not a branch")], newId });
   assert.equal(items.filter((item) => item.type === "image").length, 0);
 });
+
+test("a lesson video that is already a branch's source card is shown once, with a watch line to it", () => {
+  const draft = parseMapReply(REPLY, 3) as MapDraft;
+  const items = layoutMap(draft, {
+    newId,
+    sources: new Map([[1, { kind: "asset", assetId: "vid", assetKind: "video", title: "Processes explained" } satisfies MapSourceCard]]),
+    video: { assetId: "vid", title: "Processes explained" },
+  });
+  const cards = items.filter((item) => item.type === "resource-card" && item.props.assetId === "vid");
+  assert.equal(cards.length, 1);
+  assert.ok(items.some((item) => item.type === "connector" && item.props.target.id === cards[0].id && item.props.label?.text === "watch"));
+});

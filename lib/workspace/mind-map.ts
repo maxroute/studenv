@@ -423,7 +423,10 @@ export function layoutMap(draft: MapDraft, options: MapLayoutOptions): StudioIte
     const boxes = picture(centreImage, { x: origin.x - size.w / 2, y: underCentre });
     underCentre = bounds(boxes).y + bounds(boxes).h + 60;
   }
-  if (options.video) {
+  // A lesson video that is already a branch's source card isn't shown twice.
+  const videoCard = options.video ? cardIds.get(`asset:${options.video.assetId}`) : undefined;
+  if (videoCard) connectors.push(connector(options.newId(), centreId, videoCard, 0, { label: "watch", dashed: true }));
+  else if (options.video) {
     const box = { x: origin.x - SIZE.resourceCard.w / 2, y: underCentre, ...SIZE.resourceCard };
     const cardId = options.newId();
     nodes.push({ id: cardId, type: "resource-card", ...box, rotation: 0, zIndex: 0, props: { assetId: options.video.assetId, kind: "video", title: options.video.title.slice(0, 300), sourceHost: "www.youtube.com" } });
