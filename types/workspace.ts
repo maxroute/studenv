@@ -221,6 +221,10 @@ export const ShapeNodeSchema = WorkspaceNodeBaseSchema.extend({
     groupId: z.string().optional(),
     startPoint: z.object({ x: z.number(), y: z.number() }).optional(),
     endPoint: z.object({ x: z.number(), y: z.number() }).optional(),
+    /** Words inside the shape; shapes saved before this have none. */
+    text: z.string().max(4_000).default(""),
+    /** A chosen colour for the text; without it, one that reads on the fill. */
+    textColor: z.string().optional(),
   }),
 });
 
@@ -737,6 +741,8 @@ function parseWorkspaceNode(input: unknown): WorkspaceNode | null {
           endPoint: props.endPoint && typeof props.endPoint === "object"
             ? { x: coerceNumber((props.endPoint as any).x, 0), y: coerceNumber((props.endPoint as any).y, 0) }
             : undefined,
+          text: typeof props.text === "string" ? props.text.slice(0, 4_000) : "",
+          textColor: coerceOptionalString(props.textColor),
         },
       });
     }
@@ -872,6 +878,7 @@ export function getWorkspaceNodeText(node: WorkspaceNode) {
   switch (node.type) {
     case "text":
     case "sticky":
+    case "shape":
       return node.props.text.trim();
     case "video-anchor":
       return [node.props.label, node.props.notes].filter(Boolean).join(" ").trim();

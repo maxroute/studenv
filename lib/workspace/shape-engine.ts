@@ -19,6 +19,8 @@ export interface ShapeNodeProps {
   endPoint?: { x: number; y: number };
   w?: number;
   h?: number;
+  text: string;
+  textColor?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ export function buildShapeProps(
     endPoint: overrides?.endPoint,
     w: overrides?.w,
     h: overrides?.h,
+    text: "",
   };
 }
 

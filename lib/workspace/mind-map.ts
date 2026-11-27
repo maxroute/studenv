@@ -398,7 +398,7 @@ export function layoutMap(draft: MapDraft, options: MapLayoutOptions): StudioIte
         h: Math.round(frame.h + FRAME_PAD * 2),
         rotation: 0,
         zIndex: 0,
-        props: { kind: "rounded-rectangle", fill: { type: "solid", color: style.fill }, stroke: { width: 2, color: style.stroke, style: "dashed" }, cornerRadius: 24, opacity: 100, shadow: false, locked: false, groupId },
+        props: { kind: "rounded-rectangle", fill: { type: "solid", color: style.fill }, stroke: { width: 2, color: style.stroke, style: "dashed" }, cornerRadius: 24, opacity: 100, shadow: false, locked: false, groupId, text: "" },
       });
       lowest = Math.max(lowest, frame.y + frame.h + FRAME_PAD);
       leftmost = Math.min(leftmost, frame.x - FRAME_PAD);
