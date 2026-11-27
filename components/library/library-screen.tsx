@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
-import { BookOpen, FileText, HardDrive, Image as ImageIcon, LayoutGrid, Link2, List, Music, PlaySquare, Plus, Search, Star } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, FileText, HardDrive, Image as ImageIcon, LayoutGrid, Link2, List, Music, PlaySquare, Plus, Search, Star } from "lucide-react";
 import { CreateCollectionModal } from "@/components/collections/create-collection-modal";
 import { FilterField, FilterPopover } from "@/components/ui/filter-popover";
 import { PageLoader } from "@/components/ui/page-loader";
+import { PageMenu } from "./page-menu";
+import { useOpenPages } from "./use-open-pages";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useCollections } from "@/hooks/useCollections";
 import { useItems } from "@/hooks/useItems";
 import { useSearch } from "@/hooks/useSearch";
-import { filterEntries, libraryEntries, type FileKind, type LibraryEntry, type LibraryKind, type LibraryTab } from "@/lib/client/library-entries";
+import { filterEntries, libraryEntries, subPageEntries, treeRows, type FileKind, type LibraryEntry, type LibraryKind, type LibraryTab } from "@/lib/client/library-entries";
 import { openItemPage } from "@/lib/client/open-item-page";
+import type { MovablePage } from "@/lib/client/page-move";
 import { buildItemUpdatePayload } from "@/lib/utils/item-patch";
 import { formatBytes } from "@/lib/utils/format-bytes";
 import type { DashboardNav, ItemFilters, ItemRecord, ItemStatus } from "@/types";
@@ -64,7 +67,8 @@ export function LibraryScreen() {
   const { filters, setFilter, setNav } = useAppStore();
   const query = useSearch(filters.q ?? "", 180);
   const { data: loadedItems, items, error: itemsError, mutate, updateItem } = useItems({});
-  const pages = useSWR<Array<{ id: string; title: string; parentId: string | null; updatedAt: string }>>("/api/notes", dataFetcher);
+  const pages = useSWR<MovablePage[]>("/api/notes", dataFetcher);
+  const { openPages, togglePage, openPage } = useOpenPages();
   const boards = useSWR<Array<{ id: string; title: string; updatedAt: string }>>("/api/library/boards", dataFetcher);
   const files = useSWR<Array<{ ref: string; title: string; kind: FileKind; createdAt: string; usedIn: Array<{ type: "page" | "board"; id: string }> }>>("/api/library/files", dataFetcher);
   const storage = useSWR<{ usedBytes: number; limitBytes: number | null }>("/api/library/storage", dataFetcher);
@@ -83,9 +87,11 @@ export function LibraryScreen() {
     () => libraryEntries({ items, pages: pages.data ?? [], boards: boards.data ?? [], files: files.data ?? [] }),
     [items, pages.data, boards.data, files.data],
   );
+  // Searching also looks through the pages inside other pages.
+  const searched = useMemo(() => (query.trim() ? [...entries, ...subPageEntries(pages.data ?? [])] : entries), [entries, pages.data, query]);
   const shown = useMemo(
     () =>
-      filterEntries(entries, {
+      filterEntries(searched, {
         tab,
         fileKind,
         collectionItemIds: collectionId ? (collection?.itemIds ?? []) : undefined,
@@ -94,9 +100,21 @@ export function LibraryScreen() {
         query,
         sort: filters.sort,
       }),
-    [entries, tab, fileKind, collectionId, collection, filters.tag, status, query, filters.sort],
+    [searched, tab, fileKind, collectionId, collection, filters.tag, status, query, filters.sort],
   );
   const tags = useMemo(() => [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b)), [entries]);
+
+  // The Pages tab has its own address, so links can open it and a reload stays on it.
+  const requestedTab = searchParams.get("tab");
+  useEffect(() => {
+    const wanted = TABS.find((entry) => entry.key === requestedTab);
+    if (wanted) setNav(wanted.nav);
+  }, [requestedTab, setNav]);
+
+  function chooseTab(entry: (typeof TABS)[number]) {
+    setNav(entry.nav);
+    window.history.replaceState(null, "", entry.key === "all" ? "/shelf" : `/shelf?tab=${entry.key}`);
+  }
 
   const requestedCollection = searchParams.get("collection");
   useEffect(() => {
@@ -130,6 +148,18 @@ export function LibraryScreen() {
   const used = storage.data?.usedBytes ?? 0;
   const limit = storage.data?.limitBytes ?? null;
   const grid = filters.view === "grid";
+  // The Pages tab is a tree. Searching or filtering gives one flat list instead:
+  // a tree with half its pages hidden would be confusing.
+  const asTree = tab === "pages" && !query.trim() && !filters.tag && !status && !collectionId;
+  const rows = useMemo(
+    () => (asTree && !grid ? treeRows(shown, pages.data ?? [], openPages) : shown.map((entry) => ({ entry, depth: 0, open: false }))),
+    [asTree, grid, shown, pages.data, openPages],
+  );
+  const reload = () => {
+    void pages.mutate();
+    void mutate();
+    void files.mutate();
+  };
   const narrowed = Boolean(query || filters.tag || status || collectionId || tab !== "all");
 
   return (
@@ -223,7 +253,7 @@ export function LibraryScreen() {
 
       <div className={styles.tabs} role="group" aria-label="Show">
         {TABS.map((entry) => (
-          <button key={entry.key} type="button" aria-pressed={tab === entry.key} className={tab === entry.key ? styles.on : undefined} onClick={() => setNav(entry.nav)}>
+          <button key={entry.key} type="button" aria-pressed={tab === entry.key} className={tab === entry.key ? styles.on : undefined} onClick={() => chooseTab(entry)}>
             {entry.label}
           </button>
         ))}
@@ -248,11 +278,27 @@ export function LibraryScreen() {
           </div>
         ) : (
           <ul className={grid ? styles.grid : styles.list}>
-            {shown.map((entry) => {
+            {rows.map(({ entry, depth, open: expanded }) => {
               const kind = KINDS[entry.kind];
               const Icon = kind.icon;
+              const inside = `${entry.subPages} sub-page${entry.subPages === 1 ? "" : "s"}`;
               return (
-                <li key={entry.key}>
+                <li key={entry.key} style={{ "--depth": depth } as CSSProperties}>
+                  {asTree && !grid ? (
+                    entry.subPages > 0 && entry.noteId ? (
+                      <button
+                        type="button"
+                        className={styles.twist}
+                        aria-label={`${expanded ? "Hide" : "Show"} the pages inside ${entry.title}`}
+                        aria-expanded={expanded}
+                        onClick={() => togglePage(entry.noteId as string)}
+                      >
+                        {expanded ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}
+                      </button>
+                    ) : (
+                      <span className={styles.twistGap} />
+                    )
+                  ) : null}
                   <button type="button" className={styles.open} onClick={() => open(entry)}>
                     <span className={`${styles.kind} ${styles[entry.kind]}`}>
                       <Icon size={12} aria-hidden="true" />
@@ -260,11 +306,39 @@ export function LibraryScreen() {
                     </span>
                     <span className={styles.name}>
                       <span>{entry.title}</span>
+                      {entry.parentTitle ? <small>in {entry.parentTitle}</small> : null}
+                      {entry.subPages > 0 && !grid ? <small>{inside}</small> : null}
                       {entry.tags.length ? <small>{entry.tags.map((tag) => `#${tag}`).join(" ")}</small> : null}
                     </span>
                     <span className={styles.state}>{entry.status ? STATUS_LABELS[entry.status] : ""}</span>
                     <span className={styles.date}>{shortDate(entry.updatedAt)}</span>
                   </button>
+                  {grid && entry.subPages > 0 && entry.noteId ? (
+                    // A card has no room for a tree: this opens the list with its pages showing.
+                    <button
+                      type="button"
+                      className={styles.cardSubPages}
+                      onClick={() => {
+                        openPage(entry.noteId as string);
+                        chooseTab(TABS[1]);
+                        setFilter("view", "list");
+                      }}
+                    >
+                      {inside} <ChevronRight size={12} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  {entry.noteId ? (
+                    <PageMenu
+                      noteId={entry.noteId}
+                      title={entry.title}
+                      pages={pages.data ?? []}
+                      resource={entry.kind !== "page"}
+                      onChanged={reload}
+                      onAdded={openPage}
+                    />
+                  ) : (
+                    <span className={styles.moreGap} />
+                  )}
                   {entry.itemId ? (
                     <button
                       type="button"

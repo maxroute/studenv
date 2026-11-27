@@ -3,6 +3,9 @@ export type ShellPlace = "home" | "library" | "planner" | "focus" | "groups";
 
 const LIBRARY_ROOTS = ["/shelf", "/library", "/notes", "/flashcards"];
 
+/** Where pages are listed: the Library's Pages tab. */
+export const PAGES_TAB = "/shelf?tab=pages";
+
 const within = (pathname: string, root: string) => pathname === root || pathname.startsWith(`${root}/`);
 
 /** Which place a path belongs to; null for pages reached from the account menu. */

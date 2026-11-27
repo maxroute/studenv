@@ -1,5 +1,6 @@
 "use client";
 
+import { PAGES_TAB } from "@/lib/client/shell-nav";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -167,7 +168,7 @@ export function NoteTopline({
     }
     toast.success("Moved to the trash");
     actions.onDeleted();
-    router.push("/notes");
+    router.push(PAGES_TAB);
   };
 
   return (
