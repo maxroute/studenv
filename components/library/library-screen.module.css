@@ -70,6 +70,30 @@
 .footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; text-decoration: none; }
 .footer a:hover { color: var(--amber); }
 
+/* The page tree: an arrow for pages with pages inside, and an indent per level. */
+.list li { padding-left: calc(var(--depth, 0) * 26px); }
+.twist, .twistGap { width: 32px; height: 40px; flex-shrink: 0; margin-left: 6px; }
+.twist { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; padding: 0; color: var(--muted); cursor: pointer; }
+.twist:hover { background: var(--surface3); color: var(--text); }
+.list .twist + .open, .list .twistGap + .open { padding-left: 6px; }
+
+.menuWrap { position: relative; flex-shrink: 0; }
+.more, .moreGap { width: 36px; height: 40px; flex-shrink: 0; }
+.more { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted2); cursor: pointer; }
+.more:hover, .more[aria-expanded="true"] { background: var(--surface3); color: var(--text); }
+.menu { position: absolute; top: 100%; right: 0; z-index: 30; display: flex; width: 180px; flex-direction: column; gap: 2px; border: 1px solid var(--border2); border-radius: 10px; background: var(--surface2); box-shadow: 0 12px 34px rgb(0 0 0 / 50%); padding: 5px; }
+.menu button { display: flex; min-height: 38px; align-items: center; gap: 9px; border: 0; border-radius: 7px; background: transparent; padding: 0 10px; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.menu button:hover { background: var(--surface3); }
+.menu .danger { color: var(--red); }
+.toast { display: inline-flex; align-items: center; gap: 10px; }
+.toast button { border: 0; background: transparent; padding: 4px; color: var(--amber); font: inherit; font-weight: 700; cursor: pointer; }
+
+.grid li { padding-left: 0; flex-direction: column; }
+.grid .moreGap { display: none; }
+.grid .menuWrap { position: absolute; top: 4px; right: 40px; }
+.cardSubPages { display: inline-flex; min-height: 34px; align-items: center; align-self: flex-start; gap: 4px; margin: 0 8px 8px; border: 0; border-radius: 7px; background: transparent; padding: 0 6px; color: var(--muted); font: inherit; font-size: 11.5px; cursor: pointer; }
+.cardSubPages:hover { color: var(--amber); }
+
 @media (max-width: 767px) {
   .library { gap: 10px; padding: 14px 14px 0; }
   .header { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -84,5 +108,9 @@
   .list .name { grid-area: name; }
   .list .date { grid-area: date; align-self: center; }
   .list .state { display: none; }
+  .list li { padding-left: calc(var(--depth, 0) * 18px); }
+  .twist, .twistGap { width: 36px; height: 44px; margin-left: 2px; }
+  .more { height: 44px; }
+  .menu button { min-height: 44px; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

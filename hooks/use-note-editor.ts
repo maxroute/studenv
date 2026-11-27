@@ -26,8 +26,10 @@ const AUTOSAVE_DELAY_MS = 1000;
 
 /** Failures that may pass on their own: no connection, a timeout, too many requests, a server error. */
 const passing = (status: number) => status === 0 || status === 408 || status === 429 || status >= 500;
-/** About a minute of retries (1, 2, 4, then 8 s apart). */
+/** About a minute of retries (2, 4, then 8 s apart) while an earlier copy is on screen. */
 const MAX_LOAD_RETRIES = 10;
+/** Without a copy to show, a few quiet retries behind the page's outline, then "Try again". */
+const MAX_FIRST_LOAD_RETRIES = 3;
 
 /** Pages opened in this tab, shown at once when opened again (see note-cache.ts). */
 const openedNotes = createNoteCache<LoadedNote>();
@@ -79,11 +81,11 @@ export function useNoteEditor(noteId: string) {
     if (result.status !== 200 || !result.data) {
       const message = result.status === 404 ? "This note does not exist or was deleted." : result.error ?? "The note could not be loaded.";
       if (result.status === 404) openedNotes.forget(noteId);
-      // With an earlier copy on screen, a passing failure (offline, busy, too many
-      // requests) keeps it there, read-only, and tries again.
+      // A passing failure (offline, busy, too many requests) is tried again. An
+      // earlier copy stays on screen, read-only; without one, the outline stays.
       const cached = result.status !== 404 && result.status !== 403 ? openedNotes.get(noteId) : null;
-      if (cached && passing(result.status) && attempt < MAX_LOAD_RETRIES) {
-        setRefreshError(message);
+      if (passing(result.status) && attempt < (cached ? MAX_LOAD_RETRIES : MAX_FIRST_LOAD_RETRIES)) {
+        setRefreshError(cached ? message : null);
         loadRetryRef.current = window.setTimeout(() => void load(attempt + 1), retryDelay(attempt + 1));
         return null;
       }

@@ -9,12 +9,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
 import { EditorContent, ReactNodeViewRenderer, useEditor, type Editor } from "@tiptap/react";
-import { ChevronDown, ChevronRight, FileText, MoreHorizontal, Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useNoteEditor, type LoadedNote } from "@/hooks/use-note-editor";
 import { toEditorContent, fromEditorJSON } from "@/lib/notes/editor-bridge";
 import { createNoteExtensions, type NoteMentionItem } from "@/lib/notes/editor-extensions";
 import { parseNoteDoc } from "@/lib/notes/note-format";
-import { buildNoteTree, noteAncestors, noteSubtreeIds, type NoteTreeNode } from "@/lib/notes/note-tree";
+import { noteAncestors, noteSubtreeIds } from "@/lib/notes/note-tree";
 import { AppearsIn } from "@/components/refs/appears-in";
 import { RelatedInLibrary } from "@/components/rangan/related-in-library";
 import { useOpenPage } from "@/hooks/use-open-page";
@@ -24,6 +24,7 @@ import { NoteBubbleMenu } from "./note-bubble-menu";
 import { TableBubbleMenu } from "./table-bubble-menu";
 import { LinkMenu, openLink } from "./link-menu";
 import { linkTarget } from "@/lib/notes/link-target";
+import { PAGES_TAB } from "@/lib/client/shell-nav";
 import { editEquation, fixFormulas } from "./editor-actions";
 import { askConfirm, askText } from "./note-dialogs";
 import { FontMenu, TextColorMenu } from "./style-menus";
@@ -59,151 +60,16 @@ const REASON_LABELS: Record<string, string> = {
   migration: "Imported from the Shelf",
 };
 
-/**
- * The Notes area. The page tree lives in the app sidebar (NotesSidebarSection),
- * so this is one column: the page, or an invitation to start one.
- */
-export function NotesApp({ noteId }: { noteId?: string }) {
-  const router = useRouter();
+/** The page at /notes/[id]. Pages are listed in the Library's Pages tab. */
+export function NotesApp({ noteId }: { noteId: string }) {
   const { data: notes, mutate: refreshNotes } = useSWR("/api/notes", notesListFetcher);
-  const createNote = useCreateNote(router.push);
 
   return (
     <div className="notes-app">
       <main className="notes-main">
-        {noteId ? (
-          <NoteView key={noteId} noteId={noteId} notes={notes ?? []} onSaved={() => void refreshNotes()} />
-        ) : (
-          <div className="notes-index">
-            {/* New pages come from the top bar's + button. */}
-            <div className="notes-index-head">
-              <h1>Pages</h1>
-            </div>
-            <p className="notes-muted">Pages hold anything: text, PDFs, videos and links. They can have sub-pages, link to each other with @, and go on boards.</p>
-            {notes ? (
-              notes.length ? (
-                <NotesTree
-                  notes={notes}
-                  onCreateChild={(parentId) => void createNote(parentId)}
-                  onChanged={() => void refreshNotes()}
-                  onNavigate={() => undefined}
-                />
-              ) : (
-                <div className="notes-empty">
-                  <FileText size={32} />
-                  <p className="notes-muted">No pages yet.</p>
-                </div>
-              )
-            ) : (
-              <p className="notes-muted">Loading…</p>
-            )}
-          </div>
-        )}
+        <NoteView key={noteId} noteId={noteId} notes={notes ?? []} onSaved={() => void refreshNotes()} />
       </main>
     </div>
-  );
-}
-
-/** Creates a page (top level or under `parentId`) and opens it. */
-export function useCreateNote(navigate: (url: string) => void) {
-  const { mutate: refreshNotes } = useSWR("/api/notes", notesListFetcher);
-  return useCallback(
-    async (parentId: string | null) => {
-      const result = await api<LoadedNote>("/api/notes", { method: "POST", body: JSON.stringify({ title: "Untitled", parentId }) });
-      if (!result.ok || !result.data) {
-        toast.error(result.error ?? "The page could not be created.");
-        return;
-      }
-      await refreshNotes();
-      navigate(`/notes/${result.data.id}`);
-    },
-    [navigate, refreshNotes],
-  );
-}
-
-// ── tree ───────────────────────────────────────────────────────────────────
-
-export function NotesTree({
-  notes, activeId, onCreateChild, onChanged, onNavigate,
-}: { notes: NoteListEntry[]; activeId?: string; onCreateChild: (parentId: string) => void; onChanged: () => void; onNavigate: () => void }) {
-  const tree = useMemo(() => buildNoteTree(notes), [notes]);
-  const activeAncestors = useMemo(() => new Set(activeId ? noteAncestors(notes, activeId).map((n) => n.id) : []), [notes, activeId]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [moving, setMoving] = useState<NoteListEntry | null>(null);
-  const router = useRouter();
-
-  const remove = async (note: NoteListEntry) => {
-    const result = await api(`/api/notes/${note.id}`, { method: "DELETE" });
-    if (!result.ok) {
-      toast.error(result.error ?? "The page could not be deleted.");
-      return;
-    }
-    onChanged();
-    if (activeId && (activeId === note.id || noteSubtreeIds(notes, note.id).has(activeId))) router.push("/notes");
-    toast((t) => (
-      <span className="notes-toast">
-        Moved “{note.title}” to the trash.
-        <button
-          type="button"
-          onClick={async () => {
-            toast.dismiss(t.id);
-            const restored = await api(`/api/notes/${note.id}/restore`, { method: "POST" });
-            if (restored.ok) onChanged();
-            else toast.error("The page could not be restored.");
-          }}
-        >
-          Undo
-        </button>
-      </span>
-    ));
-  };
-
-  const renderNode = (node: NoteTreeNode<NoteListEntry>, depth: number) => {
-    const isCollapsed = collapsed.has(node.id) && !activeAncestors.has(node.id);
-    return (
-      <li key={node.id}>
-        <div className={`notes-tree-row${node.id === activeId ? " active" : ""}`} style={{ paddingLeft: 6 + depth * 14 }}>
-          <button
-            type="button"
-            className="notes-tree-toggle"
-            aria-label={isCollapsed ? "Expand" : "Collapse"}
-            disabled={node.children.length === 0}
-            onClick={() =>
-              setCollapsed((current) => {
-                const next = new Set(current);
-                if (next.has(node.id)) next.delete(node.id);
-                else next.add(node.id);
-                return next;
-              })
-            }
-          >
-            {node.children.length === 0 ? <span className="notes-tree-dot" /> : isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          </button>
-          <Link href={`/notes/${node.id}`} className="notes-tree-link" onClick={onNavigate}>
-            {node.title || "Untitled"}
-          </Link>
-          <button type="button" className="notes-tree-more" aria-label={`Actions for ${node.title}`} onClick={() => setMenuFor(menuFor === node.id ? null : node.id)}>
-            <MoreHorizontal size={15} />
-          </button>
-          {menuFor === node.id ? (
-            <div className="notes-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => { setMenuFor(null); onCreateChild(node.id); }}>Add sub-page</button>
-              <button type="button" role="menuitem" onClick={() => { setMenuFor(null); setMoving(node); }}>Move to…</button>
-              <button type="button" role="menuitem" className="danger" onClick={() => { setMenuFor(null); void remove(node); }}>Delete</button>
-            </div>
-          ) : null}
-        </div>
-        {node.children.length > 0 && !isCollapsed ? <ul>{node.children.map((child) => renderNode(child, depth + 1))}</ul> : null}
-      </li>
-    );
-  };
-
-  return (
-    <>
-      {tree.length === 0 ? <p className="notes-muted">No pages yet.</p> : <ul className="notes-tree">{tree.map((node) => renderNode(node, 0))}</ul>}
-      {moving ? <MoveDialog note={moving} notes={notes} onClose={() => setMoving(null)} onMoved={onChanged} /> : null}
-    </>
   );
 }
 
@@ -237,13 +103,13 @@ function MoveDialog({ note, notes, onClose, onMoved }: { note: NoteListEntry; no
         <label className="notes-field">
           <span>Put it under</span>
           <select value={parentId} onChange={(event) => setParentId(event.target.value)}>
-            <option value="">Top level (shown on the Shelf)</option>
+            <option value="">Top level</option>
             {choices.map((choice) => (
               <option key={choice.id} value={choice.id}>{choice.title || "Untitled"}</option>
             ))}
           </select>
         </label>
-        <p className="notes-muted">Sub-pages are not listed on the Shelf; top-level pages are.</p>
+        <p className="notes-muted">A sub-page is listed under its parent in the Library&apos;s Pages tab.</p>
         <div className="notes-dialog-actions">
           <button type="button" className="notes-secondary-btn" onClick={onClose}>Cancel</button>
           <button type="button" className="notes-primary-btn" disabled={busy} onClick={() => void move()}>Move</button>
@@ -478,7 +344,10 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     return (
       <div className="notes-empty">
         <p>{loadError}</p>
-        <Link className="notes-secondary-btn" href="/notes">Back to pages</Link>
+        <div className="notes-empty-actions">
+          <button type="button" className="notes-secondary-btn" onClick={() => void reload()}>Try again</button>
+          <Link className="notes-secondary-btn" href={PAGES_TAB}>Back to pages</Link>
+        </div>
       </div>
     );
   }
@@ -494,7 +363,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
         embedded={embedded}
         crumbs={
           <nav className="note-breadcrumbs" aria-label="Breadcrumbs">
-            <Link href="/notes">Pages</Link>
+            <Link href={PAGES_TAB}>Pages</Link>
             {ancestors.map((ancestor) => (
               <span key={ancestor.id}>
                 <span className="note-crumb-sep">/</span>

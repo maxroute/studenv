@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filterEntries, libraryEntries } from "./library-entries";
+import { filterEntries, libraryEntries, subPageEntries, treeRows } from "./library-entries";
 
 const item = (id: string, type: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -69,4 +69,51 @@ test("sorting by title, age and status", () => {
   assert.equal(filterEntries(entries, { tab: "all", sort: "title" })[0]?.key, "item:a");
   const byStatus = keys(filterEntries(entries, { tab: "all", sort: "status" }));
   assert.ok(byStatus.indexOf("item:b") < byStatus.indexOf("page:n2"), "items with a status come before the rest");
+});
+
+const tree = [
+  { id: "p", title: "Photosynthesis", parentId: null, sortKey: "a", updatedAt: "2026-11-05T00:00:00.000Z" },
+  { id: "c2", title: "Dark reactions", parentId: "p", sortKey: "b", updatedAt: "2026-11-09T00:00:00.000Z" },
+  { id: "c1", title: "Role of chlorophyll", parentId: "p", sortKey: "a", updatedAt: "2026-11-01T00:00:00.000Z" },
+  { id: "g", title: "Chlorophyll b", parentId: "c1", sortKey: "a", updatedAt: "2026-11-02T00:00:00.000Z" },
+  { id: "pdfPage", title: "Biology PDF", parentId: null, sortKey: "c", updatedAt: "2026-11-03T00:00:00.000Z" },
+  { id: "pdfChild", title: "My notes on the PDF", parentId: "pdfPage", sortKey: "a", updatedAt: "2026-11-03T00:00:00.000Z" },
+  { id: "lost", title: "Lost page", parentId: "gone", sortKey: "a", updatedAt: "2026-11-04T00:00:00.000Z" },
+];
+const treeEntries = libraryEntries({
+  items: [item("pdf", "pdf", { noteId: "pdfPage" }), item("lone", "pdf", { noteId: "other" })],
+  pages: tree,
+  boards: [],
+  files: [],
+});
+const listed = (rows: ReturnType<typeof treeRows>) => rows.map((row) => `${"  ".repeat(row.depth)}${row.entry.title}`);
+
+test("the Pages tab lists pages, and a resource only when pages are inside it", () => {
+  assert.deepEqual(keys(filterEntries(treeEntries, { tab: "pages" })).sort(), ["item:pdf", "page:lost", "page:p"]);
+  assert.equal(treeEntries.find((entry) => entry.key === "page:p")?.subPages, 2);
+});
+
+test("sub-pages start closed", () => {
+  const shown = filterEntries(treeEntries, { tab: "pages", sort: "title" });
+  assert.deepEqual(listed(treeRows(shown, tree, new Set())), ["Item pdf", "Lost page", "Photosynthesis"]);
+});
+
+test("opening a page shows its sub-pages in the student's order, level by level", () => {
+  const shown = filterEntries(treeEntries, { tab: "pages", sort: "title" });
+  assert.deepEqual(listed(treeRows(shown, tree, new Set(["p", "pdfPage"]))), ["Item pdf", "  My notes on the PDF", "Lost page", "Photosynthesis", "  Role of chlorophyll", "  Dark reactions"]);
+  assert.deepEqual(listed(treeRows(shown, tree, new Set(["p", "c1"]))).slice(-3), ["  Role of chlorophyll", "    Chlorophyll b", "  Dark reactions"]);
+});
+
+test("search finds sub-pages and says where they are", () => {
+  const found = filterEntries([...treeEntries, ...subPageEntries(tree)], { tab: "pages", query: "chlorophyll" });
+  assert.deepEqual(found.map((entry) => [entry.title, entry.parentTitle]).sort(), [["Chlorophyll b", "Role of chlorophyll"], ["Role of chlorophyll", "Photosynthesis"]]);
+});
+
+test("a loop in the data can't repeat rows forever", () => {
+  const loop = [
+    { id: "x", title: "X", parentId: "y", sortKey: "a", updatedAt: "2026-11-01T00:00:00.000Z" },
+    { id: "y", title: "Y", parentId: "x", sortKey: "a", updatedAt: "2026-11-01T00:00:00.000Z" },
+  ];
+  const start = subPageEntries(loop).filter((entry) => entry.noteId === "x");
+  assert.deepEqual(listed(treeRows(start, loop, new Set(["x", "y"]))), ["X", "  Y"]);
 });

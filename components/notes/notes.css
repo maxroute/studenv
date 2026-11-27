@@ -2203,3 +2203,5 @@
 .note-youtube-poster:hover .note-youtube-play { background: #e62117; }
 /* A bare YouTube address under its preview: hidden until the caret is on its line. */
 .note-prose .note-youtube-address { display: none; }
+
+.notes-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }

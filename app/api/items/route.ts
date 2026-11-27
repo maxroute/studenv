@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
       getRateLimitIdentifier(request, user.id),
     );
     const items = await itemService.listItems(user.id, query);
-    return apiSuccess(items, { cacheSeconds: 30 });
+    // Not reused by the browser: pages are moved and deleted, and the Library must show
+    // that at once. The app keeps its own copy in memory and refreshes it after changes.
+    return apiSuccess(items);
   } catch (error) {
     const err = getErrorResponse(error);
     return apiError(err.message, err.status, err.details);

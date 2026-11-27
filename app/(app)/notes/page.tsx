@@ -1,7 +1,7 @@
-import { NotesApp } from "@/components/notes/notes-app";
+import { redirect } from "next/navigation";
+import { PAGES_TAB } from "@/lib/client/shell-nav";
 
-export const dynamic = "force-dynamic";
-
+/** The old Pages screen is now the Pages tab of the Library. */
 export default function NotesPage() {
-  return <NotesApp />;
+  redirect(PAGES_TAB);
 }

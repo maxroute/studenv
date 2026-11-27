@@ -162,3 +162,7 @@ textarea.note-dialog-input.note-equation-input { min-height: 58px; font-family: 
   .note-equation { padding: 14px; }
 }
 .note-equation:focus { outline: none; }
+
+/* A list row's two lines, wherever the dialogs are used without the notes styles. */
+.note-dialog-option .note-popup-text { display: flex; min-width: 0; flex-direction: column; }
+.note-dialog-option .note-popup-detail { color: var(--muted); font-size: 12px; }
