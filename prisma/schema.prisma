@@ -649,6 +649,8 @@ model Task {
   completedAt         DateTime?
   dueDate             DateTime?
   dueTime             String?        @db.VarChar(10)
+  /// Days the task was left unfinished on before it was moved away.
+  missedDueDates      DateTime[]     @default([])
   estimatedDuration   Int?           // in minutes
   trackedDuration     Int            @default(0) // in milliseconds (completed focus sessions durationMs)
   notificationEnabled Boolean        @default(true)

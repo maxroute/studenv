@@ -108,7 +108,8 @@ export function sanitizeAvatarUrl(input: string | null | undefined) {
     return null;
   }
 
-  if (/^\/uploads\/avatars\/[a-zA-Z0-9-]+\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
+  // Photos uploaded to this app: the current address, and the older local one.
+  if (/^(\/uploads)?\/avatars\/[a-zA-Z0-9-]+\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
     return trimmed;
   }
 

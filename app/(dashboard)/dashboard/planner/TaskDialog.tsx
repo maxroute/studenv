@@ -1,5 +1,6 @@
 "use client";
 
+import { dayToDueDate } from "@/lib/client/reschedule";
 import React, { useEffect, useState } from "react";
 import {
   X,
@@ -229,7 +230,8 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        // An edit may move the task off a past day; the student's today says whether it was missed.
+        body: JSON.stringify(task ? { ...payload, today: dayToDueDate(new Date()) } : payload),
       });
 
       if (res.ok) {

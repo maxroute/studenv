@@ -1,0 +1,13 @@
+/* The button is the touch target; the ring inside it is what is seen. */
+.check { display: inline-flex; width: 28px; height: 28px; flex: 0 0 28px; align-items: center; justify-content: center; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.check span { display: inline-flex; width: 19px; height: 19px; align-items: center; justify-content: center; border: 1.5px solid var(--border2); border-radius: 50%; color: transparent; transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease; }
+.check:hover span { border-color: var(--amber); background: var(--amber-glow); color: var(--amber); }
+.check:active span { transform: scale(0.88); }
+.check:focus-visible { outline: none; }
+.check:focus-visible span { box-shadow: 0 0 0 3px var(--amber-dim); }
+.done span, .done:hover span { border-color: var(--amber); background: var(--amber); color: #0e0e0e; }
+
+@media (pointer: coarse) {
+  .check { width: 40px; height: 40px; flex-basis: 40px; }
+  .check span { width: 22px; height: 22px; }
+}

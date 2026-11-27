@@ -365,27 +365,11 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
 }
 
 function AppearanceSection() {
-  const accents = ["#f5a623", "#4abfb5", "#e05a4b", "#9b7fe8", "#6ba3e0"];
   return (
     <section className="panel settings-panel">
       <div className="panel-head">
         <h2>Appearance</h2>
-        <p>Fine tune the accent system and default layout.</p>
-      </div>
-      <div className="swatches">
-        {accents.map((color) => (
-          <button
-            key={color}
-            className="swatch"
-            style={{ background: color }}
-            type="button"
-            onClick={() => {
-              document.documentElement.style.setProperty("--amber", color);
-              document.documentElement.style.setProperty("--amber-glow", `${color}18`);
-              document.documentElement.style.setProperty("--amber-dim", `${color}40`);
-            }}
-          />
-        ))}
+        <p>Choose the theme and default layout.</p>
       </div>
       <div className="settings-form-grid">
         <SettingsSelect

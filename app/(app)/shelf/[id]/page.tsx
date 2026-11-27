@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { DashboardClient } from "@/components/items/dashboard-client";
+import { LibraryScreen } from "@/components/library/library-screen";
 import { useAppStore } from "@/hooks/useAppStore";
 import { useItem } from "@/hooks/useItems";
 import { openItemPage } from "@/lib/client/open-item-page";
@@ -24,5 +24,5 @@ export default function ShelfItemPage() {
     }
   }, [id, setSelectedId]);
 
-  return <DashboardClient />;
+  return <LibraryScreen />;
 }

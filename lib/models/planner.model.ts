@@ -40,8 +40,12 @@ export const createTasksSchema = z.object({
   tasks: z.array(createTaskSchema).min(1).max(MAX_BATCH_TASKS),
 }).strict();
 
+/** The student's own calendar day, sent with date changes so missed days follow their clock. */
+const todaySchema = z.string().datetime().optional();
+
 export const updateTaskSchema = baseTaskSchema
   .partial()
+  .extend({ today: todaySchema })
   .strict()
   .superRefine((value, ctx) => {
     if ("title" in value && !value.title?.trim()) {
@@ -57,5 +61,30 @@ export const reorderTasksSchema = z.object({
   taskIds: z.array(resourceIdSchema).max(1000)
 }).strict();
 
+/** Most tasks moved in one request. */
+export const MAX_RESCHEDULE_TASKS = 500;
+
+/** New dates for several tasks at once (clearing a backlog, and undoing it). */
+export const rescheduleTasksSchema = z.object({
+  changes: z.array(z.object({
+    id: resourceIdSchema,
+    dueDate: z.string().datetime().nullable(),
+    dueTime: z.string().regex(/^\d{2}:\d{2}$/, "Time must be in HH:MM format.").nullable(),
+  }).strict()).min(1).max(MAX_RESCHEDULE_TASKS),
+  today: z.string().datetime().optional(),
+}).strict();
+
+/** The longest stretch of focus history one request may read: a month with spare days. */
+export const MAX_HISTORY_DAYS = 62;
+
+export const focusHistoryQuerySchema = z.object({
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+}).strict().refine(({ from, to }) => {
+  const span = Date.parse(to) - Date.parse(from);
+  return span > 0 && span <= MAX_HISTORY_DAYS * 86_400_000;
+}, `Choose a range of up to ${MAX_HISTORY_DAYS} days.`);
+
+export type RescheduleInput = z.infer<typeof rescheduleTasksSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

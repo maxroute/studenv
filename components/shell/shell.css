@@ -1,0 +1,333 @@
+/* The app frame shared by every signed-in screen: sidebar on wide screens, header and tab bar on phones. */
+.shell-sidebar-slot { min-height: 0; height: 100%; }
+
+.shell-sidebar {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  width: 232px;
+  height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 8px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px 12px 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.shell-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--amber); text-decoration: none; }
+.shell-top { display: flex; height: 36px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.shell-top .shell-brand { min-width: 0; overflow: hidden; padding-left: 8px; white-space: nowrap; }
+.shell-toggle { display: inline-flex; width: 40px; height: 36px; flex-shrink: 0; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.shell-toggle:hover { background: var(--surface2); color: var(--text); }
+.shell-rangan-logo { flex-shrink: 0; border-radius: 999px; }
+/* The mark, a little taller than the word's capitals, centred on it and close to it
+   (these outrank the older shared logo rules). */
+.shell-brand .brand-lockup { align-items: center; gap: 7px; }
+.shell-brand .logo-mark { width: 20px; height: 20px; transform: none; }
+.shell-brand .shell-brand-text { font-size: 19px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
+
+.shell-search, .shell-rangan {
+  display: flex;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+  padding: 0 10px;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.shell-search span, .shell-rangan span { flex: 1; }
+.shell-search kbd, .shell-rangan kbd { font: inherit; font-size: 11px; opacity: 0.7; }
+.shell-search:hover { border-color: var(--border2); color: var(--text); }
+.shell-rangan { border-color: var(--amber-dim); background: var(--amber-glow); color: var(--amber); font-weight: 500; }
+
+.shell-popup-wrap { position: relative; }
+.shell-new {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--amber);
+  color: #0e0e0e;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell-new:disabled { opacity: 0.6; cursor: progress; }
+
+.shell-popup {
+  position: absolute;
+  z-index: 10000;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  min-width: 190px;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 24px));
+  flex-direction: column;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: var(--surface2);
+  padding: 5px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.shell-popup > a, .shell-popup > button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.shell-popup > a:hover, .shell-popup > button:hover { background: var(--surface3); }
+.shell-popup > .danger { color: var(--red); }
+.shell-popup-head { display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 4px; padding: 7px 10px 9px; }
+.shell-popup-head strong { font-size: 13px; font-weight: 600; }
+.shell-popup-head span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; }
+
+.shell-nav { display: flex; flex-shrink: 0; flex-direction: column; gap: 2px; margin-top: 8px; }
+.shell-link {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  gap: 11px;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.shell-link:hover { background: var(--surface2); color: var(--text); }
+.shell-link.active { background: var(--surface2); color: var(--text); box-shadow: inset 2.5px 0 0 var(--amber); }
+.shell-link span:first-of-type { flex: 1; }
+.shell-sublink { height: 32px; margin: 2px 0 0 18px; gap: 9px; border-left: 1px solid var(--border); border-radius: 0 8px 8px 0; padding-left: 14px; font-size: 12.5px; }
+
+.shell-clock { border-radius: 999px; background: var(--amber-glow); padding: 1px 7px; color: var(--amber); font-size: 11px; font-variant-numeric: tabular-nums; }
+.shell-clock.paused { opacity: 0.6; }
+
+.shell-lists { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; margin-top: 8px; }
+.shell-label { flex-shrink: 0; padding: 10px 10px 4px; color: var(--muted2); font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+.shell-entry {
+  display: flex;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.shell-entry svg { flex-shrink: 0; }
+.shell-entry span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-entry:hover, .shell-entry.active { background: var(--surface2); color: var(--text); }
+
+.shell-account-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.shell-account-trigger:hover { background: var(--surface2); }
+.shell-avatar {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--amber-dim);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 700;
+}
+.shell-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.shell-account.up .shell-popup { top: auto; bottom: calc(100% + 6px); }
+
+/* ---- Folding the sidebar: the width slides while the words fade; the icons barely move. ---- */
+.shell-sidebar svg, .shell-sidebar img { flex-shrink: 0; }
+.shell-search, .shell-rangan, .shell-new, .shell-link, .shell-account-trigger { overflow: hidden; white-space: nowrap; }
+.shell-sidebar.animate { transition: width 0.32s cubic-bezier(0.32, 0.72, 0, 1); }
+.shell-sidebar.animate :is(.shell-search, .shell-rangan, .shell-new, .shell-link, .shell-account-trigger) {
+  transition: padding 0.32s cubic-bezier(0.32, 0.72, 0, 1), margin 0.32s cubic-bezier(0.32, 0.72, 0, 1), gap 0.32s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.15s ease;
+}
+.shell-sidebar.animate :is(.shell-brand, .shell-search span, .shell-search kbd, .shell-rangan span, .shell-rangan kbd, .shell-new span, .shell-link > span, .shell-account-name) {
+  transition: opacity 0.18s ease 0.08s, max-width 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.shell-sidebar.animate .shell-lists { transition: opacity 0.2s ease 0.1s, visibility 0s; }
+.shell-search span, .shell-search kbd, .shell-rangan span, .shell-rangan kbd, .shell-new span, .shell-link > span, .shell-account-name { max-width: 160px; overflow: hidden; }
+.shell-brand { max-width: 160px; }
+
+.shell-sidebar.collapsed { width: 64px; }
+.shell-sidebar.collapsed .shell-top { gap: 0; }
+.shell-sidebar.collapsed .shell-brand { max-width: 0; flex: 0 0 0; padding: 0; opacity: 0; pointer-events: none; }
+.shell-sidebar.collapsed :is(.shell-search span, .shell-search kbd, .shell-rangan span, .shell-rangan kbd, .shell-new span, .shell-link > span, .shell-account-name) {
+  max-width: 0;
+  flex: 0 0 0;
+  opacity: 0;
+  transition-delay: 0s;
+}
+.shell-sidebar.collapsed .shell-search { gap: 0; padding: 0 11px; }
+.shell-sidebar.collapsed .shell-rangan { gap: 0; padding: 0 8px; }
+.shell-sidebar.collapsed .shell-new { gap: 0; }
+.shell-sidebar.collapsed .shell-link { gap: 0; padding: 0 11px; }
+.shell-sidebar.collapsed .shell-sublink { margin-left: 0; border-left: 0; border-radius: 8px; padding-left: 12px; }
+.shell-sidebar.collapsed .shell-account-trigger { gap: 0; padding: 6px; }
+.shell-sidebar.collapsed .shell-lists { visibility: hidden; opacity: 0; transition: opacity 0.1s ease, visibility 0s linear 0.1s; }
+/* A running session shows as a dot when there is no room for the time. */
+.shell-sidebar.collapsed .shell-sublink { position: relative; }
+.shell-sidebar.collapsed .shell-link .shell-clock { position: absolute; top: 5px; right: 6px; width: 7px; max-width: 7px; height: 7px; flex: none; overflow: hidden; background: var(--amber); padding: 0; color: transparent; font-size: 0; opacity: 1; }
+.shell-sidebar.collapsed .shell-popup { min-width: 190px; }
+/* Menus of a folded sidebar open to its right instead of being clipped by it. */
+.shell-sidebar.collapsed .shell-account .shell-popup { left: calc(100% + 14px); bottom: 0; }
+.shell-sidebar.collapsed .shell-new-wrap .shell-popup { top: 0; left: calc(100% + 14px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-sidebar.animate, .shell-sidebar.animate * { transition: none !important; }
+}
+
+.shell-phone-header, .shell-phone-bottom, .shell-planner-switch { display: none; }
+.shell-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Library screens: the frame around the page. */
+.studenv-frame { display: flex; height: 100vh; height: 100dvh; min-width: 0; }
+.studenv-frame-column { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; }
+.studenv-frame-column > .app-main { min-height: 0; flex: 1; }
+.studenv-frame.shelf-shell { overflow: hidden; }
+
+@media (max-width: 767px) {
+  .shell-sidebar-slot { display: none; }
+
+  .shell-phone-header {
+    display: flex;
+    min-height: 52px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: env(safe-area-inset-top) 10px 0 14px;
+  }
+  .shell-phone-header > .shell-brand { margin-right: auto; }
+  .shell-icon-button {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .shell-phone-header .shell-new { width: 36px; height: 36px; gap: 0; }
+  .shell-phone-header .shell-popup { right: 0; left: auto; }
+  .shell-phone-header .shell-account-name { display: none; }
+  .shell-phone-header .shell-account-trigger { width: auto; padding: 6px; }
+
+  .shell-phone-bottom { display: block; flex-shrink: 0; background: var(--surface); }
+  .shell-focus-strip {
+    display: flex;
+    height: 34px;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--amber-dim);
+    background: var(--surface2);
+    padding: 0 16px;
+    color: var(--text);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .shell-focus-strip > span:first-of-type { flex: 1; }
+  .shell-tabbar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--border);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .shell-tab {
+    display: flex;
+    min-height: 50px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10.5px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .shell-tab.active { color: var(--amber); }
+  .shell-tab-rangan { color: var(--amber); }
+  .shell-tab-orb { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; }
+
+  .shell-planner-switch {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+    margin: 10px 16px 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 4px;
+  }
+  .shell-planner-switch a {
+    display: flex;
+    min-height: 34px;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 7px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .shell-planner-switch a.active { background: var(--surface3); color: var(--text); }
+}
+
+/* Focus zen mode: the whole frame steps aside for the timer. */
+html.focus-zen :is(.shell-sidebar-slot, .shell-phone-header, .shell-phone-bottom, .shell-planner-switch) { display: none; }

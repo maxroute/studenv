@@ -1,6 +1,7 @@
+/* One calm column: what needs doing now, with everything else a tap away. */
 .plannerPage {
   min-height: 100%;
-  padding: 40px 38px 42px;
+  padding: 36px 24px 48px;
   background: #0e0e0b;
   color: #ded9ce;
   font-family: var(--font-dm-sans), sans-serif;
@@ -8,232 +9,67 @@
 
 .plannerFrame {
   width: 100%;
-  max-width: 1600px;
+  max-width: 660px;
   margin: 0 auto;
-  padding-bottom: 10px;
 }
 
 .header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 112px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-}
-
-.titleRow {
-  display: flex;
   align-items: center;
-  gap: 11px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.titleRow h1 {
+.header h1 {
   margin: 0;
   color: #e5dfd4;
   font-family: var(--font-fraunces), serif;
-  font-size: 30px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: 0;
-}
-
-.titleIcon {
-  width: 31px;
-  height: 31px;
-  color: #d88908;
-  stroke-width: 2;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.15;
 }
 
 .header p {
-  margin: 12px 0 0;
-  color: #89857d;
-  font-size: 14px;
-  line-height: 1.25;
+  margin: 4px 0 0;
+  color: #807c75;
+  font-size: 13px;
 }
 
 .headerActions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 16px;
-  padding-top: 8px;
+  gap: 4px;
 }
 
-.dateChip {
-  display: flex;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  min-width: 136px;
-  padding: 0 20px;
-  border: 2px solid #292a29;
-  border-radius: 10px;
-  background: #181918;
-  color: #aaa6a0;
-  font-size: 14px;
-}
-
-.primaryButton,
-.quickButton {
+.iconButton {
   display: inline-flex;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
+  padding: 0;
   border: 0;
-  background: #faa91f;
-  color: #11110f;
-  font-weight: 700;
-  transition:
-    background-color 150ms ease,
-    transform 150ms ease;
+  border-radius: 9px;
+  background: transparent;
+  color: #99958d;
 }
 
-.primaryButton:hover,
-.quickButton:hover {
-  background: #f5a016;
-  transform: translateY(-1px);
+.iconButton:hover,
+.iconOn {
+  background: #1d1d18;
+  color: #f5a623;
 }
 
-.primaryButton {
-  height: 40px;
-  gap: 3px;
-  padding: 0 21px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.secondaryButton {
-  display: inline-flex;
-  height: 40px;
+.filterRow {
+  display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  padding: 0 16px 0 10px;
-  border: 2px solid #292a29;
-  border-radius: 10px;
-  background: #181918;
-  color: #e4dfcf;
-  font-size: 14px;
-  white-space: nowrap;
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease;
+  margin-top: 16px;
 }
 
-.secondaryButton:hover {
-  border-color: rgba(250, 169, 31, 0.45);
-  background: #1e1f1d;
-}
-
-.ranganIcon {
-  border-radius: 999px;
-}
-
-.buttonIcon,
-.quickIcon {
-  width: 16px;
-  height: 16px;
-  stroke-width: 3;
-}
-
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 17px;
-  margin-top: 35px;
-}
-
-.statCard {
-  height: 92px;
-  padding: 18px 21px;
-  border-radius: 15px;
-  background: #181817;
-}
-
-.statCard span {
-  display: block;
-  color: #92908c;
-  font-size: 13px;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.statCard strong {
-  display: block;
-  margin-top: 12px;
-  color: #fff;
-  font-family: var(--font-fraunces), serif;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.greenText {
-  color: #3cc873 !important;
-}
-
-.purpleText {
-  color: #8e74ef !important;
-}
-
-.redText {
-  color: #ed5958 !important;
-}
-
-.orangeText {
-  color: #ffac18 !important;
-}
-
-.controlsGrid {
-  display: grid;
-  grid-template-columns: 200px 220px minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 35px;
-}
-
-.compactControl,
-.searchSortControl {
-  height: 50px;
-  border: 1px solid #272720;
-  border-radius: 11px;
-  background: #12120f;
-}
-
-.compactControl {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  padding: 0 6px 0 10px;
-}
-
-.compactControl > span,
-.sortControl > span {
-  color: #88857e;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.compactControl select,
-.sortControl select {
-  height: 35px;
-  min-width: 0;
-  padding: 0 15px 0 7px;
-  border: 1px solid #303029;
-  border-radius: 7px;
-  background-color: #191914;
-  color: #d7d2c8;
-  font-size: 12px;
-  box-shadow: none;
-}
-
-.searchSortControl {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 0px 6px;
+.filterRow .searchBox {
+  flex: 1;
 }
 
 .searchBox {
@@ -242,6 +78,7 @@
 }
 
 .searchBox input {
+  width: 100%;
   height: 35px;
   padding: 0 14px 0 36px;
   border: 1px solid #262720;
@@ -267,61 +104,328 @@
   transform: translateY(-50%);
 }
 
-.sortControl {
-  display: grid;
-  grid-template-columns: auto 120px;
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.movedNotice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(245, 166, 35, 0.35);
+  border-radius: 9px;
+  background: #151511;
+  font-size: 12.5px;
+}
+
+.movedNotice span {
+  flex: 1;
+}
+
+.movedNotice button,
+.quietButton {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0 6px;
+  color: #f5a623;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.taskList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskRow {
+  position: relative;
+  padding: 11px 4px;
+  border-top: 1px solid #1f1f19;
+  background: #0e0e0b;
+}
+
+.taskRow:first-child {
+  border-top: 0;
+}
+
+/* The next thing to do is the one thing that stands out. */
+.nextTask {
+  margin-bottom: 4px;
+  padding: 16px 14px;
+  border: 1px solid #34342b;
+  border-radius: 14px;
+  background: #161612;
+}
+
+.nextTask:first-child {
+  border-top: 1px solid #34342b;
+}
+
+.nextTask + .taskRow {
+  border-top: 0;
+}
+
+/* An open task menu sits over the rows below it. */
+.taskRow:has([aria-haspopup="menu"][aria-expanded="true"]) {
+  z-index: 20;
+}
+
+.completedTask {
+  opacity: 0.62;
+}
+
+.taskTopline {
+  display: flex;
   align-items: center;
   gap: 8px;
 }
-/* 
-.sortControl > span::before {
-  content: "=";
-  margin-right: 7px;
-  color: #565650;
-  font-size: 12px;
-} */
 
-.dateFilterNotice {
+.taskBody {
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.taskBody:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid rgba(245, 166, 35, 0.6);
+  outline-offset: 2px;
+}
+
+.taskBody h3 {
+  margin: 0;
+  color: #e3ddd2;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.nextTask .taskBody h3 {
+  font-size: 15.5px;
+  font-weight: 600;
+}
+
+.completedTask .taskBody h3 {
+  color: #66635d;
+  text-decoration: line-through;
+}
+
+.taskMeta {
   display: flex;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  color: #77736c;
+  font-size: 11.5px;
+}
+
+.taskMeta span + span::before {
+  content: "\00b7";
+  margin: 0 6px;
+  color: #4a4741;
+}
+
+.taskMeta .overdueMeta {
+  color: #d9706f;
+}
+
+.taskMeta .highMeta {
+  color: #e49a19;
+}
+
+.taskMeta .urgentMeta {
+  color: #ed5958;
+  font-weight: 600;
+}
+
+.startButton {
+  display: inline-flex;
+  min-height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: #faa91f;
+  color: #11110f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quickIcon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 3;
+}
+
+.startButton svg,
+.focusButton svg {
+  width: 12px;
+  height: 12px;
+}
+
+.focusButton {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #77736c;
+}
+
+.focusButton:hover {
+  background: #1d1d18;
+  color: #f5a623;
+}
+
+/* Edit, move and delete wait until the task is pointed at, focused or opened. */
+.more {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.taskRow:hover .more,
+.taskRow:focus-within .more,
+.openRow .more,
+.taskRow:has([aria-haspopup="menu"][aria-expanded="true"]) .more {
+  opacity: 1;
+}
+
+.clearDay {
+  margin: 0;
+  color: #77736c;
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* ---- The backlog, what is coming and what is done: one line each ---- */
+.folds {
+  display: flex;
+  flex-direction: column;
+}
+
+.folds > section {
+  border-top: 1px solid #23231d;
+}
+
+.foldLine {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14px;
-  padding: 9px 13px;
-  border: 1px solid #25251f;
-  border-radius: 8px;
-  background: #151511;
-  color: #8f8b84;
-  font-size: 12px;
-}
-
-.dateFilterNotice button {
+  gap: 12px;
+  padding: 0 4px;
   border: 0;
   background: transparent;
-  color: #e49a19;
+  color: #b8b4ab;
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.foldLabel,
+.foldAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.foldAction {
+  gap: 4px;
+  color: #77736c;
+  font-size: 12.5px;
+}
+
+.foldLine:hover .foldAction {
+  color: #f5a623;
+}
+
+.foldAction svg {
+  transition: transform 150ms ease;
+}
+
+.foldLine[aria-expanded="true"] .foldAction svg {
+  transform: rotate(180deg);
+}
+
+.attention {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ed5958;
+}
+
+.backlog {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 4px 8px;
+}
+
+.backlog button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #303029;
+  border-radius: 8px;
+  background: transparent;
+  color: #d7d2c8;
   font-size: 12px;
 }
 
-.mainGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 315px;
-  align-items: start;
-  gap: 25px;
-  margin-top: 34px;
+.backlog button:hover {
+  border-color: rgba(245, 166, 35, 0.45);
+  color: #f5a623;
 }
 
-.taskSurface {
-  min-width: 0;
-  /* min-height: clamp(430px, calc(100vh - 360px), 650px); */
-  min-height: clamp(250px, calc(100vh - 390px), 650px);
-  border: 1px dashed #22231f;
-  border-radius: 18px;
-  background: #0e0e0b;
-  overflow: hidden;
+.backlog button:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.groupLabel {
+  margin: 0;
+  padding: 6px 4px 0;
+  color: #77736c;
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quickButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: #faa91f;
+  color: #11110f;
+  font-weight: 700;
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.quickButton:hover {
+  background: #f5a016;
+  transform: translateY(-1px);
 }
 
 .emptyState {
   display: flex;
-  min-height: inherit;
+  min-height: 260px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -359,343 +463,6 @@
   padding: 0 20px;
   border-radius: 10px;
   font-size: 13px;
-}
-
-.sidebarRail {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-}
-
-.calendarCard,
-.sideCard {
-  border: 2px solid #292a28;
-  border-radius: 18px;
-  background: #171817;
-}
-
-.calendarCard {
-  min-height: 226px;
-  padding: 18px 19px 17px;
-}
-
-.cardHeaderRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.cardHeaderRow h2,
-.sideCard h2 {
-  margin: 0;
-  color: #8f8c86;
-  font-family: var(--font-dm-sans), sans-serif;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.cardHeaderRow > div {
-  display: flex;
-  gap: 4px;
-}
-
-.cardHeaderRow button {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: #565752;
-}
-
-.cardHeaderRow button:hover {
-  color: #d5d0c7;
-}
-
-.cardHeaderRow svg {
-  width: 13px;
-  height: 13px;
-}
-
-.calendarGrid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-auto-rows: 28px;
-  gap: 0;
-  margin-top: 11px;
-  text-align: center;
-}
-
-.calendarGrid > span {
-  display: grid;
-  place-items: center;
-  color: #65645f;
-  font-size: 11px;
-}
-
-.calendarGrid i {
-  display: block;
-}
-
-.calendarGrid button {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  height: 25px;
-  place-items: center;
-  align-self: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #9b9892;
-  font-size: 12px;
-  box-shadow: none;
-}
-
-.calendarGrid button:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.calendarGrid button em {
-  position: absolute;
-  bottom: 1px;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #f5a623;
-}
-
-.calendarGrid .selectedDay {
-  background: #f5a623;
-  color: #17130b;
-  font-weight: 700;
-}
-
-.calendarGrid .todayDay {
-  box-shadow: inset 0 0 0 1px rgba(245, 166, 35, 0.4);
-  color: #ddd7cc;
-}
-
-.sideCard {
-  padding: 19px 20px 17px;
-}
-
-.timelineList {
-  display: grid;
-  gap: 13px;
-  margin-top: 18px;
-}
-
-.timelineLine {
-  display: grid;
-  grid-template-columns: 10px auto 1fr;
-  align-items: center;
-  gap: 8px;
-  color: #9b9892;
-  font-size: 13px;
-}
-
-.timelineText::before {
-  content: "�";
-  margin-right: 6px;
-}
-
-.timelineDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.greenDot {
-  background: #3cc873;
-}
-
-.orangeDot {
-  background: #ffac18;
-}
-
-.purpleDot {
-  background: #8e74ef;
-}
-
-.redDot {
-  background: #ed5958;
-}
-
-.productivityRows {
-  display: grid;
-  gap: 11px;
-  margin-top: 18px;
-}
-
-.productivityRows > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  color: #96938d;
-  font-size: 13px;
-}
-
-.productivityRows strong {
-  color: #e0dbd1;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.loadingStack,
-.taskList {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-}
-
-.loadingStack div {
-  height: 76px;
-  border-radius: 10px;
-  background: #171714;
-  animation: pulse 1.2s ease-in-out infinite alternate;
-}
-
-.taskCard {
-  padding: 14px;
-  border: 1px solid #272720;
-  border-radius: 10px;
-  background: #151512;
-  transition:
-    border-color 150ms ease,
-    opacity 150ms ease;
-}
-
-.taskCard:hover,
-.expandedTask {
-  border-color: #4c3b1a;
-}
-
-.completedTask {
-  opacity: 0.62;
-}
-
-.taskTopline {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.checkButton {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  place-items: center;
-  margin-top: 1px;
-  padding: 0;
-  border: 1px solid #45453f;
-  border-radius: 4px;
-  background: #1b1b17;
-  color: transparent;
-}
-
-.checkButton svg {
-  width: 13px;
-  height: 13px;
-}
-
-.checkedButton {
-  border-color: #3cc873;
-  background: #3cc873;
-  color: #fff;
-}
-
-.taskBody {
-  min-width: 0;
-  flex: 1;
-  cursor: pointer;
-}
-
-.taskBody h3 {
-  margin: 0;
-  color: #e3ddd2;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.completedTask .taskBody h3 {
-  color: #66635d;
-  text-decoration: line-through;
-}
-
-.taskMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-  margin-top: 8px;
-  color: #8d8982;
-  font-size: 10px;
-}
-
-.taskMeta > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: 1px solid #282821;
-  border-radius: 4px;
-  background: #191916;
-}
-
-.taskMeta svg {
-  width: 10px;
-  height: 10px;
-}
-
-.taskMeta .overdueMeta {
-  border-color: rgba(237, 89, 88, 0.2);
-  color: #ed5958;
-}
-
-.taskMeta .repeatMeta {
-  color: #e49a19;
-  text-transform: uppercase;
-}
-
-.taskActions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 150ms ease;
-}
-
-.taskCard:hover .taskActions {
-  opacity: 1;
-}
-
-.taskActions button {
-  display: grid;
-  min-width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #77736c;
-  font-size: 10px;
-}
-
-.taskActions button:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #ddd7cd;
-}
-
-.taskActions svg {
-  width: 14px;
-  height: 14px;
 }
 
 .expandedPanel {
@@ -766,124 +533,54 @@
   white-space: pre-wrap;
 }
 
-@keyframes pulse {
-  from {
-    opacity: 0.45;
+@media (hover: none) {
+  /* Nothing to point with: opening a task shows its menu. Hidden ones can't be tapped by accident. */
+  /* Out of the way, so titles get the room, until the task is opened. */
+  .more {
+    display: none;
   }
-  to {
-    opacity: 0.9;
+
+  .openRow .more {
+    display: block;
+    opacity: 1;
+  }
+
+  .focusButton {
+    width: 40px;
+    height: 40px;
+  }
+
+  .startButton {
+    min-height: 44px;
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 767px) {
   .plannerPage {
-    padding-right: 28px;
-    padding-left: 28px;
+    padding: 18px 14px 28px;
   }
 
-  .controlsGrid {
-    grid-template-columns: 180px 200px minmax(0, 1fr);
-  }
-
-  .mainGrid {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 20px;
-  }
-}
-
-@media (max-width: 980px) {
-  .statsGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .controlsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .searchSortControl {
-    grid-column: 1 / -1;
-  }
-
-  .mainGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebarRail {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .calendarCard {
-    grid-row: span 2;
-  }
-}
-
-@media (max-width: 680px) {
-  .plannerPage {
-    padding: 24px 16px 36px;
-  }
-
-  .header {
-    min-height: 0;
-    flex-direction: column;
-    padding-bottom: 22px;
-  }
-
-  .titleRow h1 {
+  .header h1 {
     font-size: 24px;
   }
 
-  .headerActions {
-    width: 100%;
-    padding-top: 0;
+  .iconButton {
+    width: 44px;
+    height: 44px;
   }
 
-  .headerActions {
-    flex-wrap: wrap;
-    gap: 10px;
+  .searchBox input {
+    height: 42px;
+    font-size: 16px;
   }
 
-  .dateChip,
-  .primaryButton,
-  .secondaryButton {
+  .column {
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  .backlog button {
+    min-height: 40px;
     flex: 1;
-  }
-
-  .dateChip {
-    flex-basis: 100%;
-  }
-
-  .statsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: 26px;
-  }
-
-  .statCard:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .controlsGrid {
-    grid-template-columns: 1fr;
-    margin-top: 26px;
-  }
-
-  .searchSortControl {
-    grid-column: auto;
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-
-  .sortControl {
-    grid-template-columns: auto 1fr;
-  }
-
-  .sidebarRail {
-    display: flex;
-  }
-
-  .taskActions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    opacity: 1;
   }
 }

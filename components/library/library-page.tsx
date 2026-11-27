@@ -182,7 +182,7 @@ export function LibraryPage({ section }: { section: LibrarySection }) {
       ) : null}
 
       {section === "collections" ? (
-        collections.length === 0 ? <p className="library-muted">No collections yet. Create one with + New in the sidebar.</p> : (
+        collections.length === 0 ? <p className="library-muted">No collections yet. Create one with New collection in the Library.</p> : (
           <div className="library-list">
             {collections.map((collection) => (
               <div key={collection.id} className="library-card">

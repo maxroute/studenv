@@ -1,0 +1,4 @@
+.clock { display: inline-block; white-space: nowrap; }
+/* A slot a little under one "0" (the widest digit, which has room to spare at its sides), in any font and size. */
+.digit { display: inline-block; width: 0.92ch; text-align: center; }
+.readable { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

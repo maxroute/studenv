@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useItems } from "@/hooks/useItems";
 import { useUser, type UserResponse } from "@/hooks/useUser";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { MAX_AVATAR_BYTES, shrinkImage } from "@/lib/client/shrink-image";
 
 function startOfDay(date: Date) {
   const next = new Date(date);
@@ -127,14 +128,18 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
     try {
       setIsUploadingAvatar(true);
 
+      const photo = await shrinkImage(file);
+      if (photo.size > MAX_AVATAR_BYTES) throw new Error("Choose a photo smaller than 4 MB.");
+
       const body = new FormData();
-      body.append("file", file);
+      body.append("file", photo);
 
       const response = await fetch("/api/user/avatar", {
         method: "POST",
         body,
       });
-      const json = (await response.json()) as {
+      // A refusal from the host itself (for example, too large) is not JSON.
+      const json = ((await response.json().catch(() => null)) ?? { ok: false }) as {
         ok: boolean;
         data?: {
           avatarUrl?: string | null;
@@ -149,7 +154,7 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
 
       if (!response.ok || !json.ok || !json.data?.avatarUrl) {
         const firstIssue = json.details?.issues?.find((issue) => issue.message?.trim());
-        throw new Error(firstIssue?.message ?? json.error ?? "Upload failed.");
+        throw new Error(firstIssue?.message ?? json.error ?? (response.status === 413 ? "That photo is too large. Choose a smaller one." : "The photo could not be uploaded. Try again."));
       }
 
       setForm((current) => ({

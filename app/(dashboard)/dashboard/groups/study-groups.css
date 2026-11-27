@@ -1,7 +1,8 @@
 /* Design tokens and styles for Study Groups & Room, matching previewofsomething.html */
 
 /* Tokens */
-:root {
+/* Groups colours stay inside Groups: its pages, and the pieces drawn outside them. */
+:where(.study-groups-page, .room-page, .floating-controls-container, .fullscreen-timer-overlay, .study-room-pip) {
   --bg: #0e0e0d;
   --surface: #161614;
   --raised: #1e1e1b;
@@ -578,19 +579,19 @@
   border-color: rgba(255, 255, 255, 0.18);
 }
 
-.btn-primary {
+:where(.study-groups-page, .room-page) .btn-primary {
   background: #f5a623;
   color: #111;
   border: 1px solid #f5a623;
 }
 
-.btn-primary:hover:not(:disabled) {
+:where(.study-groups-page, .room-page) .btn-primary:hover:not(:disabled) {
   background: #d88f14;
   border-color: #d88f14;
 }
 
 .btn:disabled,
-.btn-primary:disabled {
+:where(.study-groups-page, .room-page) .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -605,7 +606,7 @@
   stroke-linejoin: round;
 }
 
-.btn-primary svg {
+:where(.study-groups-page, .room-page) .btn-primary svg {
   stroke: #000;
 }
 
@@ -971,7 +972,7 @@
   gap: 12px;
 }
 
-.avatar {
+:where(.study-groups-page, .room-page) .avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -985,7 +986,7 @@
   flex-shrink: 0;
 }
 
-.avatar.me {
+:where(.study-groups-page, .room-page) .avatar.me {
   background: var(--amber-bg);
   color: var(--amber);
 }
@@ -1811,7 +1812,7 @@
   overflow: hidden;
 }
 
-.section-head {
+:where(.study-groups-page, .room-page) .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1857,7 +1858,7 @@
 }
 
 /* Goal text */
-.goal-text {
+:where(.study-groups-page, .room-page) .goal-text {
   font-size: 14px;
   color: var(--ink-2);
   padding: 10px 14px 14px;
@@ -6004,7 +6005,7 @@
   padding: 6px 0;
 }
 
-.stats-grid {
+:where(.floating-controls-container) .stats-grid {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -6022,7 +6023,7 @@
   color: #7e7b72;
 }
 
-.stat-value {
+:where(.floating-controls-container) .stat-value {
   font-size: 11px;
   font-weight: 600;
   color: #ddd8cc;
@@ -6041,7 +6042,7 @@
   gap: 6px;
 }
 
-.shortcut-row {
+:where(.floating-controls-container) .shortcut-row {
   display: flex;
   align-items: center;
   gap: 8px;
