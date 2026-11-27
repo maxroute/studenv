@@ -6,6 +6,7 @@ import "@/app/globals.css";
 import { BootLoaderGate } from "@/components/ui/boot-loader-gate";
 import { NavigationProgress } from "@/components/ui/navigation-progress";
 import { Providers } from "@/components/ui/providers";
+import { DesktopTimerBridge } from "@/components/focus/DesktopTimerBridge";
 import { getPublicSiteUrl } from "@/lib/seo/site-url";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default async function RootLayout({
           <Suspense fallback={null}>
             <NavigationProgress />
           </Suspense>
+          <DesktopTimerBridge />
           <BootLoaderGate>{children}</BootLoaderGate>
           <div id="viewer-portal-root" className="fixed inset-0 pointer-events-none z-[9999]" />
         </Providers>
