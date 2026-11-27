@@ -26,11 +26,24 @@
 .rows small { flex-shrink: 0; color: var(--muted2); font-size: 11.5px; }
 .rows button:hover span { color: var(--amber); }
 
-.overdue { display: flex; min-height: 52px; align-items: center; gap: 10px; border-top: 1px solid #23231d; border-bottom: 1px solid #23231d; padding: 0 4px; color: var(--text); font-size: 13.5px; text-decoration: none; }
-.overdue i { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--red); }
-.overdue span { flex: 1; }
-.overdue small { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; }
-.overdue:hover small { color: var(--amber); }
+/* The streak line: there when you look for it, never louder than the work below. */
+.statsSlot { min-height: 26px; margin-top: 14px; }
+.stats { display: inline-flex; flex-wrap: wrap; gap: 6px 22px; color: var(--muted); font-size: 14px; text-decoration: none; }
+.stats span { display: inline-flex; align-items: baseline; gap: 6px; }
+.stats svg { width: 17px; height: 17px; align-self: center; color: var(--amber); }
+.stats b { color: var(--text); font-size: 16.5px; font-weight: 700; }
+.stats:hover { color: var(--text); }
+
+/* Overdue work: the one place Home uses red, right under the greeting. */
+.alert { display: flex; min-height: 66px; align-items: center; gap: 12px; border: 1px solid rgba(224, 90, 75, 0.38); border-left: 4px solid var(--red); border-radius: 12px; background: rgba(224, 90, 75, 0.1); padding: 12px 14px; color: var(--text); text-decoration: none; animation: alertIn 0.4s ease 0.1s both; }
+.alert i { width: 9px; height: 9px; flex-shrink: 0; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(224, 90, 75, 0.18); }
+.alert > span { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.alert strong { font-size: 15px; font-weight: 700; }
+.alert small { color: var(--muted); font-size: 12px; }
+.alert em { display: inline-flex; min-height: 36px; flex-shrink: 0; align-items: center; gap: 6px; border-radius: 9px; background: var(--red); padding: 0 14px; color: #14100f; font-size: 13px; font-style: normal; font-weight: 700; }
+.alert:hover { border-color: var(--red); }
+@keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .alert { animation: none; } }
 
 @media (pointer: coarse) {
   .start, .plain { min-height: 44px; }
@@ -39,6 +52,9 @@
 @media (max-width: 767px) {
   .home { gap: 26px; padding: 22px 14px 32px; }
   .home header h1 { font-size: 25px; }
+  /* Tighter, so all three still fit on one line on most phones. */
+  .stats { column-gap: 16px; font-size: 13.5px; }
+  .stats b { font-size: 15.5px; }
   .rows button { min-height: 54px; }
   .rows small { display: none; }
 }
