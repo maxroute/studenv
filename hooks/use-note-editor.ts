@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NoteDocEnvelope } from "@/lib/notes/note-format";
+import { createNoteCache } from "@/lib/notes/note-cache";
+import { retryDelay } from "@/lib/client/load-state";
 
 export type NoteSaveStatus = "idle" | "dirty" | "saving" | "saved" | "conflict" | "error" | "readonly";
 
@@ -22,8 +24,18 @@ type Pending = { title: string; doc: NoteDocEnvelope };
 
 const AUTOSAVE_DELAY_MS = 1000;
 
+/** Failures that may pass on their own: no connection, a timeout, too many requests, a server error. */
+const passing = (status: number) => status === 0 || status === 408 || status === 429 || status >= 500;
+/** About a minute of retries (1, 2, 4, then 8 s apart). */
+const MAX_LOAD_RETRIES = 10;
+
+/** Pages opened in this tab, shown at once when opened again (see note-cache.ts). */
+const openedNotes = createNoteCache<LoadedNote>();
+
 async function request<T>(url: string, init?: RequestInit): Promise<{ status: number; data?: T; error?: string; details?: unknown }> {
-  const response = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  // No connection reads as status 0, like a failed request, instead of throwing.
+  const response = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } }).catch(() => null);
+  if (!response) return { status: 0, error: "You're offline, or Studenv can't be reached." };
   const json = await response.json().catch(() => null);
   return { status: response.status, data: json?.data, error: json?.error, details: json?.details };
 }
@@ -35,7 +47,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<{ status: nu
  * local content until the user chooses what to do.
  */
 export function useNoteEditor(noteId: string) {
-  const [note, setNote] = useState<LoadedNote | null>(null);
+  // A page opened before shows its last copy at once; `fresh` stays false until
+  // the server's copy arrives, and the page can't be edited until then.
+  const [note, setNote] = useState<LoadedNote | null>(() => openedNotes.get(noteId));
+  const [fresh, setFresh] = useState(false);
+  /** Shown over an earlier copy when the fresh one can't be loaded yet; retried on its own. */
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<NoteSaveStatus>("idle");
   const [conflict, setConflict] = useState<NoteConflict | null>(null);
@@ -52,19 +69,36 @@ export function useNoteEditor(noteId: string) {
   const noteIdRef = useRef(noteId);
   /** Title and content as last loaded or saved; identical changes are not sent. */
   const baselineRef = useRef<string | null>(null);
+  const loadRetryRef = useRef<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (attempt = 0): Promise<LoadedNote | null> => {
+    if (loadRetryRef.current) window.clearTimeout(loadRetryRef.current);
     setLoadError(null);
     const result = await request<LoadedNote>(`/api/notes/${noteId}`);
     if (noteIdRef.current !== noteId) return null;
     if (result.status !== 200 || !result.data) {
-      setLoadError(result.status === 404 ? "This note does not exist or was deleted." : result.error ?? "The note could not be loaded.");
+      const message = result.status === 404 ? "This note does not exist or was deleted." : result.error ?? "The note could not be loaded.";
+      if (result.status === 404) openedNotes.forget(noteId);
+      // With an earlier copy on screen, a passing failure (offline, busy, too many
+      // requests) keeps it there, read-only, and tries again.
+      const cached = result.status !== 404 && result.status !== 403 ? openedNotes.get(noteId) : null;
+      if (cached && passing(result.status) && attempt < MAX_LOAD_RETRIES) {
+        setRefreshError(message);
+        loadRetryRef.current = window.setTimeout(() => void load(attempt + 1), retryDelay(attempt + 1));
+        return null;
+      }
+      setRefreshError(null);
+      setNote(null);
+      setLoadError(message);
       return null;
     }
+    setRefreshError(null);
+    openedNotes.put(result.data);
     versionRef.current = result.data.version;
     blockedRef.current = false;
     pendingRef.current = null;
     setNote(result.data);
+    setFresh(true);
     setConflict(null);
     setStatus("idle");
     return result.data;
@@ -72,10 +106,12 @@ export function useNoteEditor(noteId: string) {
 
   useEffect(() => {
     noteIdRef.current = noteId;
-    setNote(null);
+    setNote(openedNotes.get(noteId));
+    setFresh(false);
     void load();
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (loadRetryRef.current) window.clearTimeout(loadRetryRef.current);
     };
   }, [load, noteId]);
 
@@ -115,6 +151,8 @@ export function useNoteEditor(noteId: string) {
         baselineRef.current = JSON.stringify(sending);
         versionRef.current = saved.version;
         setNote((current) => (current ? { ...current, title: saved.title, version: saved.version, updatedAt: saved.updatedAt } : current));
+        // What was saved is what the page shows next time it's opened.
+        openedNotes.put({ ...saved, title: sending.title, doc: sending.doc });
         setLastSavedAt(Date.now());
         failuresRef.current = 0;
         setStatus(pendingRef.current ? "dirty" : "saved");
@@ -193,5 +231,5 @@ export function useNoteEditor(noteId: string) {
     setStatus("readonly");
   }, []);
 
-  return { note, loadError, status, conflict, lastSavedAt, change, saveNow, loadLatest, keepMine, saveAsNew, markReadOnly, setBaseline, reload: load };
+  return { note, fresh, refreshError, loadError, status, conflict, lastSavedAt, change, saveNow, loadLatest, keepMine, saveAsNew, markReadOnly, setBaseline, reload: () => load() };
 }

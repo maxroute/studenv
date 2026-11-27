@@ -22,7 +22,9 @@ import { createMentionSuggestion } from "./mention-suggestion";
 import { createSlashSuggestion, slashCommands } from "./slash-commands";
 import { NoteBubbleMenu } from "./note-bubble-menu";
 import { TableBubbleMenu } from "./table-bubble-menu";
-import { editEquation } from "./editor-actions";
+import { LinkMenu, openLink } from "./link-menu";
+import { linkTarget } from "@/lib/notes/link-target";
+import { editEquation, fixFormulas } from "./editor-actions";
 import { askConfirm, askText } from "./note-dialogs";
 import { FontMenu, TextColorMenu } from "./style-menus";
 import { noteFontVariables } from "./note-fonts";
@@ -259,17 +261,22 @@ export type { NoteListEntry };
 export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId: string; notes: NoteListEntry[]; onSaved: () => void; embedded?: boolean }) {
   const router = useRouter();
   const editorState = useNoteEditor(noteId);
-  const { note, loadError, status, conflict, change, saveNow, loadLatest, keepMine, saveAsNew, markReadOnly, reload, setBaseline } = editorState;
+  const { note, fresh, refreshError, loadError, status, conflict, change, saveNow, loadLatest, keepMine, saveAsNew, markReadOnly, reload, setBaseline } = editorState;
   const baselineRef = useRef(setBaseline);
   baselineRef.current = setBaseline;
-  const [title, setTitle] = useState("");
+  // From an earlier visit's copy when there is one, so the title is there at once.
+  const [title, setTitle] = useState(() => note?.title ?? "");
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addToWorkspaceOpen, setAddToWorkspaceOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const coarsePointer = useCoarsePointer();
-  const titleRef = useRef("");
+  const titleRef = useRef(note?.title ?? "");
+  const titleBoxRef = useRef<HTMLTextAreaElement>(null);
+  // Read inside applyNote: an earlier copy shown while loading is never editable.
+  const freshRef = useRef(fresh);
+  freshRef.current = fresh;
   const notesRef = useRef<NoteListEntry[]>(notes);
   notesRef.current = notes;
 
@@ -374,8 +381,9 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           ? "This page uses features from a newer version of Studenv. Refresh the page to edit it."
           : null;
       setReadOnlyReason(reason);
-      // No update event: switching editing on is not an edit.
-      current.setEditable(reason === null, false);
+      // No update event: switching editing on is not an edit. Until the server's
+      // copy has arrived, what shows is the copy from an earlier visit: read-only.
+      current.setEditable(reason === null && freshRef.current, false);
       // Deep links to a section (/notes/[id]#b_…) scroll to the block and mark it.
       const blockId = embedded ? null : decodeURIComponent(window.location.hash.slice(1));
       if (blockId && /^b_[A-Za-z0-9_-]{10}$/.test(blockId)) {
@@ -423,13 +431,26 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     applyNote(note, editor);
   }, [applyNote, editor, note, status]);
 
+  // The server's copy matched the one shown from the earlier visit: editing starts now.
+  useEffect(() => {
+    if (editor && fresh && !readOnlyReason && !editor.isEditable) editor.setEditable(true, false);
+  }, [editor, fresh, readOnlyReason]);
+
+  // A long title wraps onto more lines instead of being cut off.
+  useEffect(() => {
+    const box = titleBoxRef.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  }, [title, note]);
+
   useEffect(() => {
     if (status === "saved") onSaved();
   }, [onSaved, status]);
 
-  // Rangan reads and changes this page only while it is open and editable.
+  // Rangan reads and changes this page only while it is open and editable (never an earlier copy).
   useEffect(() => {
-    if (!editor || !note || readOnlyReason) return;
+    if (!editor || !note || !fresh || readOnlyReason) return;
     const rename = (next: string) => {
       setTitle(next);
       titleRef.current = next;
@@ -437,7 +458,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
     };
     useOpenPage.getState().register({ noteId, title: title || "Untitled", editor, saveNow, rename });
     return () => useOpenPage.getState().unregister(noteId, editor);
-  }, [editor, note, readOnlyReason, noteId, title, saveNow, change]);
+  }, [editor, note, fresh, readOnlyReason, noteId, title, saveNow, change]);
 
   // Save before leaving the page or the note.
   useEffect(() => {
@@ -488,6 +509,7 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           onHistory: () => setHistoryOpen(true),
           onMove: () => setMoveOpen(true),
           onCollections: () => setCollectionsOpen(true),
+          ...(editor && fresh && !readOnlyReason ? { onFixFormulas: () => fixFormulas(editor) } : {}),
           onDeleted: onSaved,
         }}
       />
@@ -517,19 +539,25 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           if (restored.ok) { appliedVersionRef.current = null; await reload(); onSaved(); }
         }}>Restore</button>
       ) : null}</div> : null}
+      {refreshError && note ? <div className="note-banner info" role="status">Showing your last copy of this page. {refreshError} Trying again…</div> : null}
       {status === "error" ? <div className="note-banner warning" role="alert">Saving failed. Your changes are kept here and saving is retried automatically. <button type="button" className="note-inline-btn" onClick={() => void saveNow()}>Retry now</button></div> : null}
 
-      <input
+      {note ? (
+      <textarea
+        ref={titleBoxRef}
         className="note-title-input"
         value={title}
+        rows={1}
         placeholder="Untitled"
         aria-label="Page title"
-        readOnly={Boolean(readOnlyReason) || !note}
+        readOnly={Boolean(readOnlyReason) || !fresh}
         maxLength={500}
         onChange={(event) => {
-          setTitle(event.target.value);
-          titleRef.current = event.target.value;
-          if (editor && editor.isEditable) change(event.target.value, fromEditorJSON(editor.getJSON()));
+          // A title is one line: pasted line breaks become spaces.
+          const next = event.target.value.replace(/[\r\n]+/g, " ");
+          setTitle(next);
+          titleRef.current = next;
+          if (editor && editor.isEditable) change(next, fromEditorJSON(editor.getJSON()));
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -538,12 +566,21 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           }
         }}
       />
+      ) : (
+        <div className="note-skeleton" role="status" aria-label="Opening the page">
+          <span className="note-skeleton-title" />
+          <span />
+          <span />
+          <span className="note-skeleton-short" />
+        </div>
+      )}
 
       {note && !readOnlyReason ? <NoteChips noteId={noteId} itemId={note.itemId} /> : null}
       {/* Mouse: a bubble on selection. Touch: one toolbar above the keyboard (the system's own
           selection bar takes the space a bubble would use). */}
       {editor && !readOnlyReason && !coarsePointer ? <NoteBubbleMenu editor={editor} onFlashcard={() => void makeFlashcard(editor, noteId)} onAskRangan={() => askRanganAbout(editor, title)} /> : null}
       {editor && !readOnlyReason && !coarsePointer ? <TableBubbleMenu editor={editor} /> : null}
+      {editor && !readOnlyReason ? <LinkMenu editor={editor} navigate={(url) => router.push(url)} /> : null}
       {editor && !readOnlyReason && coarsePointer ? (
         <KeyboardToolbar
           editor={editor}
@@ -556,8 +593,21 @@ export function NoteView({ noteId, notes, onSaved, embedded = false }: { noteId:
           ]}
         />
       ) : null}
-      {!note ? <p className="notes-muted">Loading…</p> : null}
-      <EditorContent editor={editor} className="note-editor" />
+      <EditorContent
+        editor={editor}
+        className="note-editor"
+        onClickCapture={(event) => {
+          // A click on a link places the caret (its menu offers Open). Ctrl/⌘-click opens it at
+          // once, and on a page that can't be edited a plain click does.
+          const anchor = event.target instanceof Element ? event.target.closest(".note-prose a") : null;
+          if (!anchor || !editor || (editor.isEditable && !event.metaKey && !event.ctrlKey)) return;
+          const target = linkTarget({ href: anchor.getAttribute("href"), ref: null });
+          if (!target) return;
+          event.preventDefault();
+          event.stopPropagation();
+          openLink(target, (url) => router.push(url));
+        }}
+      />
       {note ? <AppearsIn refString={`note:${noteId}`} className="note-appears-in" /> : null}
       {note ? <RelatedInLibrary noteId={noteId} title={title} embedded={embedded} /> : null}
 

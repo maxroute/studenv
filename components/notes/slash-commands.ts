@@ -4,7 +4,8 @@ import type { Editor, Range } from "@tiptap/core";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import type { SlashCommandItem } from "@/lib/notes/editor-extensions";
 import { popupRenderer } from "./suggestion-popup";
-import { insertEquation } from "./editor-actions";
+import { insertEquation, insertSymbol } from "./editor-actions";
+import { ALL_SYMBOLS } from "@/lib/notes/math-symbols";
 
 export type SlashContext = {
   /** Creates a sub-page of this note and returns its id and title, or null. */
@@ -41,6 +42,10 @@ export function slashCommands(context: SlashContext): SlashCommandItem[] {
     {
       id: "inline-equation", title: "Inline equation", description: "Math inside a sentence", keywords: ["math", "latex", "inline"], badge: "x²", group: "Advanced",
       run: (e, r) => void insertEquation(e, "inline", r),
+    },
+    {
+      id: "symbol", title: "Math symbol", description: "θ π √ ≤ and more, as text", keywords: ["symbol", "greek", "sign", "math"], badge: "π", group: "Advanced",
+      run: (e, r) => void insertSymbol(e, r),
     },
     { id: "link", title: "Link to page", description: "Mention a page, resource or workspace", keywords: ["mention", "@", "page", "resource"], badge: "@", group: "Linking", run: (e, r) => chainAt(e, r).insertContent("@").run() },
     {
@@ -79,6 +84,11 @@ export function slashCommands(context: SlashContext): SlashCommandItem[] {
           },
         }]
       : []),
+    // "/theta" or "/pi" types the character itself. Listed only when asked for by name.
+    ...ALL_SYMBOLS.map((symbol): SlashCommandItem => ({
+      id: `symbol-${symbol.name}`, title: `${symbol.char}  ${symbol.name}`, description: "Insert this symbol", keywords: [symbol.name, ...(symbol.also ?? [])], badge: symbol.char, group: SYMBOL_GROUP,
+      run: (e, r) => chainAt(e, r).insertContent({ type: "text", text: symbol.char }).run(),
+    })),
     {
       id: "flashcard", title: "Flashcard", description: "Turn this line into a flashcard", keywords: ["card", "quiz", "study", "review"], badge: "❏", group: "Study",
       run: (e, r) => {
@@ -92,11 +102,24 @@ export function slashCommands(context: SlashContext): SlashCommandItem[] {
 /** Lowercase letters and digits only, so "to-do", "todo" and "To Do" all match. */
 const normalize = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Best matches first: title prefix, then keyword prefix, then contains. */
+const SYMBOL_GROUP = "Symbols";
+
+/**
+ * Best matches first: title prefix, then keyword prefix, then contains. Single
+ * symbols stay out of the full list: one appears first when its name is typed
+ * in full ("/pi"), and after the blocks once two letters start its name.
+ */
 export function filterSlashCommands(items: readonly SlashCommandItem[], query: string): SlashCommandItem[] {
   const q = normalize(query);
-  if (!q) return [...items];
+  if (!q) return items.filter((item) => item.group !== SYMBOL_GROUP);
   const score = (item: SlashCommandItem) => {
+    if (item.group === SYMBOL_GROUP) {
+      const names = item.keywords.map(normalize);
+      // The typed capital picks the capital letter ("/Delta" is Δ, "/delta" is δ).
+      if (item.keywords[0] === query) return -2;
+      if (names.includes(q)) return -1;
+      return q.length >= 2 && names.some((name) => name.startsWith(q)) ? 2.5 : 3;
+    }
     const title = normalize(item.title);
     const keywords = item.keywords.map(normalize).filter(Boolean);
     if (title.startsWith(q)) return 0;
