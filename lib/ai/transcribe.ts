@@ -5,6 +5,8 @@
 // The audio is sent only to be transcribed and is not kept. Each provider is
 // tried in turn; a missing key skips it.
 
+import { VOICE_VOCABULARY } from "@/lib/rangan/voice";
+
 export type TranscribeProvider = "groq-whisper" | "cloudflare-whisper";
 
 export type TranscribeEnv = {
@@ -47,6 +49,7 @@ async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps): Pro
   form.append("model", GROQ_MODEL);
   form.append("response_format", "json");
   form.append("temperature", "0");
+  form.append("prompt", VOICE_VOCABULARY);
   const response = await deps.fetch(GROQ_URL, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) return null;
   return textOf(await response.json().catch(() => null), ["text"]);
@@ -59,7 +62,7 @@ async function viaCloudflare(audio: Blob, deps: TranscribeDeps): Promise<string 
   const response = await deps.fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/run/@cf/openai/whisper-large-v3-turbo`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ audio: base64 }),
+    body: JSON.stringify({ audio: base64, initial_prompt: VOICE_VOCABULARY }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) return null;

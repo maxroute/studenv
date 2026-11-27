@@ -5,6 +5,7 @@ import {
   buildLibraryContext,
   citedNumbers,
   focusBlock,
+  FOCUS_INSTRUCTION,
   MAX_CONTEXT_PASSAGES,
   normalizeCitationMarks,
   retrievalQuery,
@@ -22,7 +23,7 @@ import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM
 import { openBoardPassages, openPagePassages, pickOpenPassages, type PassageOrigin } from "@/lib/rangan/open-source";
 import { extractJsonObject } from "@/lib/study/plan";
 import { boardEditInstruction, parseBoardPlan, type BoardChange } from "@/lib/workspace/board-edit";
-import { asksForNewBoard, BOARD_TOOLS_SYSTEM_PROMPT, boardToolsInstruction, looksLikeBoardEdit, parseBoardOps, type BoardCard, type BoardOp } from "@/lib/workspace/board-ops";
+import { asksForBoard, asksForNewBoard, BOARD_TOOLS_SYSTEM_PROMPT, boardToolsInstruction, looksLikeBoardEdit, parseBoardOps, type BoardCard, type BoardOp } from "@/lib/workspace/board-ops";
 import { MAP_MAX_READING, mapInstruction, mapOutline, parseMapReply, type MapDraft, type MapImage } from "@/lib/workspace/mind-map";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
@@ -242,7 +243,17 @@ export const RANGAN_SYSTEM_PROMPT = [
   "Be clear and concise. Use short paragraphs or lists, and Markdown where it helps, but no tables.",
   "When teaching a topic, explain how it works step by step with a concrete example, not just a list of headings.",
   "If you are not sure of something, say so instead of guessing.",
+  "Earlier messages in the conversation are context: \"that\", \"it\" or \"what you just said\" refer to them.",
+  "Inside Studenv you can also write new pages, change the open page, make boards (whiteboards, mind maps, flowcharts, roadmaps), change the open board, add tasks to the planner and make study plans. The student asks for these in plain words, like \"make a board on this\". Never tell them to use another app (Miro, Notion, Excalidraw) for something Studenv does; if they seem to want one of these, tell them to ask for it the same way.",
 ].join(" ");
+
+/** The last few turns, as context for tools that only see the newest request. */
+function earlierConversation(history: RanganAskInput["history"]): string {
+  const turns = (history ?? []).slice(-6);
+  if (!turns.length) return "";
+  const lines = turns.map((turn) => `${turn.role === "user" ? "Student" : "Rangan"}: ${turn.content.replace(/\s+/g, " ").slice(0, 700)}`);
+  return `Earlier in this conversation (context only; the student's newest request below is what to do):\n"""\n${lines.join("\n")}\n"""\n\n`;
+}
 
 /** True when outside text is about the subject: its name and a core term, or two core terms. Without a subject, anything goes. */
 function onSubject(text: string, reading: RequestReading | null): boolean {
@@ -313,7 +324,11 @@ export function createRanganService(deps: RanganDeps) {
    */
   async function readRequest(question: string, history: RanganAskInput["history"], openPage?: string, openBoard?: string, area?: RanganAskInput["where"]): Promise<RequestReading | null> {
     if (!deps.completeQuick) return null;
-    const previous = [...(history ?? [])].reverse().find((turn) => turn.role === "user")?.content;
+    // The last exchange, so "make a board on that" knows what "that" is.
+    const previous = (history ?? [])
+      .slice(-2)
+      .map((turn) => `${turn.role === "user" ? "Student" : "Rangan"}: ${turn.content.replace(/\s+/g, " ").slice(0, 700)}`)
+      .join("\n") || undefined;
     try {
       const result = await deps.completeQuick(
         [
@@ -406,7 +421,7 @@ export function createRanganService(deps: RanganDeps) {
     const result = await deps.complete(
       [
         { role: "system", content: PAGE_SYSTEM_PROMPT },
-        { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageInstruction(input.question, subject, { kind, video })}` },
+        { role: "user", content: earlierConversation(input.history) + `${buildLibraryContext(passages)}\n\n${pageInstruction(input.question, subject, { kind, video })}` },
       ],
       { maxTokens: 4_000, temperature: 0.4 },
     );
@@ -444,7 +459,7 @@ export function createRanganService(deps: RanganDeps) {
     const result = await deps.complete(
       [
         { role: "system", content: TASK_SYSTEM_PROMPT },
-        { role: "user", content: taskInstruction(input.question, clock) },
+        { role: "user", content: earlierConversation(input.history) + taskInstruction(input.question, clock) },
       ],
       { maxTokens: 800, temperature: 0 },
     );
@@ -464,7 +479,7 @@ export function createRanganService(deps: RanganDeps) {
       const result = await deps.complete(
         [
           { role: "system", content: PAGE_TOOLS_SYSTEM_PROMPT },
-          { role: "user", content: `${buildLibraryContext(passages)}\n\n${pageToolsInstruction(input.question, page.title, toolBlocks, page.selection ?? null)}` },
+          { role: "user", content: earlierConversation(input.history) + `${buildLibraryContext(passages)}\n\n${pageToolsInstruction(input.question, page.title, toolBlocks, page.selection ?? null)}` },
         ],
         { maxTokens: 3_000, temperature: 0.2 },
       );
@@ -505,7 +520,7 @@ export function createRanganService(deps: RanganDeps) {
     const result = await deps.complete(
       [
         { role: "system", content: PAGE_SYSTEM_PROMPT },
-        { role: "user", content: `${buildLibraryContext(passages)}\n\n${editInstruction(input.question, page.title, blocks)}` },
+        { role: "user", content: earlierConversation(input.history) + `${buildLibraryContext(passages)}\n\n${editInstruction(input.question, page.title, blocks)}` },
       ],
       { maxTokens: 3_000, temperature: 0.2 },
     );
@@ -531,7 +546,7 @@ export function createRanganService(deps: RanganDeps) {
     const result = await deps.complete(
       [
         { role: "system", content: MAP_SYSTEM_PROMPT },
-        { role: "user", content: `${buildLibraryContext(passages)}\n\n${mapInstruction(input.question, subject)}` },
+        { role: "user", content: earlierConversation(input.history) + `${buildLibraryContext(passages)}\n\n${mapInstruction(input.question, subject)}` },
       ],
       { maxTokens: 2_500, temperature: 0.3 },
     );
@@ -590,7 +605,7 @@ export function createRanganService(deps: RanganDeps) {
           { role: "system", content: BOARD_TOOLS_SYSTEM_PROMPT },
           {
             role: "user",
-            content: `${passages.length ? `${buildLibraryContext(passages)}\n\n` : ""}${boardToolsInstruction(input.question, board.title, summary, styles, [...cards].map(([cardRef, card]) => ({ ref: cardRef, title: card.title })))}`,
+            content: `${earlierConversation(input.history)}${passages.length ? `${buildLibraryContext(passages)}\n\n` : ""}${boardToolsInstruction(input.question, board.title, summary, styles, [...cards].map(([cardRef, card]) => ({ ref: cardRef, title: card.title })))}`,
           },
         ],
         { maxTokens: 2_500, temperature: 0.2 },
@@ -602,7 +617,7 @@ export function createRanganService(deps: RanganDeps) {
     const result = await deps.complete(
       [
         { role: "system", content: MAP_SYSTEM_PROMPT },
-        { role: "user", content: boardEditInstruction(input.question, board.title, summary) },
+        { role: "user", content: earlierConversation(input.history) + boardEditInstruction(input.question, board.title, summary) },
       ],
       { maxTokens: 1_500, temperature: 0.2 },
     );
@@ -623,6 +638,18 @@ export function createRanganService(deps: RanganDeps) {
       const read = input.focus ? null : await readRequest(input.question, input.history, input.page?.title, input.board?.title, input.where);
       // "notes on sql joins" asks for a page however it's worded, even when the reading missed it.
       const pageTopic = input.focus ? null : newPageTopic(input.question);
+      // "Create the board", "draw a flowchart of this": a new board, when none is open.
+      const boardWanted = !input.focus && !input.board && !pageTopic && asksForBoard(input.question) && !read?.actions.includes("board");
+      const base: RequestReading | null = boardWanted
+        ? {
+            subject: read?.subject ?? null,
+            search: read?.search || retrievalQuery(input.question, input.history),
+            names: read?.names ?? [],
+            terms: read?.terms ?? [],
+            actions: [...(read?.actions ?? []).filter((action) => action !== "task" && action !== "plan" && action !== "edit"), "board"],
+            chat: false,
+          }
+        : read;
       const reading: RequestReading | null =
         pageTopic && !read?.actions.includes("page") && !read?.actions.includes("edit")
           ? {
@@ -633,7 +660,7 @@ export function createRanganService(deps: RanganDeps) {
               actions: [...(read?.actions ?? []).filter((action) => action !== "task" && action !== "plan"), "page"],
               chat: false,
             }
-          : read;
+          : base;
       // Something to do goes to the planner, from anywhere in the app. Asked for
       // outright ("add a task", "remind me", "in the planner"), it is a task even
       // if the reading missed it; asked for a page or board, it never is.
@@ -687,7 +714,7 @@ export function createRanganService(deps: RanganDeps) {
       }
       const prompt = [
         buildLibraryContext(passages),
-        input.focus ? focusBlock(input.focus) : null,
+        input.focus ? `${focusBlock(input.focus)}\n${FOCUS_INSTRUCTION}` : null,
         `Question: ${input.question}`,
       ]
         .filter(Boolean)

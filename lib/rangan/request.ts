@@ -41,19 +41,19 @@ export const READING_SYSTEM_PROMPT = [
 export function readingInstruction(message: string, previousQuestion?: string, openPage?: string, openBoard?: string, area?: AppArea): string {
   return [
     `Message: """${message.slice(0, 2_000)}"""`,
-    previousQuestion ? `The student's previous question, for context if the message is a follow-up: """${previousQuestion.slice(0, 1_000)}"""` : "",
+    previousQuestion ? `The conversation just before, for context if the message is a follow-up ("that", "what you just said", "the board"): """${previousQuestion.slice(0, 1_600)}"""` : "",
     openBoard
       ? `The student has the board """${openBoard.slice(0, 200)}""" open.`
       : openPage
         ? `The student has the page """${openPage.slice(0, 200)}""" open.`
         : "The student has no page or board open.",
     areaLine(area),
-    "subject: the topic the student wants to learn about, in a few words; null if there is none (a greeting, or a request about their notes in general).",
+    "subject: the topic the student wants to learn about, in a few words; null if there is none (a greeting, or a request about their notes in general). For a follow-up, it is the topic of the conversation before.",
     "search: a short search for the subject, 2 to 8 words of key terms only. Leave out task words such as create, make, explain, teach, easy, understand, revision, board, map, note.",
     "names: 1 to 5 names for the subject itself: its full name, abbreviations and synonyms.",
     "terms: 3 to 8 core terms a text about the subject would use.",
     "If the message is not in English, include names and terms in the message's language too.",
-    'actions: include "page" if the student asks you to create, write or make a new note or page; include "edit" if they ask you to change what is open (on a page: add to it, simplify, shorten, reorganize, turn into a table, add questions, fix mistakes, format or highlight words, add or remove links, embed a link or video, tick to-dos, rename the page, or do something to the selected text; on a board: add or expand nodes, connect things, add tips, group things); include "board" if they ask for a new board, map, mind map, diagram or visualization; include "task" if they ask to add something to do to their planner, a task, to-do, reminder or deadline, or say they want or need to do something by a day or time ("I want to solve 5 problems before midnight"). include "plan" if they ask for a study plan, schedule or timetable that spreads learning or revision over several days, usually toward an exam or a date ("plan this for my exam on Friday"); one thing to do by a time is a "task", not a plan. What the message asks for decides, wherever the student is: a task or a plan is not a page. Otherwise [].',
+    'actions: include "page" if the student asks you to create, write or make a new note or page; include "edit" if they ask you to change what is open (on a page: add to it, simplify, shorten, reorganize, turn into a table, add questions, fix mistakes, format or highlight words, add or remove links, embed a link or video, tick to-dos, rename the page, or do something to the selected text; on a board: add or expand nodes, connect things, add tips, group things); include "board" if they ask for a new board, whiteboard, map, mind map, diagram, flowchart, roadmap or visualization; include "task" if they ask to add something to do to their planner, a task, to-do, reminder or deadline, or say they want or need to do something by a day or time ("I want to solve 5 problems before midnight"). include "plan" if they ask for a study plan, schedule or timetable that spreads learning or revision over several days, usually toward an exam or a date ("plan this for my exam on Friday"); one thing to do by a time is a "task", not a plan. What the message asks for decides, wherever the student is: a task or a plan is not a page. Otherwise [].',
     "chat: true if the message is only small talk (a greeting, thanks, how are you) or about you, Rangan, rather than about a topic or the student's notes; otherwise false. For chat, subject is null.",
     'Reply with only a JSON object: {"subject": "...", "search": "...", "names": ["..."], "terms": ["..."], "actions": [], "chat": false}',
   ]

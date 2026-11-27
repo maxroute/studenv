@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { StudioItem } from "@/types/workspace";
 import { WorkspaceNodeSchema } from "@/types/workspace";
-import { applyBoardOps, boardToolsInstruction, describeBoardOp, layoutBoxes, parseBoardOps, type BoardCard } from "./board-ops";
+import { applyBoardOps, boardToolsInstruction, describeBoardOp, layoutBoxes, parseBoardOps, type BoardCard, asksForBoard } from "./board-ops";
 import { boardSummary } from "./board-edit";
 
 const sticky = (id: string, text: string, x: number, y: number, extra: Record<string, unknown> = {}): StudioItem => ({
@@ -179,4 +179,14 @@ test("a heading or text named in other words is still a heading or text", () => 
     { op: "add", what: "note", text: "A sticky" },
   ] }, summary);
   assert.deepEqual(plan?.ops.map((op) => (op.op === "add" ? op.what : op.op)), ["heading", "text", "heading", "sticky"]);
+});
+
+test("asking for a whiteboard, diagram, flowchart or roadmap is a board request", () => {
+  for (const message of ["Create the board", "make a whiteboard on JWT", "draw a flowchart of the login flow", "Now create a full diagram on the board explaining all these", "build a roadmap to finish this topic"]) {
+    assert.equal(asksForBoard(message), true, message);
+  }
+  const long = "create a new note on operating systems and also take it to the board too so that i can visualize it for my revision and my exam next week, with every topic";
+  for (const message of ["Where is the board?", "what is a flowchart", "add a task to make a diagram", "create a page on trees", long]) {
+    assert.equal(asksForBoard(message), false, message);
+  }
 });

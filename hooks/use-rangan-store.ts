@@ -17,6 +17,7 @@ import { appArea, type RanganTaskDraft } from "@/lib/rangan/task";
 import type { StudyPlanResult } from "@/lib/services/study.service";
 import { isPlanRequest, refersToOpen } from "@/lib/study/plan-intent";
 import { mutate as mutateCache } from "swr";
+import { conversationHistory } from "@/lib/rangan/history";
 import { canRestore, conversationTitle, MAX_TURNS_PER_SAVE, storedTurn, type StoredTurn } from "@/lib/rangan/conversation";
 
 export type RanganCitationView = {
@@ -85,6 +86,8 @@ type RanganState = {
   /** A saved chat being opened. */
   loadingConversation: boolean;
   pending: boolean;
+  /** The request in flight, for the line that says what Rangan is doing. */
+  pendingRequest: RanganRequest | null;
   usage: RanganUsageSummary | null;
   openPanel: () => void;
   close: () => void;
@@ -206,10 +209,8 @@ export const useRanganStore = create<RanganState>((set, get) => {
   /** Sends one request and appends its answer, or an error that can be retried. */
   async function run(request: RanganRequest) {
     if (get().pending) return;
-    const history = get()
-      .turns.filter((turn): turn is Extract<RanganTurn, { role: "user" | "assistant" }> => turn.role === "user" || turn.role === "assistant")
-      .slice(-HISTORY_TURNS)
-      .map((turn) => ({ role: turn.role, content: turn.content.slice(0, HISTORY_CHARS) }));
+    // Pages, boards, tasks and plans Rangan made are told too, so "add to it" has something to point at.
+    const history = conversationHistory(get().turns, HISTORY_TURNS, HISTORY_CHARS);
     const userTurn: RanganTurn =
       request.kind === "summarize"
         ? { id: newId(), role: "user", content: request.label }
@@ -218,7 +219,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
           : request.kind === "explore"
             ? { id: newId(), role: "user", content: request.label }
             : { id: newId(), role: "user", content: request.question, ...(request.focus ? { quote: request.focus.text } : {}) };
-    set((state) => ({ pending: true, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
+    set((state) => ({ pending: true, pendingRequest: request, turns: [...state.turns.filter((turn) => turn.role !== "error"), userTurn] }));
 
     // The open board or page as it is right now, so Rangan can add to it or change it when asked.
     const board = request.kind === "ask" && !request.focus ? openBoard() : null;
@@ -376,7 +377,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
         ],
       }));
     } finally {
-      set({ pending: false });
+      set({ pending: false, pendingRequest: null });
     }
   }
 
@@ -487,6 +488,7 @@ export const useRanganStore = create<RanganState>((set, get) => {
     conversationId: null,
     loadingConversation: false,
     pending: false,
+    pendingRequest: null,
     usage: null,
     applyUsage: (incoming, broadcast = true) => {
       const usage = pickUsage(incoming);

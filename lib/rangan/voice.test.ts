@@ -58,3 +58,18 @@ test("a turn ends after speech and a pause, or gives up when nobody speaks", () 
   long.sample(0.5, 0);
   assert.equal(long.sample(0.5, 3_000), "done", "the longest recording stops on its own");
 });
+
+test("a request ending in 'stop' is sent without it, and voice mode then ends", async () => {
+  const { withoutTrailingStop } = await import("./voice");
+  assert.deepEqual(withoutTrailingStop("please create a note on mathematics, trigonometry chapter. Stop."), { text: "please create a note on mathematics, trigonometry chapter", stop: true });
+  assert.deepEqual(withoutTrailingStop("Write a paragraph on Studenv. Stop."), { text: "Write a paragraph on Studenv", stop: true });
+  assert.deepEqual(withoutTrailingStop("explain how a bus stop works"), { text: "explain how a bus stop works", stop: false });
+  assert.deepEqual(withoutTrailingStop("stop"), { text: "stop", stop: false }, "'stop' alone is handled as a reply, not a request");
+});
+
+test("the expected-words list is never taken for something said", async () => {
+  const { VOICE_VOCABULARY } = await import("./voice");
+  assert.equal(cleanTranscript(VOICE_VOCABULARY), "");
+  assert.equal(cleanTranscript("Studenv, Rangan."), "");
+  assert.equal(cleanTranscript("Explain the fs module"), "Explain the fs module");
+});

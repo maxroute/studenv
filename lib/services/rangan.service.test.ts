@@ -221,6 +221,15 @@ test("explaining selected text searches with it and quotes it to the model", asy
   assert.match(last, /Question: Explain this$/);
 });
 
+test("explaining a selection is about that exact text, not the page around it", async () => {
+  const { deps, sent } = fakeDeps({ passages: PASSAGES });
+  await createRanganService(deps).ask("u1", { question: "Explain this", focus: { text: "thatatata", title: "Launch checklist" } });
+  const last = sent[0].at(-1)?.content ?? "";
+  assert.match(last, /Answer about exactly this selected text/);
+  assert.match(last, /never explain the page's title or another topic instead/);
+  assert.match(last, /no clear meaning \(random letters, a placeholder, a typo\), say so/);
+});
+
 test("selected text is limited in size and cannot carry extra fields", () => {
   assert.equal(ranganAskSchema.safeParse({ question: "Explain", focus: { text: "x".repeat(4_001) } }).success, false);
   assert.equal(ranganAskSchema.safeParse({ question: "Explain", focus: { text: "ok", noteId: "n1" } }).success, false);
@@ -660,6 +669,24 @@ test("asking for a board returns a map draft with its outline", async () => {
   if (reply.kind !== "map") return;
   assert.deepEqual(reply.map.outline, ["Kernel (has)", "  Scheduler", "Memory (manages)", "  Paging"]);
   assert.match(sent[0][1].content, /Plan a mind map that teaches "operating systems"/);
+});
+
+test("'create the board' after a chat makes a board on the subject talked about, even when the reading misses it", async () => {
+  // The quick reading sees the last exchange, finds the subject, but leaves out the action.
+  const reading = JSON.stringify({ subject: "operating systems", search: "operating system kernel", names: ["operating system"], terms: ["kernel"], actions: [] });
+  const { deps, sent, quick } = sequenceDeps(reading, [MAP_REPLY]);
+  const history = [
+    { role: "user" as const, content: "Explain how an operating system kernel works" },
+    { role: "assistant" as const, content: "The kernel schedules processes and manages memory." },
+  ];
+  const reply = await createRanganService(deps).ask("u1", { question: "Create the board", history });
+  assert.equal(reply.kind, "map");
+  assert.match(quick[0][1].content, /conversation just before[\s\S]*Student: Explain how an operating system kernel works\nRangan: The kernel schedules/);
+  assert.match(sent[0][1].content, /Earlier in this conversation[\s\S]*Rangan: The kernel schedules processes/);
+});
+
+test("a board request never goes to a chat answer that points to another app", () => {
+  assert.match(RANGAN_SYSTEM_PROMPT, /Never tell them to use another app/);
 });
 
 test("a map brings freely licensed pictures for what it asked, and the on-subject Wikipedia articles it used as reading", async () => {
