@@ -144,3 +144,38 @@ test("a lesson video is saved for this user and shown under the centre; only rea
   assert.ok(card && card.type === "resource-card" && card.props.assetId === "v1");
   assert.ok(scene.items.some((item) => item.type === "connector" && item.props.target.id === card.id && item.props.label?.text === "watch"));
 });
+
+test("a board's diagrams, extra videos and pictures go under the map, without overlapping it", async () => {
+  const { service, created, videos } = setup();
+  const input = createMapBoardSchema.parse({
+    draft: DRAFT,
+    sources: [],
+    video: { videoId: "aaaaaaaaaaa", title: "OS in 10 minutes", channel: "C" },
+    sections: [
+      { type: "diagram", heading: "Layers", joiner: "", parts: [{ name: "Kernel", detail: "Talks to the hardware." }, { name: "Shell", detail: "Talks to you." }] },
+      { type: "timeline", heading: "Boot", milestones: [{ when: "", title: "BIOS", detail: "" }, { when: "", title: "Kernel", detail: "" }] },
+    ],
+    // The first repeats the map's own video, so only the second is saved again.
+    videos: [
+      { videoId: "aaaaaaaaaaa", title: "OS in 10 minutes", channel: "C" },
+      { videoId: "bbbbbbbbbbb", title: "Paging explained", channel: "C" },
+    ],
+    pictures: [{ src: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/X.png/400px-X.png", width: 400, height: 300, alt: "Pages", credit: "A, CC BY 4.0", sourceUrl: "https://commons.wikimedia.org/wiki/File:X.png" }],
+  });
+  await service.createMapBoard("u1", input);
+  assert.deepEqual(videos.map((video) => video.videoId), ["aaaaaaaaaaa", "bbbbbbbbbbb"]);
+  const scene = parseWorkspaceSceneJson(created[0].sceneJson);
+  const texts = scene.items.flatMap((item) => (item.type === "free-text" ? [item.props.text] : []));
+  for (const heading of ["Layers", "Boot", "Watch and look"]) assert.ok(texts.includes(heading), heading);
+  const solid = scene.items.filter((item) => item.type !== "connector");
+  const mapBottom = Math.max(...solid.filter((item) => item.type === "sticky").map((item) => item.y + item.h));
+  const layers = solid.find((item) => item.type === "free-text" && item.props.text === "Layers");
+  assert.ok(layers && layers.y > mapBottom, "the diagrams start below the map");
+  assert.equal(Math.min(...solid.map((item) => item.x)), 0);
+  assert.equal(new Set(scene.items.map((item) => item.id)).size, scene.items.length);
+});
+
+test("sections that don't fit the limits are refused when the draft comes back", () => {
+  const tooMany = Array.from({ length: 4 }, () => ({ type: "timeline", heading: "t", milestones: [{ title: "a" }, { title: "b" }] }));
+  assert.equal(createMapBoardSchema.safeParse({ draft: DRAFT, sources: [], sections: tooMany }).success, false);
+});

@@ -34,16 +34,28 @@ export function MapOutline({ map }: { map: RanganMap }) {
   );
 }
 
-/** The pictures and further reading a map comes with: shown before anything is saved. */
+const SECTION_NAMES = { flowchart: "Flowchart", diagram: "Diagram", comparison: "Comparison", timeline: "Timeline" } as const;
+
+/** The pictures, diagrams, videos and further reading a map comes with: shown before anything is saved. */
 function MapExtras({ map }: { map: RanganMap }) {
-  const images = map.images ?? [];
+  const images = [...(map.images ?? []), ...(map.pictures ?? []).map((picture) => ({ ...picture, target: "" }))];
   const reading = map.reading ?? [];
-  const video = map.video ?? null;
-  if (!images.length && !reading.length && !video) return null;
+  const videos = [...(map.video ? [map.video] : []), ...(map.videos ?? [])];
+  const sections = map.sections ?? [];
+  if (!images.length && !reading.length && !videos.length && !sections.length) return null;
   return (
     <>
-      {video ? (
-        <a className="rangan-map-video" href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.videoId)}`} target="_blank" rel="noopener noreferrer">
+      {sections.length ? (
+        <ul className="rangan-map-sections">
+          {sections.map((section) => (
+            <li key={section.type}>
+              <span className="rangan-map-branch">{SECTION_NAMES[section.type]}</span> <span className="rangan-plan-meta">{section.heading}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {videos.map((video) => (
+        <a key={video.videoId} className="rangan-map-video" href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.videoId)}`} target="_blank" rel="noopener noreferrer">
           {/* YouTube's own thumbnail, shown as is. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`https://i.ytimg.com/vi/${encodeURIComponent(video.videoId)}/mqdefault.jpg`} alt="" loading="lazy" />
@@ -52,7 +64,7 @@ function MapExtras({ map }: { map: RanganMap }) {
             <span className="rangan-plan-meta">{video.channel ? `${video.channel} · ` : ""}YouTube. Saved to your library when you create the board.</span>
           </span>
         </a>
-      ) : null}
+      ))}
       {images.length ? (
         <div className="rangan-map-images">
           {images.map((image) => (

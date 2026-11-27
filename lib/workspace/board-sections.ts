@@ -520,15 +520,153 @@ export function composeBoard(title: string, sections: readonly BoardSection[], n
     .slice(0, SECTION_LIMITS.sections)
     .map((section) => layoutSection(section, newId))
     .filter((layout): layout is SectionLayout => layout !== null);
-  const width = Math.max(600, ...layouts.map((layout) => layout.width), Math.round(title.length * 19));
-  const items: StudioItem[] = [{ id: newId(), type: "free-text", x: 0, y: 0, w: width, h: TITLE_H, rotation: 0, zIndex: 0, props: { text: title, color: INK, fontSize: 34 } }];
-  let top = TITLE_H + 60;
-  for (const layout of layouts) {
-    const left = Math.round((width - layout.width) / 2);
-    for (const item of layout.items) items.push(item.type === "connector" ? item : ({ ...item, x: item.x + left, y: item.y + top } as StudioItem));
-    top += layout.height + SECTION_GAP;
+  return stackBlocks(title, layouts, newId);
+}
+
+// ── what Rangan writes ───────────────────────────────────────────────────────
+
+export const SECTION_PLAN_MAX = 3;
+export const MEDIA_MAX_VIDEOS = 3;
+export const MEDIA_MAX_IMAGES = 3;
+
+/** The sections, video searches and pictures Rangan plans for a board. */
+export type SectionPlan = { sections: SectionDraft[]; videos: string[]; images: string[] };
+
+export function sectionsInstruction(request: string, subject: string): string {
+  return [
+    `The student asked: """${request.slice(0, 1_500)}"""`,
+    `Plan the diagrams for a study board on "${subject}". A mind map of the main ideas is made separately; these diagrams explain what a mind map can't.`,
+    `sections: 1 to ${SECTION_PLAN_MAX} of these, only where the subject really has one. Never two of the same type.`,
+    `- flowchart: a process, algorithm or decision. nodes (3 to 10): id ("a", "b"…), kind ("start", "step", "decision" or "end") and text (under 10 words). edges: from, to and a label ("yes"/"no" after a decision, else ""). Keep it a main path down the page with short side exits; one loop back at most.`,
+    `- diagram: one thing made of named parts in order (a JWT's header, payload and signature; a URL's parts; the layers of a stack). parts (2 to ${SECTION_LIMITS.parts}): name (1 to 3 words) and detail (one sentence). joiner: what goes between parts if something does, like "." or "→", else "".`,
+    `- comparison: two to ${SECTION_LIMITS.columns} things the student must tell apart. columns: their names. rows (2 to 6): label (the point compared) and cells (one short phrase per column).`,
+    `- timeline: a history, a lifecycle or a learning roadmap. milestones (3 to ${SECTION_LIMITS.milestones}): when (a date, "Step 1" or "Week 1"; "" if none), title (1 to 5 words) and detail (under 15 words).`,
+    'Each section has a type and a heading (under 8 words) that says what it shows.',
+    `videos: up to ${MEDIA_MAX_VIDEOS} YouTube searches (3 to 6 words each), each for a short lesson on a different part of the subject, like "jwt signature verification explained". Empty if videos would not help.`,
+    `images: up to ${MEDIA_MAX_IMAGES} exact English Wikipedia article titles whose picture shows something from the subject, other than the subject's own article. Empty if pictures would not help.`,
+    "Use the passages where they cover something. Write in the language of the request. Never mention passage numbers.",
+    'Reply with only a JSON object: {"sections": [{"type": "flowchart", "heading": "...", "nodes": [{"id": "a", "kind": "start", "text": "..."}], "edges": [{"from": "a", "to": "b", "label": ""}]}], "videos": ["..."], "images": ["..."]}',
+  ].join("\n");
+}
+
+const clip = (value: unknown, max: number) => (typeof value === "string" ? value.replace(/\s+/g, " ").replace(/\s*\[\d{1,2}\]/g, "").trim().slice(0, max) : "");
+const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
+const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+
+/**
+ * A table row's cells in column order. Models write them as a list, as an
+ * object keyed by column name, or as keys on the row itself.
+ */
+function rowCells(row: Record<string, unknown>, columns: string[]): unknown[] {
+  const given = row.cells ?? row.values;
+  if (Array.isArray(given)) return given.slice(0, columns.length);
+  const keyed = given && typeof given === "object" ? (given as Record<string, unknown>) : row;
+  const byName = new Map(Object.entries(keyed).map(([key, value]) => [key.trim().toLowerCase(), value]));
+  const found = columns.map((column) => byName.get(column.toLowerCase()));
+  if (found.some((value) => typeof value === "string" && value.trim())) return found;
+  // Keyed some other way: take the values in order, if there is one per column.
+  if (keyed !== row) {
+    const values = Object.values(keyed);
+    if (values.length === columns.length) return values;
   }
-  // Lines under the shapes and cards they join.
+  return [];
+}
+
+/** One section from the model, trimmed to the limits; null when it isn't usable. */
+function readSection(raw: unknown): SectionDraft | null {
+  const entry = record(raw);
+  const heading = clip(entry.heading, 80);
+  let shaped: unknown;
+  switch (entry.type) {
+    case "flowchart":
+      shaped = {
+        type: "flowchart",
+        heading,
+        nodes: list(entry.nodes, SECTION_LIMITS.flowNodes).map((node) => {
+          const value = record(node);
+          return { id: clip(value.id, 20), kind: ["start", "step", "decision", "end"].includes(String(value.kind)) ? value.kind : "step", text: clip(value.text, 90) };
+        }),
+        edges: list(entry.edges, SECTION_LIMITS.flowEdges).map((edge) => {
+          const value = record(edge);
+          return { from: clip(value.from, 20), to: clip(value.to, 20), label: clip(value.label, 16) };
+        }),
+      };
+      break;
+    case "diagram":
+      shaped = {
+        type: "diagram",
+        heading,
+        joiner: clip(entry.joiner, 3),
+        parts: list(entry.parts, SECTION_LIMITS.parts).map((part) => ({ name: clip(record(part).name, 30), detail: clip(record(part).detail, 160) })),
+      };
+      break;
+    case "comparison": {
+      const columns = list(entry.columns, SECTION_LIMITS.columns).map((column) => clip(column, 40));
+      const rows = list(entry.rows, SECTION_LIMITS.rows)
+        .map((row) => ({ label: clip(record(row).label, 40), cells: rowCells(record(row), columns).map((cell) => clip(cell, 120)) }))
+        // A row with nothing filled in says nothing; a table of them would be a grid of dashes.
+        .filter((row) => row.cells.some(Boolean));
+      if (rows.length < 2) return null;
+      shaped = { type: "comparison", heading, columns, rows };
+      break;
+    }
+    case "timeline":
+      shaped = {
+        type: "timeline",
+        heading,
+        milestones: list(entry.milestones, SECTION_LIMITS.milestones).map((stop) => {
+          const value = record(stop);
+          return { when: clip(value.when, 24), title: clip(value.title, 50), detail: clip(value.detail, 120) };
+        }),
+      };
+      break;
+    default:
+      return null;
+  }
+  const parsed = sectionDraftSchema.safeParse(shaped);
+  if (!parsed.success) return null;
+  // A flowchart needs at least one line between its own steps to be drawn.
+  return parsed.data.type === "flowchart" && !flowEdges(parsed.data).length ? null : parsed.data;
+}
+
+/** The model's plan, keeping only usable sections, at most one of each type. */
+export function parseSectionsReply(object: Record<string, unknown> | null): SectionPlan {
+  if (!object) return { sections: [], videos: [], images: [] };
+  const sections: SectionDraft[] = [];
+  for (const raw of list(object.sections, 8)) {
+    const section = readSection(raw);
+    if (section && !sections.some((other) => other.type === section.type)) sections.push(section);
+    if (sections.length >= SECTION_PLAN_MAX) break;
+  }
+  const distinct = (values: unknown, max: number, length: number) =>
+    [...new Set(list(values, 10).map((value) => clip(value, length)).filter((value) => value && !/^(null|none|n\/a)$/i.test(value)))].slice(0, max);
+  return { sections, videos: distinct(object.videos, MEDIA_MAX_VIDEOS, 80), images: distinct(object.images, MEDIA_MAX_IMAGES, 80) };
+}
+
+/**
+ * Blocks one under another, centred, with an optional title on top. Each
+ * block's items have its top-left at (0, 0). Elements come back with their
+ * stacking order set: lines under the shapes and cards they join.
+ */
+export function stackBlocks(title: string | null, blocks: readonly SectionLayout[], newId: () => string): StudioItem[] {
+  const width = Math.max(600, ...blocks.map((block) => block.width), title ? Math.round(title.length * 19) : 0);
+  const items: StudioItem[] = title ? [{ id: newId(), type: "free-text", x: 0, y: 0, w: width, h: TITLE_H, rotation: 0, zIndex: 0, props: { text: title, color: INK, fontSize: 34 } }] : [];
+  let top = title ? TITLE_H + 60 : 0;
+  for (const block of blocks) {
+    const left = Math.round((width - block.width) / 2);
+    for (const item of block.items) items.push(item.type === "connector" ? item : ({ ...item, x: item.x + left, y: item.y + top } as StudioItem));
+    top += block.height + SECTION_GAP;
+  }
   const ordered = [...items.filter((item) => item.type === "connector"), ...items.filter((item) => item.type !== "connector")];
   return ordered.map((item, index) => ({ ...item, zIndex: index + 1 }) as StudioItem);
+}
+
+/** Items already laid out elsewhere (like a mind map) as a block: moved so their top-left is (0, 0). */
+export function asBlock(items: readonly StudioItem[]): SectionLayout {
+  const solid = items.filter((item): item is Exclude<StudioItem, ConnectorNode> => item.type !== "connector");
+  const minX = Math.min(...solid.map((item) => item.x));
+  const minY = Math.min(...solid.map((item) => item.y));
+  const moved = items.map((item) => (item.type === "connector" ? item : ({ ...item, x: item.x - minX, y: item.y - minY } as StudioItem)));
+  const placed = moved.filter((item): item is Exclude<StudioItem, ConnectorNode> => item.type !== "connector");
+  return { items: moved, width: Math.max(...placed.map((item) => item.x + item.w)), height: Math.max(...placed.map((item) => item.y + item.h)) };
 }

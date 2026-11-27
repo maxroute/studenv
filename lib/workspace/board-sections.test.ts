@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseWorkspaceSceneJson, serializeWorkspaceScene, type ConnectorNode, type StudioItem } from "@/types/workspace";
 import { computeConnectorRoute } from "./connector-routing";
-import { composeBoard, flowRanks, layoutSection, sectionDraftSchema, wrappedLines, type BoardSection, type MediaSection } from "./board-sections";
+import { asBlock, composeBoard, flowRanks, layoutSection, parseSectionsReply, sectionDraftSchema, stackBlocks, wrappedLines, type BoardSection, type MediaSection } from "./board-sections";
 
 const ids = () => {
   let n = 0;
@@ -218,4 +218,62 @@ test("longer text wraps to more lines, and a word wider than a line breaks", () 
   assert.equal(wrappedLines("short", 200), 1);
   assert.ok(wrappedLines("a much longer sentence that cannot fit on one narrow line", 100) > 3);
   assert.ok(wrappedLines("abcdefghijklmnopqrstuvwxyz", 90) >= 3);
+});
+
+test("Rangan's plan is trimmed to the limits, keeps one section of each type and drops broken ones", () => {
+  const plan = parseSectionsReply({
+    sections: [
+      { type: "flowchart", heading: "Check", nodes: [{ id: "a", kind: "begin", text: "x".repeat(200) }, { id: "b", kind: "end", text: "Done" }], edges: [{ from: "a", to: "b", label: "" }] },
+      { type: "flowchart", heading: "Second flowchart", nodes: [{ id: "a", text: "A" }, { id: "b", text: "B" }], edges: [{ from: "a", to: "b" }] },
+      { type: "comparison", heading: "Compare", columns: ["A", "B", "C", "D", "E"], rows: [{ label: "Speed", cells: ["fast", "slow", "", "", "extra", "more"] }, { label: "Cost", cells: ["low"] }] },
+      { type: "diagram", heading: "Only one part", parts: [{ name: "A", detail: "a" }] },
+      { type: "poem", heading: "No" },
+      { type: "timeline", heading: "Lines that go nowhere", milestones: "none" },
+    ],
+    videos: ["jwt explained", "jwt explained", "null", "", "refresh tokens", "fourth search"],
+    images: ["JSON Web Token", 4, "Base64"],
+  });
+  assert.deepEqual(plan.sections.map((section) => section.type), ["flowchart", "comparison"]);
+  const flow = plan.sections[0];
+  assert.ok(flow.type === "flowchart");
+  assert.equal(flow.nodes[0].kind, "step");
+  assert.equal(flow.nodes[0].text.length, 90);
+  const table = plan.sections[1];
+  assert.ok(table.type === "comparison");
+  assert.equal(table.columns.length, 4);
+  assert.equal(table.rows[0].cells.length, 4);
+  assert.deepEqual(plan.videos, ["jwt explained", "refresh tokens", "fourth search"]);
+  assert.deepEqual(plan.images, ["JSON Web Token", "Base64"]);
+});
+
+test("no plan, or a plan with nothing usable, means a board without diagrams", () => {
+  assert.deepEqual(parseSectionsReply(null), { sections: [], videos: [], images: [] });
+  assert.deepEqual(parseSectionsReply({ sections: "lots" }), { sections: [], videos: [], images: [] });
+});
+
+test("a block laid out elsewhere is moved to the corner, and blocks stack without overlapping", () => {
+  const block = asBlock([
+    { id: "s1", type: "sticky", x: -300, y: 50, w: 200, h: 100, rotation: 0, zIndex: 1, props: { text: "A", color: "#F8E7A1" } },
+    { id: "s2", type: "sticky", x: 100, y: -20, w: 200, h: 100, rotation: 0, zIndex: 2, props: { text: "B", color: "#F8E7A1" } },
+  ]);
+  assert.deepEqual([block.width, block.height], [600, 170]);
+  const diagramLayout = layoutSection(diagram, ids());
+  assert.ok(diagramLayout);
+  const items = stackBlocks(null, [block, diagramLayout], ids());
+  assertTidy(items, "stacked");
+  assert.equal(Math.min(...solids(items).map((item) => item.y)), 0);
+});
+
+test("table cells are read however the model writes them, and an empty table is left out", () => {
+  const columns = ["Session", "JWT"];
+  const read = (rows: unknown[]) => parseSectionsReply({ sections: [{ type: "comparison", heading: "Sessions vs JWT", columns, rows }] }).sections[0];
+  const keyed = read([
+    { label: "Storage", cells: { Session: "On the server", JWT: "In the token" } },
+    { label: "Revoking", session: "Delete it", jwt: "Wait for expiry" },
+    { label: "Scaling", values: ["Shared store", "Any server"] },
+  ]);
+  assert.ok(keyed?.type === "comparison");
+  assert.deepEqual(keyed.rows.map((row) => row.cells), [["On the server", "In the token"], ["Delete it", "Wait for expiry"], ["Shared store", "Any server"]]);
+  assert.equal(read([{ label: "Storage", cells: [] }, { label: "Scaling", cells: {} }, { label: "Load" }]), undefined);
+  assert.equal(read([{ label: "Storage", cells: ["a", "b"] }, { label: "Scaling" }]), undefined, "one filled row isn't a comparison");
 });

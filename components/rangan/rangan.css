@@ -1309,6 +1309,15 @@ body:has(.note-keyboard-bar) .rangan-fab {
   margin: 3px 0;
 }
 
+/* The diagrams under the map: a short list set apart from the branches. */
+.rangan-map-outline ul.rangan-map-sections {
+  margin-top: 6px;
+  padding-top: 6px;
+  padding-left: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
 .rangan-map-branch em {
   color: var(--muted);
   font-style: normal;
