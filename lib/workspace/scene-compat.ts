@@ -9,14 +9,15 @@
 // When a release adds something an older build would lose on save, raise
 // WORKSPACE_SCENE_CLIENT_BUILD and set MIN_WORKSPACE_SCENE_CLIENT_BUILD to it.
 
-/** The scene build this client sends with every snapshot save. Build 2 knows `note-card`. */
-export const WORKSPACE_SCENE_CLIENT_BUILD = 2;
+/** The scene build this client sends with every snapshot save. Build 2 knows `note-card`; build 3, text in shapes. */
+export const WORKSPACE_SCENE_CLIENT_BUILD = 3;
 
 /**
- * Saves from builds older than this are refused with 409. Raised to 2 with
- * `note-card`, so a tab still running an older build reloads before saving.
+ * Saves from builds older than this are refused with 409, so a tab still
+ * running an older build reloads before saving: it would drop `note-card`
+ * cards (before 2) or the text typed in shapes (before 3).
  */
-export const MIN_WORKSPACE_SCENE_CLIENT_BUILD = 2;
+export const MIN_WORKSPACE_SCENE_CLIENT_BUILD = 3;
 
 /**
  * Builds from before this check send no `clientBuild`. They know exactly the
