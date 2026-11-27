@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { INTRO_END_FRAME, INTRO_STILL_FRAME, INTRO_WORDS, introFrame, logoDisc } from "./intro";
+import {
+  INTRO_ARMS_FRAME,
+  INTRO_END_FRAME,
+  INTRO_HOLD_FRAME,
+  INTRO_STILL_FRAME,
+  INTRO_WORDS,
+  introFrame,
+  logoDisc,
+  nextFrame,
+} from "./intro";
 
 const target = logoDisc({ left: 20, top: 10, width: 20, height: 20 });
 const at = (f: number) => introFrame(f, 1440, 900, target);
@@ -14,6 +23,26 @@ test("it opens larger than the screen and covers it", () => {
   const first = at(0);
   assert.ok(first.logo.size > Math.hypot(1440, 900));
   assert.equal(first.progress, 0);
+});
+
+test("a black circle shrinks to the centre dot before any arm appears", () => {
+  assert.equal(at(0).dotRadius, 121);
+  assert.ok(at(30).dotRadius < 121 && at(30).dotRadius > 17);
+  assert.equal(at(60).dotRadius, 17);
+  for (let f = 0; f < INTRO_ARMS_FRAME; f++) assert.equal(at(f).armsStarted, false);
+  assert.ok(INTRO_ARMS_FRAME >= 60);
+  assert.equal(at(INTRO_ARMS_FRAME).armsStarted, true);
+});
+
+test("it waits on the last word until it may leave", () => {
+  assert.equal(nextFrame(0, 1_000, false), 60);
+  assert.equal(nextFrame(160, 1_000, false), INTRO_HOLD_FRAME);
+  assert.equal(nextFrame(INTRO_HOLD_FRAME, 1_000, false), INTRO_HOLD_FRAME);
+  assert.equal(nextFrame(INTRO_HOLD_FRAME, 100, true), INTRO_HOLD_FRAME + 6);
+});
+
+test("once leaving it finishes, even if the data is asked for again", () => {
+  assert.equal(nextFrame(INTRO_HOLD_FRAME + 6, 5_000, false), INTRO_END_FRAME);
 });
 
 test("the logo has shrunk into place by the last word", () => {

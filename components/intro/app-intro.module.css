@@ -5,12 +5,21 @@
   z-index: 20000;
   overflow: hidden;
   /* If the page's script never runs, the screen still gets out of the way. */
-  animation: giveUp 0s linear 10s forwards;
+  animation: giveUp 0s linear 20s forwards;
 }
 
 /* The yellow of the app's logo, so the two meet without a change of colour. It is
    yellow from the first paint: iPhone Safari colours its edges from that. */
 .field { position: absolute; inset: 0; background: #ffde0a; }
+
+/* Before the first frame can be drawn, it already looks like it: a black circle. A
+   gradient, so that iPhone Safari still takes its edge colour from the yellow. */
+.intro:not(.playing)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle 62vmax at 50% 40%, #050505 99.6%, transparent 100%);
+}
 
 .text, .mark { visibility: hidden; }
 .playing .text, .playing .mark { visibility: visible; }
@@ -44,10 +53,11 @@
 
 .mark { position: absolute; top: 0; left: 0; width: 100px; height: 100px; transform-origin: 0 0; }
 .mark svg { display: block; overflow: visible; }
-/* One draw and one turn, then it rests, upright, to fold into the app's logo.
-   The motion starts with the first frame, in step with the words. */
-.mark g, .mark path { animation-iteration-count: 1; animation-fill-mode: both; }
-.intro:not(.playing) .mark :is(g, path) { animation-play-state: paused; }
+/* One draw and one turn, then it rests, upright, to fold into the app's logo. */
+.mark g, .mark path { animation-delay: 0s; animation-iteration-count: 1; animation-fill-mode: both; }
+/* No arm shows, and none starts, until the black circle has become the dot. */
+.mark:not(.drawing) g { visibility: hidden; }
+.mark:not(.drawing) :is(g, path) { animation-play-state: paused; }
 
 /* Film grain, faint enough to feel rather than see. */
 .grain {

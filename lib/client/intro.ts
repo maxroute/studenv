@@ -1,24 +1,32 @@
 /**
  * The yellow opening screen. Its motion follows the studio's reference
- * animation (studenv-v3.html), counted in frames at 60 a second: the mark
- * shrinks into place, the words roll over, and it all folds into the app's
- * logo. The mark itself draws the way it does in the app's loaders.
+ * animation (studenv-v3.html), counted in frames at 60 a second: a black circle
+ * shrinks to the mark's centre dot, the arms then draw as they do in the app's
+ * loaders, the words roll over, and it all folds into the app's logo.
  */
-
-/** A session cookie: the intro plays once, not on every page or reload. */
-export const INTRO_COOKIE = "studenv-intro";
 
 export const INTRO_FPS = 60;
 /** The screen has reached the app's logo by this frame. */
 export const INTRO_END_FRAME = 228;
 /** With reduced motion, the finished picture is held still on this frame. */
 export const INTRO_STILL_FRAME = 165;
+/** The arms begin to draw here, once the black circle has become the dot. */
+export const INTRO_ARMS_FRAME = 64;
+/** The last frame before the text fades: it waits here for the screen's data. */
+export const INTRO_HOLD_FRAME = 170;
+/** A slow connection never holds the student there longer than this. */
+export const INTRO_MAX_HOLD_MS = 4_000;
+
+/** The mark's disc and its centre dot, as radii on the mark's own grid. */
+const MARK_RADIUS = 121;
+const DOT_RADIUS = 17;
 
 export const INTRO_WORDS = ["Capture", "Organize", "Grow", "Studenv"];
 
 const clamp = (t: number) => Math.max(0, Math.min(1, t));
 /** How far `u` has got from `a` to `b`, from 0 to 1. */
 const segment = (u: number, a: number, b: number) => clamp((u - a) / (b - a));
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 /** The value at frame `f`, moving through `values` at `frames`. */
@@ -44,6 +52,12 @@ export function logoDisc(box: Box): Circle {
   return { x: box.left + box.width / 2, y: box.top + box.height / 2, size: box.width * DISC_SHARE };
 }
 
+/** The next frame to show: it goes past the hold only once it may leave. */
+export function nextFrame(frame: number, elapsedMs: number, mayLeave: boolean): number {
+  const limit = mayLeave || frame > INTRO_HOLD_FRAME ? INTRO_END_FRAME : INTRO_HOLD_FRAME;
+  return Math.min(limit, frame + (elapsedMs * INTRO_FPS) / 1000);
+}
+
 /**
  * Everything on screen at frame `f`. `target` is the app's logo; without one on
  * screen the intro closes to nothing in the middle.
@@ -66,6 +80,9 @@ export function introFrame(f: number, width: number, height: number, target: Cir
 
   return {
     logo: { x, y, size },
+    /** The black circle: the whole mark at first, then only its centre dot. */
+    dotRadius: DOT_RADIUS + (MARK_RADIUS - DOT_RADIUS) * (1 - easeInOut(segment(f, 4, 60))),
+    armsStarted: f >= INTRO_ARMS_FRAME,
     /** The yellow covers the whole window until it folds. */
     fieldRadius: folded(diagonal, size / 2),
     wordsTop: middle.y + restingSize / 2 + 28,

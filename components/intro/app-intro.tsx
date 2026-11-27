@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { INTRO_COOKIE, INTRO_END_FRAME, INTRO_FPS, INTRO_STILL_FRAME, INTRO_WORDS, introFrame, logoDisc } from "@/lib/client/intro";
+import { INTRO_HOLD_FRAME, INTRO_MAX_HOLD_MS, INTRO_STILL_FRAME, INTRO_WORDS, introFrame, logoDisc, nextFrame } from "@/lib/client/intro";
 import { ARROWS, HEADS } from "@/components/ui/page-loader";
 import loader from "@/components/ui/page-loader.module.css";
 import { useIntroPreload } from "./use-intro-preload";
@@ -17,29 +17,55 @@ const STILL_MS = 900;
 const WORD_LINE = 1.3;
 const MAIN_SCREENS = ["/dashboard", "/shelf", "/dashboard/planner", "/dashboard/groups"];
 
-/** Stays set while the app is open, so moving between its sections doesn't replay the intro. */
+/** Stays set until the page is reloaded, so moving between the app's sections doesn't replay it. */
 let played = false;
 
-/** `show` comes from the server, so the first thing painted is already the intro (or isn't). */
-export function AppIntro({ show }: { show: boolean }) {
-  const [active, setActive] = useState(() => show && !(typeof window !== "undefined" && played));
-  return active ? <Intro onDone={() => setActive(false)} /> : null;
+/** It is part of the first paint, and gone for good once played. */
+function useOncePerLoad() {
+  const [active, setActive] = useState(() => !(typeof window !== "undefined" && played));
+  return { active, finish: () => setActive(false) };
 }
 
-/** The logo in the sidebar or the phone's top bar, whichever is on screen. */
+/** Plays each time the signed-in app is opened or reloaded, while its data loads. */
+export function AppIntro() {
+  const { active, finish } = useOncePerLoad();
+  return active ? <SignedInIntro onDone={finish} /> : null;
+}
+
+/** The same on the public home page, where there is no data to wait for. */
+export function PublicIntro() {
+  const { active, finish } = useOncePerLoad();
+  return active ? <Intro ready onDone={finish} /> : null;
+}
+
+function SignedInIntro({ onDone }: { onDone: () => void }) {
+  const router = useRouter();
+  const ready = useIntroPreload();
+
+  useEffect(() => {
+    for (const screen of MAIN_SCREENS) router.prefetch(screen);
+  }, [router]);
+
+  return <Intro ready={ready} onDone={onDone} />;
+}
+
+/** The app's sidebar and phone top bar, and the public home page's header. */
+const LOGOS = ".shell-brand .brand-mark, .approved-homepage .topbar .brand-logo";
+
+/** Whichever of those logos is on screen. */
 function visibleLogo(): DOMRect | null {
-  for (const mark of Array.from(document.querySelectorAll(".shell-brand .brand-mark"))) {
+  for (const mark of Array.from(document.querySelectorAll(LOGOS))) {
     const box = mark.getBoundingClientRect();
-    const brand = mark.closest(".shell-brand")?.getBoundingClientRect();
+    const brand = mark.closest(".shell-brand, .brand")?.getBoundingClientRect();
     // A collapsed sidebar squeezes the brand to nothing but leaves the image its size.
     if (box.width > 0 && brand && brand.width >= box.width) return box;
   }
   return null;
 }
 
-function Intro({ onDone }: { onDone: () => void }) {
-  const router = useRouter();
-  useIntroPreload();
+function Intro({ ready, onDone }: { ready: boolean; onDone: () => void }) {
+  const dataReady = useRef(ready);
+  dataReady.current = ready;
   const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLDivElement>(null);
   const text = useRef<HTMLDivElement>(null);
@@ -48,14 +74,13 @@ function Intro({ onDone }: { onDone: () => void }) {
   const counter = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const mark = useRef<HTMLDivElement>(null);
+  const dot = useRef<SVGCircleElement>(null);
   const done = useRef(onDone);
   done.current = onDone;
 
   useEffect(() => {
     played = true;
-    document.cookie = `${INTRO_COOKIE}=seen; path=/; SameSite=Lax`;
-    for (const screen of MAIN_SCREENS) router.prefetch(screen);
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -63,6 +88,9 @@ function Intro({ onDone }: { onDone: () => void }) {
     let last: number | null = null;
     let request = 0;
     let leaving = 0;
+    /** When it began waiting on its last word. */
+    let heldSince: number | null = null;
+    const startedAt = performance.now();
 
     const paint = () => {
       const box = visibleLogo();
@@ -73,8 +101,12 @@ function Intro({ onDone }: { onDone: () => void }) {
       if (text.current) text.current.style.opacity = String(now.textOpacity);
       if (roll.current) roll.current.style.top = `${now.wordsTop}px`;
       if (firstWord.current) firstWord.current.style.marginTop = `${-now.wordShift * WORD_LINE}em`;
-      if (counter.current) counter.current.textContent = String(Math.round(now.progress * 100)).padStart(3, "0");
-      if (bar.current) bar.current.style.width = `${now.progress * 100}%`;
+      dot.current?.setAttribute("r", now.dotRadius.toFixed(2));
+      if (now.armsStarted) mark.current?.classList.add(styles.drawing);
+      // The count doesn't claim to be finished while the data is still on its way.
+      const progress = dataReady.current || frame > INTRO_HOLD_FRAME ? now.progress : Math.min(0.99, now.progress);
+      if (counter.current) counter.current.textContent = String(Math.round(progress * 100)).padStart(3, "0");
+      if (bar.current) bar.current.style.width = `${progress * 100}%`;
       root.current?.classList.add(styles.playing);
       return now.finished;
     };
@@ -87,8 +119,12 @@ function Intro({ onDone }: { onDone: () => void }) {
       }, after);
     };
 
+    const waitedEnough = (time: number) => heldSince !== null && time - heldSince >= INTRO_MAX_HOLD_MS;
+
     const step = (time: number) => {
-      if (last !== null) frame = Math.min(INTRO_END_FRAME, frame + (Math.min(LONGEST_STEP_MS, time - last) * INTRO_FPS) / 1000);
+      if (frame >= INTRO_HOLD_FRAME) heldSince ??= time;
+      const mayLeave = dataReady.current || waitedEnough(time);
+      if (last !== null) frame = nextFrame(frame, Math.min(LONGEST_STEP_MS, time - last), mayLeave);
       last = time;
       if (!paint()) {
         request = window.requestAnimationFrame(step);
@@ -98,12 +134,16 @@ function Intro({ onDone }: { onDone: () => void }) {
       leave(0);
     };
 
-    if (still) {
+    // With reduced motion the finished picture is held still until the data is in.
+    const holdStill = () => {
       paint();
-      leave(STILL_MS);
-    } else {
-      request = window.requestAnimationFrame(step);
-    }
+      const waited = performance.now() - startedAt;
+      if (waited >= STILL_MS && (dataReady.current || waited >= INTRO_MAX_HOLD_MS)) leave(0);
+      else leaving = window.setTimeout(holdStill, 100);
+    };
+
+    if (still) holdStill();
+    else request = window.requestAnimationFrame(step);
     return () => {
       window.cancelAnimationFrame(request);
       window.clearTimeout(leaving);
@@ -136,7 +176,7 @@ function Intro({ onDone }: { onDone: () => void }) {
               <path key={d} className={loader.head} d={d} />
             ))}
           </g>
-          <circle className={loader.dot} cx="141" cy="141" r="17" />
+          <circle ref={dot} className={loader.dot} cx="141" cy="141" r="121" />
         </svg>
       </div>
       <div className={styles.grain} aria-hidden="true" />

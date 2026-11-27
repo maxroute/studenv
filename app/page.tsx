@@ -1,3 +1,4 @@
+import { PublicIntro } from "@/components/intro/app-intro";
 import { WarmUp } from "@/components/ui/warm-up";
 import { ApprovedHomepage } from "@/components/layout/approved-homepage";
 import { createPublicPageMetadata } from "@/lib/seo/page-metadata";
@@ -32,6 +33,7 @@ export default function HomePage() {
         }}
       />
       <ApprovedHomepage />
+      <PublicIntro />
     </>
   );
 }

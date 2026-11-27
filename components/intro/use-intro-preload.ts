@@ -13,17 +13,22 @@ async function overviewFetcher(url: string): Promise<unknown> {
 
 /**
  * Loads what Home, Library, Planner and Groups show, into the same cache they
- * read. Each entry must be stored in the shape those screens expect. The intro
- * doesn't wait for them: anything still on its way arrives behind it.
+ * read. Each entry must be stored in the shape those screens expect.
+ *
+ * True once everything Home shows has answered, whether it worked or not. The
+ * rest isn't waited for: anything still on its way arrives behind the intro.
  */
-export function useIntroPreload(): void {
-  useSWR("/api/dashboard", overviewFetcher);
-  usePlannerTasks();
-  useSWR<unknown>("/api/items", apiFetcher);
+export function useIntroPreload(): boolean {
+  const home = [
+    useSWR("/api/dashboard", overviewFetcher),
+    usePlannerTasks(),
+    useSWR<unknown>("/api/items", apiFetcher),
+    useSWR<unknown>("/api/notes", apiFetcher),
+    useSWR<unknown>("/api/library/boards", apiFetcher),
+  ];
   useSWR<unknown>("/api/collections", apiFetcher);
-  useSWR<unknown>("/api/notes", apiFetcher);
-  useSWR<unknown>("/api/library/boards", apiFetcher);
   useSWR<unknown>("/api/library/files", apiFetcher);
   useSWR<unknown>("/api/library/storage", apiFetcher);
   useSWR<unknown>("/api/study-groups", apiFetcher);
+  return home.every((request) => request.data !== undefined || request.error !== undefined);
 }

@@ -1,10 +1,8 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
 import { AppIntro } from "@/components/intro/app-intro";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth/auth.config";
-import { INTRO_COOKIE } from "@/lib/client/intro";
 
 export default async function AuthenticatedLayout({
   children,
@@ -25,7 +23,7 @@ export default async function AuthenticatedLayout({
       }}
     >
       {children}
-      <AppIntro show={!cookies().has(INTRO_COOKIE)} />
+      <AppIntro />
     </AppShell>
   );
 }
