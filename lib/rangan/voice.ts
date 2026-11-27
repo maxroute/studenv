@@ -7,8 +7,8 @@
 
 /** Recordings longer than this stop on their own. */
 export const MAX_RECORDING_MS = 60_000;
-/** Silence after speech that ends a turn in voice mode. */
-export const END_OF_SPEECH_MS = 1_300;
+/** Silence after speech that ends a turn: long enough for a pause to think, short enough not to wait. */
+export const END_OF_SPEECH_MS = 1_600;
 /** With no speech at all for this long, listening gives up. */
 export const NO_SPEECH_MS = 8_000;
 /** Audio uploads larger than this are refused (60 s of compressed speech is far smaller). */
@@ -57,11 +57,30 @@ const SILENCE_PHRASES = new Set([
   "subtitles by the amara.org community",
 ]);
 
+/**
+ * Words the speech model is told to expect, so the app's names and common study
+ * terms are spelled right ("Studenv", not "Student V"; "fs module", not "FH").
+ */
+export const VOICE_VOCABULARY =
+  "Studenv, Rangan. Notes on Node.js, the fs module, JWT, OAuth, React, Next.js, SQL, DSA, LeetCode, GeeksforGeeks, LaTeX, sine, cosine, theta, pi, mitochondria, photosynthesis.";
+
 /** The transcript tidied for the input box, or "" when nothing was said. */
 export function cleanTranscript(text: string): string {
   const line = text.replace(/\s+/g, " ").trim();
   if (!line || SILENCE_PHRASES.has(line.toLowerCase())) return "";
+  // With nothing said, a speech model can repeat the words it was told to expect.
+  if (VOICE_VOCABULARY.toLowerCase().includes(line.toLowerCase().replace(/[.,]+$/, "")) && line.length > 12) return "";
   return line.slice(0, 2_000);
+}
+
+/**
+ * A request that ends with "stop" ("make a note on trigonometry. Stop."): the
+ * request without it, and whether to stop listening after answering.
+ */
+export function withoutTrailingStop(text: string): { text: string; stop: boolean } {
+  const match = /^(.*?)[\s,.;!-]+(?:ok(?:ay)?[\s,]+)?(stop|stop listening|that'?s all|that'?s it|over|done)[.!]*$/i.exec(text.trim());
+  if (!match || match[1].trim().split(/\s+/).length < 2) return { text: text.trim(), stop: false };
+  return { text: match[1].trim().replace(/[\s,;-]+$/, ""), stop: true };
 }
 
 export type VoiceReply = "yes" | "no" | "stop" | null;

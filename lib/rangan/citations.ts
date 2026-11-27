@@ -141,6 +141,12 @@ export function focusBlock(focus: { text: string; title?: string }): string {
   return `The student selected this text${where}:\n"""\n${focus.text.trim()}\n"""`;
 }
 
+/** How to answer about a selection: that text, not the page around it. */
+export const FOCUS_INSTRUCTION = [
+  "Answer about exactly this selected text: what it means, in the context of their page. The passages are only for explaining it; never explain the page's title or another topic instead.",
+  "If the selection has no clear meaning (random letters, a placeholder, a typo), say so in one sentence and ask what they meant, without a \"Beyond your sources\" section.",
+].join("\n");
+
 /** Href prefix of an in-answer citation link; the panel renders these as source chips. */
 export const CITATION_HREF_PREFIX = "#rangan-cite-";
 

@@ -6,8 +6,8 @@ import { aboutSubject, countMentioned, mentionsAny, parseReading, readingInstruc
 test("the reading instruction carries the message and, for follow-ups, the previous question", () => {
   const text = readingInstruction("which one makes gametes?", "What is meiosis?");
   assert.match(text, /Message: """which one makes gametes\?"""/);
-  assert.match(text, /previous question.*"""What is meiosis\?"""/);
-  assert.doesNotMatch(readingInstruction("Hi"), /previous question/);
+  assert.match(text, /conversation just before.*"""What is meiosis\?"""/);
+  assert.doesNotMatch(readingInstruction("Hi"), /conversation just before/);
 });
 
 test("a reading gives the subject, a clean search, its names and terms, and actions", () => {

@@ -19,7 +19,7 @@ import {
   voiceMessage,
   type Recording,
 } from "@/lib/client/voice";
-import { speakable, spokenDue, voiceReply } from "@/lib/rangan/voice";
+import { speakable, spokenDue, voiceReply, withoutTrailingStop } from "@/lib/rangan/voice";
 
 // Talking with Rangan. The mic button types what you say into the box. Voice
 // mode is a conversation: Rangan listens, sends when you stop talking, reads
@@ -150,7 +150,9 @@ async function converse(send: (text: string) => void) {
         continue;
       }
       quiet = 0;
-      const reply = voiceReply(text);
+      // "…Stop." at the end of a request: send the request, answer, then stop.
+      const ending = withoutTrailingStop(text);
+      const reply = ending.stop ? null : voiceReply(text);
       if (reply === "stop") break;
       if (awaiting && (reply === "yes" || reply === "no")) {
         const turn: RanganTurn = awaiting;
@@ -172,7 +174,7 @@ async function converse(send: (text: string) => void) {
         break;
       }
       setPhase("thinking");
-      send(text);
+      send(ending.text);
       await untilAnswered();
       if (!active("conversation")) break;
       // The reply is what follows this question: the last turn after the newest question.
@@ -183,6 +185,7 @@ async function converse(send: (text: string) => void) {
       if (!answer) continue;
       const spoken = spokenTurn(answer);
       await say(spoken.text);
+      if (ending.stop) break;
       if (spoken.asks && voiceActionFor(answer.id)) awaiting = answer;
     }
   } catch (error) {
@@ -215,7 +218,7 @@ async function dictate(onText: (text: string) => void) {
     setPhase("transcribing");
     const text = await transcribeAudio(audio);
     if (!active("dictating")) return;
-    if (text) onText(text);
+    if (text) onText(withoutTrailingStop(text).text);
     else useVoiceStore.setState({ problem: "Rangan didn't catch that. Tap the mic and try again." });
   } catch (error) {
     showProblem(error);
@@ -309,7 +312,7 @@ export function RanganVoiceMode({ send, disabled }: { send: (text: string) => vo
     <div className="rangan-voice-bar" role="status" aria-live="polite">
       <span className={`rangan-voice-dot ${phase}`} style={phase === "listening" ? { transform: `scale(${1 + level * 0.9})` } : undefined} aria-hidden />
       <span className="rangan-voice-label">{PHASE_LABEL[phase]}</span>
-      <span className="rangan-voice-hint">{phase === "listening" ? "Say “stop” to end" : ""}</span>
+      <span className="rangan-voice-hint">{phase === "listening" ? "Pause when you're done" : ""}</span>
       <button type="button" className="rangan-chip rangan-voice-stop" onClick={stopVoice}>
         <span className="rangan-stop-glyph small" aria-hidden /> Stop
       </button>

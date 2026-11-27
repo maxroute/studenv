@@ -131,6 +131,17 @@ const BOARD_EDIT_WORDS =
   /\b(arrange|rearrange|align|tidy|clean up|organi[sz]e|lay ?out|layout|colou?r|recolou?r|move|delete|remove|group|ungroup|lock|unlock|frame|connect|link|join|disconnect|resize|bigger|smaller|front|back|rename|relabel|add (a|an|some|more|the|two|three|four|five)? ?(\w+ ){0,3}(sticky|stickies|note|notes|shape|shapes|box|boxes|card|cards|heading|title|tip|tips|step|steps|node|nodes|branch|branches|diamond|circle|rectangle|arrow)|(make|turn|paint|change) [^.?!]{0,40}\b(yellow|green|blue|pink|orange|purple|red|black)|timeline|grid|tree|flowchart)\b/i;
 const NOT_THE_BOARD = /\b(planner|remind me|reminders?|new board|another board|new page|create a (page|note))\b/i;
 
+/**
+ * True when a message asks Rangan to make a board: a whiteboard, diagram,
+ * flowchart, roadmap or mind map ("create the board", "draw a flowchart of…").
+ * Only for short, direct requests: a long message that mixes a page, a board
+ * and more is left to the request reading. Not a planner request.
+ */
+export function asksForBoard(message: string): boolean {
+  if (message.length > 160 || /\b(planner|remind me|reminders?|task)\b/i.test(message)) return false;
+  return /\b(create|make|draw|build|generate|design|start|put|show)\b[^.?!]{0,50}\b(white ?boards?|boards?|diagrams?|flow ?charts?|road ?maps?|mind ?maps?|concept maps?|visuali[sz]ations?)\b/i.test(message);
+}
+
 /** True when a message asks for a new board or mind map rather than a change to the open one. */
 export function asksForNewBoard(message: string): boolean {
   return /\b(new|another|separate|second) (board|map|mind ?map)\b|\b(make|create|draw|build|generate)\b[^.?!]{0,30}\bmind ?maps?\b/i.test(message);

@@ -10,6 +10,9 @@ import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
 import { RanganLogo } from "./rangan-launcher";
+import { openBoard } from "./board-actions";
+import { useOpenPage } from "@/hooks/use-open-page";
+import { progressLabel } from "@/lib/rangan/progress";
 import { RanganExploreCard } from "./rangan-explore-card";
 import { RanganBoardEditCard, RanganMapCard } from "./rangan-map-card";
 import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
@@ -396,7 +399,7 @@ export function RanganPanel() {
         )}
         {pending ? (
           <div className="rangan-thinking" aria-live="polite">
-            <Loader2 size={15} className="rangan-spin" aria-hidden /> Searching your library…
+            <Loader2 size={15} className="rangan-spin" aria-hidden /> <RanganProgress />
           </div>
         ) : null}
       </>
@@ -509,4 +512,19 @@ export function RanganPanel() {
     </>,
     document.body,
   );
+}
+
+/** What Rangan is doing while a request is in flight, a step at a time. */
+function RanganProgress() {
+  const request = useRanganStore((state) => state.pendingRequest);
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    setSeconds(0);
+    const started = Date.now();
+    const timer = window.setInterval(() => setSeconds((Date.now() - started) / 1000), 1000);
+    return () => window.clearInterval(timer);
+  }, [request]);
+  if (!request) return <>Thinking…</>;
+  const where = { pageOpen: Boolean(useOpenPage.getState().page), boardOpen: Boolean(openBoard()) };
+  return <>{progressLabel(request, where, seconds)}</>;
 }
