@@ -16,6 +16,8 @@ interface StudioItemComponentProps {
   children: ReactNode;
   onClick?: () => void;
   onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+  /** Release on the item: unlike a click, it also arrives after a touch the drag library handled. */
+  onPointerUp?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerEnter?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerLeave?: (event: React.PointerEvent<HTMLDivElement>) => void;
   className?: string;
@@ -35,6 +37,7 @@ export function StudioItemComponent({
   children,
   onClick,
   onPointerDown,
+  onPointerUp,
   onPointerEnter,
   onPointerLeave,
   className,
@@ -370,6 +373,7 @@ export function StudioItemComponent({
         className={`w-full h-full relative group ${className ?? ""}`}
         onClick={onClick}
         onPointerDown={handleItemPointerDown}
+        onPointerUp={onPointerUp}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         data-workspace-item="true"

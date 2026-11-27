@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -52,6 +53,7 @@ import "./tool-dock.css";
 import { browserStorage, readDockPinned, writeDockPinned } from "@/lib/workspace/dock-pin";
 import { contentBounds, fitCamera, stepScale, zoomAroundCentre } from "@/lib/workspace/fit-view";
 import { isMigratedToSelectionOverlay } from "@/lib/workspace/shape-engine";
+import { shapeHoldsText } from "@/lib/workspace/shape-text";
 import { usesOverlayOutlineOnly } from "@/lib/workspace/selection-frame";
 import { SelectionOverlay } from "./shapes/SelectionOverlay";
 import { ShapeStyleToolbar } from "./shapes/ShapeStyleToolbar";
@@ -235,6 +237,10 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [selectedStickyId, setSelectedStickyId] = useState<string | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  /** The shape whose text is being typed. */
+  const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
+  /** Where a press on a shape began, to tell a tap (edit its text) from a drag. */
+  const shapePressRef = useRef<{ id: string; pointerId: number; clientX: number; clientY: number; x: number; y: number; w: number; h: number; wasOnlySelected: boolean } | null>(null);
   const [stickyColor, setStickyColor] = useState<string>(STICKY_NOTE_COLORS[0].value);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
@@ -279,6 +285,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
   const [snapGuides, setSnapGuides] = useState<SnapGuideLine[]>([]);
 
   const { selectedIds } = useSelectionStore();
+  /** Opens typing in a shape that was tapped or clicked while it was the only one selected and didn't move. */
+  const startShapeTyping = (id: string, press: { id: string; x: number; y: number; w: number; h: number; wasOnlySelected: boolean }) => {
+    const current = useWorkspaceStore.getState().items.find((candidate) => candidate.id === id);
+    const selected = useSelectionStore.getState().selectedIds;
+    if (
+      !press || press.id !== id || !press.wasOnlySelected || !current || current.type !== "shape" ||
+      activeTool !== "select" || isPanning || isElementLocked(current) || !shapeHoldsText(current.props.kind) ||
+      selected.length !== 1 || selected[0] !== id ||
+      current.x !== press.x || current.y !== press.y || current.w !== press.w || current.h !== press.h
+    ) return;
+    // Shown and focused within the tap itself: a phone opens its keyboard
+    // only for a field focused during the user's own gesture.
+    flushSync(() => setEditingShapeId(id));
+    document.querySelector<HTMLTextAreaElement>(`[data-shape-id="${CSS.escape(id)}"] textarea`)?.focus({ preventScroll: true });
+  };
+
+  // Typing into a shape ends when it is no longer the one selected.
+  useEffect(() => {
+    if (editingShapeId && !(selectedIds.length === 1 && selectedIds[0] === editingShapeId)) setEditingShapeId(null);
+  }, [editingShapeId, selectedIds]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -2175,7 +2201,7 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                             : item.type === "drawing"
                               ? false
                               : isMigratedToSelectionOverlay(item.type)
-                                ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id)
+                                ? ('locked' in item.props && item.props.locked) || !selectedIds.includes(item.id) || editingShapeId === item.id
                                 : selectedIds.includes(item.id) ? ('locked' in item.props && item.props.locked) : undefined
                       )
                     }
@@ -2221,10 +2247,28 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       return { x: snap.x, y: snap.y };
                     }}
                     onDragStop={() => setSnapGuides([])}
+                    onPointerUp={
+                      item.type === "shape"
+                        ? (event) => {
+                            // A tap or click on a shape that was already the one selected, without
+                            // moving or resizing it, types into it (a double-click does the same).
+                            const press = shapePressRef.current;
+                            if (!press || press.pointerId !== event.pointerId) return;
+                            shapePressRef.current = null;
+                            if (Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) > 6) return;
+                            startShapeTyping(item.id, press);
+                          }
+                        : undefined
+                    }
                     onPointerDown={(event) => {
                       if (isPanning) return;
                       const selection = useSelectionStore.getState();
                       const selectedBeforePointer = selection.selectedIds;
+                      if (editingShapeId && editingShapeId !== item.id) setEditingShapeId(null);
+                      shapePressRef.current =
+                        item.type === "shape" && !event.shiftKey
+                          ? { id: item.id, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: item.x, y: item.y, w: item.w, h: item.h, wasOnlySelected: selectedBeforePointer.length === 1 && selectedBeforePointer[0] === item.id }
+                          : null;
                       const targetIds = [item.id];
                       const groupId = (item.props as { groupId?: string }).groupId;
                       if (groupId) {
@@ -2368,6 +2412,8 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                       <ShapeNode
                         item={item as any}
                         isSelected={selectedIds.includes(item.id)}
+                        isEditing={editingShapeId === item.id}
+                        onFinishEditing={() => setEditingShapeId(null)}
                       />
                     )}
                   </StudioItemComponent>
