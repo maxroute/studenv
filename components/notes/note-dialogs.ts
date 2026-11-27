@@ -13,7 +13,8 @@
 
 type DialogShell = { root: HTMLDivElement; panel: HTMLDivElement; close: () => void };
 
-function openShell(label: string, onDismiss: () => void): DialogShell {
+/** The backdrop and panel every in-app dialog sits in. */
+export function openShell(label: string, onDismiss: () => void): DialogShell {
   const root = document.createElement("div");
   root.className = "note-dialog-backdrop";
   const panel = document.createElement("div");
@@ -40,7 +41,7 @@ function openShell(label: string, onDismiss: () => void): DialogShell {
   };
 }
 
-function button(text: string, variant: "primary" | "secondary" | "danger") {
+export function button(text: string, variant: "primary" | "secondary" | "danger") {
   const element = document.createElement("button");
   element.type = "button";
   element.className = `note-dialog-btn ${variant}`;

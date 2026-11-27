@@ -366,11 +366,18 @@
 }
 
 .note-title-input {
+  display: block;
   width: 100%;
+  /* Not the app's tall default for text boxes: one line until the title needs more. */
+  min-height: 0;
   margin: 18px 0 8px;
   padding: 0;
+  overflow: hidden;
+  resize: none;
   border: 0;
   outline: none;
+  font-family: inherit;
+  overflow-wrap: anywhere;
   background: transparent;
   color: var(--text);
   font-size: 32px;
@@ -1141,7 +1148,10 @@
 
 .note-popup {
   position: fixed;
-  z-index: 13000;
+  /* Above the phone's editing bar, so no entry sits under it. */
+  z-index: 13600;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   width: min(292px, calc(100vw - 16px));
@@ -1226,6 +1236,9 @@
 /* Selection toolbar */
 
 .note-bubble {
+  /* Above the block handles and anything else in the page. */
+  position: relative;
+  z-index: 40;
   display: flex;
   gap: 2px;
   padding: 4px;
@@ -2165,3 +2178,28 @@
     padding-bottom: 160px;
   }
 }
+
+/* While a page opens for the first time: its shape, not an empty "Untitled". */
+.note-skeleton { display: flex; flex-direction: column; gap: 12px; margin: 22px 0 8px; }
+.note-skeleton span { display: block; height: 14px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); animation: noteSkeleton 1.2s ease-in-out infinite alternate; }
+.note-skeleton .note-skeleton-title { width: min(420px, 70%); height: 30px; margin-bottom: 10px; }
+.note-skeleton .note-skeleton-short { width: 45%; }
+@keyframes noteSkeleton { from { opacity: 0.55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .note-skeleton span { animation: none; } }
+
+/* The link menu: open, copy, edit, remove. */
+.note-link-menu { align-items: center; }
+.note-link-menu .note-link-open { display: inline-flex; width: auto; max-width: 220px; gap: 6px; padding: 0 10px; color: var(--amber); font-size: 12.5px; font-weight: 600; }
+.note-link-menu .note-link-open span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A YouTube preview under a line that mentions a video (drawn by the editor, not saved). */
+.note-youtube { position: relative; width: min(100%, 520px); margin: 8px 0 12px; overflow: hidden; border: 1px solid var(--border2); border-radius: 10px; background: #000; aspect-ratio: 16 / 9; }
+.note-youtube iframe, .note-youtube-poster { display: block; width: 100%; height: 100%; border: 0; }
+.note-youtube-poster { position: relative; padding: 0; background: #141414; cursor: pointer; }
+.note-youtube-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.note-youtube-label { position: absolute; top: 12px; left: 14px; color: var(--muted); font-size: 13px; }
+.note-youtube-play { position: absolute; top: 50%; left: 50%; width: 58px; height: 40px; border-radius: 10px; background: rgba(0, 0, 0, 0.72); transform: translate(-50%, -50%); }
+.note-youtube-play::after { content: ""; position: absolute; top: 50%; left: 50%; border-width: 9px 0 9px 15px; border-style: solid; border-color: transparent transparent transparent #fff; transform: translate(-35%, -50%); }
+.note-youtube-poster:hover .note-youtube-play { background: #e62117; }
+/* A bare YouTube address under its preview: hidden until the caret is on its line. */
+.note-prose .note-youtube-address { display: none; }

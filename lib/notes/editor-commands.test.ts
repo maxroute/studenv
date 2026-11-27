@@ -32,6 +32,9 @@ class NoMutationObserver {
     return [];
   }
 }
+// The in-app lists scroll the active row into view on the next frame.
+Object.assign(dom.window, { requestAnimationFrame: globalThis.requestAnimationFrame });
+dom.window.HTMLElement.prototype.scrollIntoView = () => {};
 Object.assign(globalThis, { MutationObserver: NoMutationObserver, Event: dom.window.Event });
 Object.assign(dom.window, { MutationObserver: NoMutationObserver });
 Object.defineProperty(dom.window.HTMLElement.prototype, "offsetParent", {
@@ -44,6 +47,13 @@ Object.defineProperty(dom.window.HTMLElement.prototype, "offsetParent", {
 /** Types `value` into the open in-app dialog (equations ask for LaTeX) and submits it. */
 async function answerDialog(value: string) {
   await new Promise((resolve) => setTimeout(resolve, 0));
+  // A list ("Math symbol") is answered by picking its first row.
+  const row = dom.window.document.querySelector<HTMLButtonElement>(".note-dialog-option");
+  if (row) {
+    row.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return;
+  }
   const input = dom.window.document.querySelector<HTMLInputElement>(".note-dialog-input");
   const form = dom.window.document.querySelector("form.note-dialog-form");
   if (!input || !form) return;
@@ -73,6 +83,34 @@ test("each / command removes the typed /query and produces a valid note block", 
     assert.equal(parsed.envelope.doc.content.some((node) => node.type === "unsupported"), false, `${item.id}: every node is known`);
     editor.destroy();
   }
+});
+
+test("symbols are typed into the text, by name or from the list, and equations from the picker", async () => {
+  const run = async (id: string, answer: () => Promise<void>) => {
+    const item = slashCommands({ createSubPage: async () => null, makeFlashcard: () => {} }).find((entry) => entry.id === id);
+    assert.ok(item, id);
+    const editor = freshEditor();
+    item.run(editor, { from: 1, to: 5 });
+    await answer();
+    const json = editor.getJSON();
+    editor.destroy();
+    return json;
+  };
+  assert.match(JSON.stringify(await run("symbol-theta", async () => {})), /"text":"θ"/);
+  assert.match(JSON.stringify(await run("symbol", () => answerDialog(""))), /"text":"α"/);
+  const made = await run("equation", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const find = (selector: string) => dom.window.document.querySelector<HTMLElement>(selector);
+    find('.note-equation-tab[data-tab="structures"]')?.click();
+    find('.note-equation-key[aria-label="Fraction"]')?.click();
+    find('.note-equation-tab[data-tab="greek"]')?.click();
+    find('.note-equation-key[aria-label="theta"]')?.click();
+    find("form.note-dialog-form")?.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  assert.equal(made.content?.[0]?.type, "blockMath");
+  assert.equal(made.content?.[0]?.attrs?.latex, "\\frac{\\theta}{}");
+  assert.equal(dom.window.document.querySelector(".note-dialog"), null, "every dialog closed");
 });
 
 test("headings, lists, to-dos, toggles and tables become the right nodes", async () => {

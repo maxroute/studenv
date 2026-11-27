@@ -3,6 +3,9 @@
 import type { SuggestionKeyDownProps, SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { placeFloating } from "@/lib/notes/floating";
 
+/** How far a finger may move and still be a tap, in pixels. */
+const TAP_SLOP = 10;
+
 export type PopupEntry = {
   /** Shown in bold. */
   title: string;
@@ -78,9 +81,22 @@ export function popupRenderer<T>(toEntry: (item: T) => PopupEntry, emptyText: st
           text.append(detail);
         }
         button.append(text);
+        // Pressing keeps the editor focused (and the phone keyboard up). A mouse picks at
+        // once; a finger picks only on a tap, so scrolling the list never picks an entry.
+        let pressed: { x: number; y: number; id: number } | null = null;
         button.addEventListener("pointerdown", (event) => {
           event.preventDefault();
-          choose(index);
+          if (event.pointerType === "mouse") choose(index);
+          else pressed = { x: event.clientX, y: event.clientY, id: event.pointerId };
+        });
+        button.addEventListener("pointerup", (event) => {
+          const start = pressed;
+          pressed = null;
+          if (!start || start.id !== event.pointerId) return;
+          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) <= TAP_SLOP) choose(index);
+        });
+        button.addEventListener("pointercancel", () => {
+          pressed = null;
         });
         popup?.append(button);
         if (index === selected) window.requestAnimationFrame(() => button.scrollIntoView({ block: "nearest" }));

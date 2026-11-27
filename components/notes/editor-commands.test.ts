@@ -24,6 +24,20 @@ test("/ filtering ranks title prefixes first and matches keywords", () => {
   }
 });
 
+test("symbols stay out of the full / list and come first when named in full", () => {
+  assert.equal(filterSlashCommands(items, "").some((item) => item.group === "Symbols"), false);
+  assert.equal(filterSlashCommands(items, "pi")[0].badge, "π");
+  assert.equal(filterSlashCommands(items, "Pi")[0].badge, "Π", "a typed capital picks the capital letter");
+  assert.equal(filterSlashCommands(items, "theta")[0].badge, "θ");
+  assert.equal(filterSlashCommands(items, "Delta")[0].badge, "Δ");
+  assert.equal(filterSlashCommands(items, "delta")[0].badge, "δ");
+  assert.equal(filterSlashCommands(items, "ta")[0].group !== "Symbols", true, "part of a name never pushes the blocks down");
+  assert.equal(filterSlashCommands(items, "ta").some((item) => item.badge === "τ"), true);
+  assert.equal(filterSlashCommands(items, "t").some((item) => item.group === "Symbols"), false);
+  assert.equal(filterSlashCommands(items, "symbol")[0].id, "symbol");
+  assert.equal(filterSlashCommands(items, "table")[0].id, "table");
+});
+
 test("@ lists pages, resources and workspaces in groups, best matches first", () => {
   const targets = [
     { ref: "workspace:w1", label: "Biology board", kind: "workspace" as const },

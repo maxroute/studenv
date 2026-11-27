@@ -30,6 +30,7 @@ import { refToUrl } from "@/lib/refs/ref-links";
 import { generateBlockId } from "./block-ids";
 import { NOTE_NODE_TYPES } from "./block-registry";
 import { BlockHandle } from "./block-handle";
+import { YouTubePreviews } from "./youtube-preview";
 
 /** Node types that carry a permanent block id, straight from the registry. */
 /** Bullet and numbered lists that switch type per line, not per list (see list-behavior.ts). */
@@ -271,6 +272,7 @@ export function createNoteExtensions(options: NoteExtensionOptions = {}): AnyExt
       heading: { levels: [1, 2, 3, 4, 5, 6] },
     }),
     NoteLink.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: "noopener noreferrer nofollow", target: null } }),
+    YouTubePreviews,
     NoteBulletList,
     NoteOrderedList,
     ListItem,

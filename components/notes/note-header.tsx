@@ -106,6 +106,8 @@ export type NoteMenuActions = {
   onHistory: () => void;
   onMove: () => void;
   onCollections: () => void;
+  /** Turns raw LaTeX text on the page into equations; absent while the page can't be edited. */
+  onFixFormulas?: () => void;
   onDeleted: () => void;
 };
 
@@ -211,6 +213,7 @@ export function NoteTopline({
           {item ? <MenuItem onSelect={run(() => void toggleStar())}>{item.starred ? "Remove star" : "Star"}</MenuItem> : null}
           {item ? <MenuItem onSelect={run(actions.onCollections)}>Collections…</MenuItem> : null}
           <div className="note-block-menu-sep" />
+          {actions.onFixFormulas ? <MenuItem onSelect={run(actions.onFixFormulas)}>Fix formulas</MenuItem> : null}
           <MenuItem onSelect={run(actions.onHistory)}>Version history</MenuItem>
           {!embedded ? <MenuItem onSelect={run(actions.onMove)}>Move to…</MenuItem> : null}
           <MenuItem

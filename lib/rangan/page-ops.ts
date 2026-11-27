@@ -56,7 +56,9 @@ export type PageOp =
   | { op: "rewrite"; block: string; text: string; with: string }
   | { op: "embed"; after: string | null; url: string }
   | { op: "check"; block: string; item: string | null; done: boolean }
-  | { op: "title"; title: string };
+  | { op: "title"; title: string }
+  /** Turns maths written as raw text ($$…$$, \(…\)) anywhere on the page into equations. */
+  | { op: "fixMath" };
 
 export const MAX_PAGE_OPS = 30;
 const MAX_MARKDOWN = 8_000;
@@ -125,6 +127,7 @@ export function pageToolsInstruction(
     '- {"op": "embed", "after": 3, "url": "https://…"} shows a web page, YouTube video or PDF as a card (it is also saved to the Shelf).',
     '- {"op": "check", "block": 6, "item": "exact item words", "done": true} ticks a to-do; leave out "item" for every item in the list.',
     '- {"op": "title", "title": "New page title"}',
+    '- {"op": "fixMath"} turns maths shown as raw text on the page ($$…$$, \\(…\\), \\[…\\]) into real equations.',
     "Markdown for insert and replace: ## and ### headings, paragraphs, - and 1. lists, - [ ] to-dos, | tables |, > [!tip] and > [!mistake] callouts, Q:/A: lines, **bold**, *italic*, ==highlight==, ~~strike~~, `code`, [text](https://…) links, and [n] to cite a passage.",
     "Use the smallest tools that do what was asked: format or link words rather than rewriting a block; rewrite words rather than replacing a block. Do several steps when the request needs them.",
     "Only use real web addresses you are sure of: ones on the page, in the passages, or well-known sites.",
@@ -210,6 +213,10 @@ export function parsePageOps(reply: string, blocks: readonly PageToolBlock[]): {
         const url = safeHref(raw.url);
         if (url) ops.push({ op: "embed", after, url });
       }
+      continue;
+    }
+    if (kind === "fixMath") {
+      if (!ops.some((op) => op.op === "fixMath")) ops.push({ op: "fixMath" });
       continue;
     }
     if (kind === "title") {
@@ -333,6 +340,8 @@ export function describePageOp(op: PageOp, blocks: readonly PageToolBlock[]): st
       return `${op.done ? "Tick" : "Untick"} ${op.item ? quote(op.item) : `every item in ${name(op.block)}`}`;
     case "title":
       return `Rename the page to ${quote(op.title)}`;
+    case "fixMath":
+      return "Turn formulas written as raw text into equations";
   }
 }
 
@@ -348,7 +357,7 @@ export function touchedBlocks(ops: readonly PageOp[]): string[] {
 
 /** Words that ask to change what's on the page in front of the student, as its toolbar and menus do. */
 const EDIT_WORDS =
-  /\b(bold|italic|italicize|underline|strike ?through|highlight|colou?r|font|link|unlink|embed|tick|untick|check off|mark (as )?done|rename|retitle|turn (it|this|that|them|.{1,40}?) into|convert|format|reformat|indent|move (this|that|it|the)|delete (this|that|the)|remove (this|that|the)|swap|reorder|fix (the |my |any )?(typos?|spelling|grammar|mistakes?))\b/i;
+  /\b(bold|italic|italicize|underline|strike ?through|highlight|colou?r|font|link|unlink|embed|tick|untick|check off|mark (as )?done|rename|retitle|turn (it|this|that|them|.{1,40}?) into|convert|format|reformat|indent|move (this|that|it|the)|delete (this|that|the)|remove (this|that|the)|swap|reorder|fix (the |my |any |all )?(typos?|spelling|grammar|mistakes?|maths?|formulas?|formulae|equations?))\b/i;
 const NOT_THE_PAGE = /\b(planner|remind me|reminders?|calendar|new page|another page|board|mind ?map)\b/i;
 
 /**
