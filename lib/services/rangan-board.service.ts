@@ -2,6 +2,7 @@ import { parseRef } from "@/lib/refs/ref-grammar";
 import { isCommonsFilePage, isCommonsImageUrl, isWikipediaArticleUrl } from "@/lib/web/wikimedia-images";
 import { YOUTUBE_VIDEO_ID } from "@/lib/web/youtube-search";
 import { framedMap, layoutMap, MAP_MAX_IMAGES, MAP_MAX_READING, mapDraftSchema, type MapReadingCard, type MapSourceCard, type MapVideoCard } from "@/lib/workspace/mind-map";
+import { asBlock, layoutSection, MEDIA_MAX_IMAGES, MEDIA_MAX_VIDEOS, SECTION_PLAN_MAX, sectionDraftSchema, stackBlocks, type SectionLayout } from "@/lib/workspace/board-sections";
 import { serializeWorkspaceScene } from "@/types/workspace";
 import { z } from "zod";
 
@@ -16,6 +17,8 @@ const mapImageSchema = z
     sourceUrl: z.string().max(1_000).refine(isCommonsFilePage, "A picture's source must be its Commons page."),
   })
   .strict();
+
+const videoSchema = z.object({ videoId: z.string().regex(YOUTUBE_VIDEO_ID), title: z.string().trim().min(1).max(200), channel: z.string().max(120) }).strict();
 
 const readingSchema = z
   .object({
@@ -32,15 +35,17 @@ export const createMapBoardSchema = z
     pageNoteId: z.string().trim().min(1).max(128).optional(),
     images: z.array(mapImageSchema).max(MAP_MAX_IMAGES).default([]),
     reading: z.array(readingSchema).max(MAP_MAX_READING).default([]),
-    video: z
-      .object({ videoId: z.string().regex(YOUTUBE_VIDEO_ID), title: z.string().trim().min(1).max(200), channel: z.string().max(120) })
-      .strict()
-      .nullable()
-      .default(null),
+    video: videoSchema.nullable().default(null),
+    /** Diagrams under the map. Boards drafted before sections existed have none. */
+    sections: z.array(sectionDraftSchema).max(SECTION_PLAN_MAX).default([]),
+    videos: z.array(videoSchema).max(MEDIA_MAX_VIDEOS).default([]),
+    pictures: z.array(mapImageSchema.omit({ target: true })).max(MEDIA_MAX_IMAGES).default([]),
   })
   .strict();
 
+/** What the board is made from; fields added later are optional, so drafts saved before them still work. */
 export type CreateMapBoardInput = z.infer<typeof createMapBoardSchema>;
+type CreateMapBoardRequest = Omit<CreateMapBoardInput, "sections" | "videos" | "pictures"> & Partial<Pick<CreateMapBoardInput, "sections" | "videos" | "pictures">>;
 
 export type RanganBoardDeps = {
   findNoteCard: (ownerId: string, noteId: string) => Promise<{ title: string; excerpt: string } | null>;
@@ -66,7 +71,7 @@ export function createRanganBoardService(deps: RanganBoardDeps) {
    * user's own pages and files; a source that isn't theirs is left out. The
    * draft is the one the student looked at; it is checked again here.
    */
-  async function createMapBoard(userId: string, input: CreateMapBoardInput): Promise<{ workspaceId: string }> {
+  async function createMapBoard(userId: string, input: CreateMapBoardRequest): Promise<{ workspaceId: string }> {
     const sources = new Map<number, MapSourceCard>();
     for (const source of input.sources) {
       const ref = parseRef(source.ref);
@@ -104,7 +109,20 @@ export function createRanganBoardService(deps: RanganBoardDeps) {
       newId: deps.newId,
     });
     const framed = framedMap(items);
-    const sceneJson = serializeWorkspaceScene({ items: framed.items, viewport: framed.viewport });
+    // Under the map: the diagrams, then more videos and pictures, each with its heading.
+    const videos: Array<{ assetId: string; title: string }> = [];
+    for (const extra of input.videos ?? []) {
+      if (extra.videoId === input.video?.videoId || videos.length >= MEDIA_MAX_VIDEOS) continue;
+      videos.push(await deps.saveVideo(userId, { videoId: extra.videoId, title: extra.title }));
+    }
+    const below = [
+      ...(input.sections ?? []).map((section) => layoutSection(section, deps.newId)),
+      layoutSection({ type: "media", heading: "Watch and look", videos: videos.filter((video, index) => videos.findIndex((other) => other.assetId === video.assetId) === index), images: input.pictures ?? [] }, deps.newId),
+    ].filter((layout): layout is SectionLayout => layout !== null);
+    const sceneJson = serializeWorkspaceScene({
+      items: below.length ? stackBlocks(null, [asBlock(framed.items), ...below], deps.newId) : framed.items,
+      viewport: framed.viewport,
+    });
     return { workspaceId: await deps.createBoard(userId, input.draft.title, sceneJson) };
   }
 

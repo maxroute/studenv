@@ -37,6 +37,9 @@ export async function createMapBoard(map: RanganMap, pageNoteId?: string | null)
         images: map.images ?? [],
         reading: map.reading ?? [],
         video: map.video ?? null,
+        sections: map.sections ?? [],
+        videos: map.videos ?? [],
+        pictures: map.pictures ?? [],
         ...(pageNoteId ? { pageNoteId } : {}),
       }),
     });

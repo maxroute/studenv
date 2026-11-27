@@ -25,6 +25,7 @@ import { extractJsonObject } from "@/lib/study/plan";
 import { boardEditInstruction, parseBoardPlan, type BoardChange } from "@/lib/workspace/board-edit";
 import { asksForBoard, asksForNewBoard, BOARD_TOOLS_SYSTEM_PROMPT, boardToolsInstruction, looksLikeBoardEdit, parseBoardOps, type BoardCard, type BoardOp } from "@/lib/workspace/board-ops";
 import { MAP_MAX_READING, mapInstruction, mapOutline, parseMapReply, type MapDraft, type MapImage } from "@/lib/workspace/mind-map";
+import { parseSectionsReply, sectionsInstruction, type SectionDraft } from "@/lib/workspace/board-sections";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
 /** A library passage as Rangan's search returns it. */
@@ -124,6 +125,12 @@ export type RanganMap = {
   reading: Array<{ title: string; url: string }>;
   /** A lesson video found for the map, saved to the library when the board is created. */
   video: { videoId: string; title: string; channel: string } | null;
+  /** Diagrams laid out under the map: a flowchart, labelled diagram, comparison or timeline. */
+  sections?: SectionDraft[];
+  /** More lesson videos, each on a different part of the subject, for the board's media row. */
+  videos?: Array<{ videoId: string; title: string; channel: string }>;
+  /** More pictures for the media row (the map's own pictures stay with the map). */
+  pictures?: Array<Omit<MapImage, "target">>;
 };
 
 /** A new board Rangan drafted. Nothing is saved until the student creates it. */
@@ -543,13 +550,27 @@ export function createRanganService(deps: RanganDeps) {
   /** A mind map of the request's subject; branches note the passage they are based on. Nothing is saved. */
   async function writeMap(input: RanganAskInput, reading: RequestReading, passages: LibraryPassage[]): Promise<(RanganMap & { provider: ProviderId }) | null> {
     const subject = reading.subject ?? reading.search;
-    const result = await deps.complete(
-      [
-        { role: "system", content: MAP_SYSTEM_PROMPT },
-        { role: "user", content: earlierConversation(input.history) + `${buildLibraryContext(passages)}\n\n${mapInstruction(input.question, subject)}` },
-      ],
-      { maxTokens: 2_500, temperature: 0.3 },
-    );
+    const context = earlierConversation(input.history) + buildLibraryContext(passages);
+    // The diagrams are planned at the same time as the map; a board without them is still a board.
+    const [result, plan] = await Promise.all([
+      deps.complete(
+        [
+          { role: "system", content: MAP_SYSTEM_PROMPT },
+          { role: "user", content: `${context}\n\n${mapInstruction(input.question, subject)}` },
+        ],
+        { maxTokens: 2_500, temperature: 0.3 },
+      ),
+      deps
+        .complete(
+          [
+            { role: "system", content: MAP_SYSTEM_PROMPT },
+            { role: "user", content: `${context}\n\n${sectionsInstruction(input.question, subject)}` },
+          ],
+          { maxTokens: 3_000, temperature: 0.3 },
+        )
+        .then((reply) => parseSectionsReply(extractJsonObject(reply.text)))
+        .catch(() => parseSectionsReply(null)),
+    ]);
     const draft = parseMapReply(extractJsonObject(result.text), passages.length);
     if (!draft) return null;
     const sources = [...new Set(draft.branches.flatMap((branch) => (branch.source === null ? [] : [branch.source])))].flatMap((n) => {
@@ -561,22 +582,33 @@ export function createRanganService(deps: RanganDeps) {
       ...(draft.image ? [{ target: "", query: draft.image }] : []),
       ...draft.branches.flatMap((branch) => (branch.image ? [{ target: branch.title, query: branch.image }] : [])),
     ];
-    const video = draft.video && deps.findVideo ? await deps.findVideo(draft.video, subject).catch(() => null) : null;
-    const found = deps.findImage
-      ? await Promise.all(wanted.map(async ({ target, query }) => {
-          const image = await deps.findImage?.(query).catch(() => null);
-          return image ? { ...image, target } : null;
-        }))
-      : [];
+    const findVideo = (query: string) => (deps.findVideo ? deps.findVideo(query, subject).catch(() => null) : Promise.resolve(null));
+    const findPicture = (query: string) => (deps.findImage ? deps.findImage(query).catch(() => null) : Promise.resolve(null));
+    const [video, moreVideos, found, morePictures] = await Promise.all([
+      draft.video ? findVideo(draft.video) : Promise.resolve(null),
+      Promise.all(plan.videos.map(findVideo)),
+      Promise.all(wanted.map(async ({ target, query }) => {
+        const image = await findPicture(query);
+        return image ? { ...image, target } : null;
+      })),
+      Promise.all(plan.images.map(findPicture)),
+    ]);
     // The same picture twice would only repeat itself.
     const images = found.filter((image, index, all): image is MapImage => image !== null && all.findIndex((other) => other?.src === image.src) === index);
+    const pictures = morePictures.filter(
+      (image, index, all): image is Omit<MapImage, "target"> => image !== null && !images.some((other) => other.src === image.src) && all.findIndex((other) => other?.src === image.src) === index,
+    );
+    // Different searches can find the same video.
+    const videos = moreVideos.filter(
+      (found, index, all): found is NonNullable<typeof found> => found !== null && found.videoId !== video?.videoId && all.findIndex((other) => other?.videoId === found.videoId) === index,
+    );
     const further = passages
       // Only articles named for the subject: the fallback's second hit is often a neighbour topic.
       .filter((passage) => passage.sourceType === "web" && passage.open?.kind === "web" && (reading.names.length === 0 || mentionsAny(passage.title, reading.names)))
       .map((passage) => ({ title: passage.title, url: passage.ref }))
       .filter((link, index, all) => all.findIndex((other) => other.url === link.url) === index)
       .slice(0, MAP_MAX_READING);
-    return { draft, outline: mapOutline(draft), sources, images, reading: further, video, provider: result.provider };
+    return { draft, outline: mapOutline(draft), sources, images, reading: further, video, sections: plan.sections, videos, pictures, provider: result.provider };
   }
 
   /** Additions to the open board as the student described them. Nothing is applied: the student sees them first. */
