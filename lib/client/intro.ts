@@ -17,9 +17,11 @@ export const INTRO_HOLD_FRAME = 170;
 /** A slow connection never holds the student there longer than this. */
 export const INTRO_MAX_HOLD_MS = 4_000;
 
-/** The mark's disc and its centre dot, as radii on the mark's own grid. */
-const MARK_RADIUS = 121;
+/** The mark's centre dot, as a radius on the mark's own grid, and that grid's width. */
 const DOT_RADIUS = 17;
+const MARK_GRID = 242;
+/** How far past the farthest corner the black circle starts, so no edge shows at first. */
+const OVERSHOOT = 1.04;
 
 export const INTRO_WORDS = ["Capture", "Organize", "Grow", "Studenv"];
 
@@ -78,10 +80,15 @@ export function introFrame(f: number, width: number, height: number, target: Cir
   const y = folded(middle.y, end.y);
   const counted = keyframes(f, [0, 165], [0, 1], easeInOutCubic);
 
+  // The black circle starts beyond the window, so its edge comes in from outside.
+  const farthestCorner = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
+  const covering = size > 0 ? (farthestCorner * OVERSHOOT * MARK_GRID) / size : DOT_RADIUS;
+  const closing = 1 - easeInOut(segment(f, 4, 60));
+
   return {
     logo: { x, y, size },
-    /** The black circle: the whole mark at first, then only its centre dot. */
-    dotRadius: DOT_RADIUS + (MARK_RADIUS - DOT_RADIUS) * (1 - easeInOut(segment(f, 4, 60))),
+    /** The black circle, on the mark's grid: the whole window at first, then only the centre dot. */
+    dotRadius: DOT_RADIUS + (covering - DOT_RADIUS) * closing,
     armsStarted: f >= INTRO_ARMS_FRAME,
     /** The yellow covers the whole window until it folds. */
     fieldRadius: folded(diagonal, size / 2),

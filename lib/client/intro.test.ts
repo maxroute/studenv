@@ -25,9 +25,23 @@ test("it opens larger than the screen and covers it", () => {
   assert.equal(first.progress, 0);
 });
 
+/** The black circle's radius on screen, in pixels. */
+const blackPx = (frame: ReturnType<typeof introFrame>) => (frame.dotRadius * frame.logo.size) / 242;
+
+test("the black starts outside the window: no corner shows through", () => {
+  for (const [width, height] of [[1440, 900], [390, 844], [844, 390], [2560, 1080]]) {
+    for (let f = 0; f <= 4; f++) {
+      const frame = introFrame(f, width, height, target);
+      for (const [x, y] of [[0, 0], [width, 0], [0, height], [width, height]]) {
+        assert.ok(blackPx(frame) > Math.hypot(frame.logo.x - x, frame.logo.y - y), `${width}x${height} frame ${f}`);
+      }
+    }
+  }
+});
+
 test("a black circle shrinks to the centre dot before any arm appears", () => {
-  assert.equal(at(0).dotRadius, 121);
-  assert.ok(at(30).dotRadius < 121 && at(30).dotRadius > 17);
+  for (let f = 1; f <= 60; f++) assert.ok(blackPx(at(f)) <= blackPx(at(f - 1)), `grew at frame ${f}`);
+  assert.ok(at(30).dotRadius > 17);
   assert.equal(at(60).dotRadius, 17);
   for (let f = 0; f < INTRO_ARMS_FRAME; f++) assert.equal(at(f).armsStarted, false);
   assert.ok(INTRO_ARMS_FRAME >= 60);

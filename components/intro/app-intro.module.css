@@ -8,18 +8,10 @@
   animation: giveUp 0s linear 20s forwards;
 }
 
-/* The yellow of the app's logo, so the two meet without a change of colour. It is
-   yellow from the first paint: iPhone Safari colours its edges from that. */
-.field { position: absolute; inset: 0; background: #ffde0a; }
-
-/* Before the first frame can be drawn, it already looks like it: a black circle. A
-   gradient, so that iPhone Safari still takes its edge colour from the yellow. */
-.intro:not(.playing)::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle 62vmax at 50% 40%, #050505 99.6%, transparent 100%);
-}
+/* The yellow of the app's logo, so the two meet without a change of colour. */
+.field { position: absolute; inset: 0; background-color: #ffde0a; }
+/* Until the first frame can be drawn it is all black, as that frame is. */
+.intro:not(.playing) .field { background-image: linear-gradient(#050505, #050505); }
 
 .text, .mark { visibility: hidden; }
 .playing .text, .playing .mark { visibility: visible; }
