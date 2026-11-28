@@ -1,3 +1,4 @@
+import { applyPageCorrections, PAGE_CHECK_SYSTEM_PROMPT, pageCheckInstruction, parsePageCorrections } from "@/lib/rangan/page-check";
 import type { ChatMessage, CompletionOptions, CompletionResult, ProviderId } from "@/lib/ai/providers";
 import type { RanganAskInput, RanganExploreInput, RanganSummarizeInput, RanganUsageSummary } from "@/lib/models/rangan.model";
 import { parseRef } from "@/lib/refs/ref-grammar";
@@ -109,6 +110,8 @@ export type RanganPageDraft = Omit<RanganAnswer, "answer" | "kind"> & {
   pageKind?: PageKind;
   /** A map of the same subject, when the request asked for a board too. */
   map?: RanganMap;
+  /** The check of the page's answers and facts: `fixed` corrections applied; `checked` false when it couldn't run. */
+  factCheck?: { checked: boolean; fixed: number };
 };
 
 /** A library passage a map branch is based on, to become a card on the board. */
@@ -435,6 +438,8 @@ export function createRanganService(deps: RanganDeps) {
     );
     const finished = finishDraft(normalizeCitationMarks(result.text).trim(), { kind, videoUrl: video ? `https://www.youtube.com/watch?v=${video.videoId}` : null });
     if (!/^#{1,3}\s/m.test(finished.markdown)) throw Object.assign(new Error("Rangan couldn't write that page. Please try again."), { status: 502 });
+    // Students learn what the page says: its answers and facts are checked before they see it.
+    const factCheck = await checkPageFacts(input.question, finished.markdown);
     // A made-up video or article link becomes plain words.
     const links = draftLinks(finished.markdown).slice(0, 12);
     const missing = new Set<string>();
@@ -444,7 +449,7 @@ export function createRanganService(deps: RanganDeps) {
         if (!found[index]) missing.add(href);
       });
     }
-    const { answer: markdown, support } = await checkSupport(unlinkMissing(finished.markdown, missing), passages);
+    const { answer: markdown, support } = await checkSupport(unlinkMissing(factCheck.markdown, missing), passages);
     const placedVideo = video && markdown.includes(`[[embed:https://www.youtube.com/watch?v=${video.videoId}]]`) ? video : null;
     const title = /^#\s+(.+)$/m.exec(markdown)?.[1].replace(/\[\d{1,2}\]/g, "").replace(/[*_`]/g, "").trim() || subject;
     return {
@@ -458,7 +463,31 @@ export function createRanganService(deps: RanganDeps) {
       usage,
       citations: citationsFor(markdown, passages),
       support,
+      factCheck: { checked: factCheck.checked, fixed: factCheck.fixed },
     };
+  }
+
+  /**
+   * A page's answers and facts checked by a second, more careful model call
+   * that uses no daily question. Corrections are applied only where they can
+   * be placed without doubt; if the check can't run, the page is kept as it is.
+   */
+  async function checkPageFacts(request: string, markdown: string): Promise<{ markdown: string; checked: boolean; fixed: number }> {
+    try {
+      const result = await deps.complete(
+        [
+          { role: "system", content: PAGE_CHECK_SYSTEM_PROMPT },
+          { role: "user", content: pageCheckInstruction(request, markdown) },
+        ],
+        { maxTokens: 6_000, temperature: 0, reasoning: "medium", timeoutMs: 45_000 },
+      );
+      const corrections = parsePageCorrections(result.text);
+      if (!corrections) return { markdown, checked: false, fixed: 0 };
+      const fixed = applyPageCorrections(markdown, corrections);
+      return { markdown: fixed.markdown, checked: true, fixed: fixed.applied.length };
+    } catch {
+      return { markdown, checked: false, fixed: 0 };
+    }
   }
 
   /** Planner tasks for what the student said they want to do, on their own clock. Nothing is saved. */
