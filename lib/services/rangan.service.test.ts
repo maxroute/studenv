@@ -1123,5 +1123,12 @@ test("on an open board, a 'board' reading with change words edits it rather than
 
 test("Rangan answers in the student's language, Bengali, Hindi and Hinglish included", async () => {
   const { RANGAN_SYSTEM_PROMPT } = await import("./rangan.service");
-  for (const words of ["Bengali script gets Bengali", "Devanagari Hindi gets Hindi", "same mix in English letters, never Devanagari", "even when the passages are in another language"]) assert.ok(RANGAN_SYSTEM_PROMPT.includes(words), words);
+  for (const words of ["Bengali script gets Bengali", "Devanagari Hindi gets Hindi", "same mix in English letters, never Devanagari", "never the passages' language", "an English question about Bengali notes gets an English answer"]) assert.ok(RANGAN_SYSTEM_PROMPT.includes(words), words);
+});
+
+test("a cited sentence says only what its passage says, with an example of splitting one", async () => {
+  const { RANGAN_SYSTEM_PROMPT } = await import("./rangan.service");
+  assert.ok(RANGAN_SYSTEM_PROMPT.includes("a sentence with a citation says only what its passage says, nothing more"));
+  assert.ok(RANGAN_SYSTEM_PROMPT.includes("split the sentence"));
+  assert.match(RANGAN_SYSTEM_PROMPT, /never "The mitochondria make ATP through aerobic respiration \[1\]\."/);
 });

@@ -64,14 +64,74 @@ export function supportInstruction(claims: readonly Claim[]): string {
     "Check each claim against the passages it cites.",
     "supported is true only when the cited passages state the claim or directly imply it. Background knowledge does not count.",
     "A claim that adds details the passages don't give is not supported.",
+    'When part of a claim is in the passages and part isn\'t, set supported to "partly", with "stated": the claim reworded to say only what the passages say, as a complete sentence, and "added": the rest of the claim as its own sentence. Both in the claim\'s language, without [n] marks.',
     "",
     ...list,
     "",
-    'Reply with only a JSON array, one entry per claim: [{"claim": 1, "supported": true}]',
+    'Reply with only a JSON array, one entry per claim: [{"claim": 1, "supported": true}, {"claim": 2, "supported": "partly", "stated": "…", "added": "…"}]',
   ].join("\n");
 }
 
-const rawVerdict = z.object({ claim: z.union([z.number(), z.string()]), supported: z.union([z.boolean(), z.string()]) });
+const rawVerdict = z.object({
+  claim: z.union([z.number(), z.string()]),
+  supported: z.union([z.boolean(), z.string()]),
+  stated: z.string().optional(),
+  added: z.string().optional(),
+});
+
+/** A claim only partly backed by its passages: what they say, and the rest as its own sentence. */
+export type PartlySupported = { stated: string; added: string };
+
+/**
+ * The claims the checker found only partly backed, by claim (0-based), with
+ * usable rewordings: a sentence no longer than the claim, without citation
+ * marks. A "partly" without them counts as rejected in `parseSupportReply`.
+ */
+export function parsePartlySupported(text: string, claims: readonly Claim[]): Map<number, PartlySupported> {
+  const found = new Map<number, PartlySupported>();
+  for (const entry of extractJsonArray(text)) {
+    const parsed = rawVerdict.safeParse(entry);
+    if (!parsed.success || String(parsed.data.supported).trim().toLowerCase() !== "partly") continue;
+    const index = Number(parsed.data.claim) - 1;
+    const claim = claims[index];
+    const stated = parsed.data.stated?.replace(/\s+/g, " ").trim() ?? "";
+    const added = parsed.data.added?.replace(/\s+/g, " ").trim() ?? "";
+    if (!claim || stated.length < 3 || /\[\d+\]/.test(stated + added)) continue;
+    // A rewording that says more than the claim isn't "only what the passages say".
+    if (stated.length > claim.text.length + 10 || added.length > claim.text.length + 80) continue;
+    found.set(index, { stated, added });
+  }
+  return found;
+}
+
+const ENDING = /[.!?।]+$/u;
+
+/**
+ * The answer with each partly backed sentence split in two: the part its
+ * passages say, keeping its citation marks, then the rest without any. A
+ * list bullet or number in front is kept.
+ */
+export function splitPartlySupported(answer: string, claims: readonly Claim[], partly: ReadonlyMap<number, PartlySupported>): string {
+  if (partly.size === 0) return answer;
+  const byPiece = new Map<number, PartlySupported>();
+  partly.forEach((value, index) => {
+    const claim = claims[index];
+    if (claim) byPiece.set(claim.piece, value);
+  });
+  return splitSentences(answer)
+    .map((piece, index) => {
+      const split = byPiece.get(index);
+      if (!split) return piece;
+      const marks = [...new Set([...piece.matchAll(CITATION)].map((match) => `[${match[1]}]`))].join("");
+      const lead = /^(\s*(?:[-+*]\s+|\d+[.)]\s+)?)/.exec(piece)?.[1] ?? "";
+      const trail = /\s*$/.exec(piece)?.[0] ?? "";
+      const end = ENDING.exec(split.stated)?.[0] ?? ".";
+      const stated = `${split.stated.replace(ENDING, "")}${marks}${end}`;
+      const added = split.added ? ` ${ENDING.test(split.added) ? split.added : `${split.added}${end}`}` : "";
+      return `${lead}${stated}${added}${trail}`;
+    })
+    .join("");
+}
 
 /**
  * Which claims (0-based) the checker said are not supported, or null when its
