@@ -340,4 +340,5 @@ test("the plan asks for separate outcomes, so a failed check never leads to succ
   const text = sectionsInstruction("make a board on JWT", "JWT");
   assert.ok(text.includes("own end node"));
   assert.ok(text.includes("a failed check never leads to a success"));
+  assert.ok(text.includes("History, a biography or how something developed over time gets a timeline, never a flowchart"));
 });
