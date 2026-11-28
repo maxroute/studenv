@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getDownloadUrl, uploadBuffer } from "@/lib/storage/s3";
+import { deleteObject, uploadBuffer } from "@/lib/storage/s3";
+import { groupFileUrl } from "@/lib/study-groups/file-delivery";
+import {
+  groupPhotoFile,
+  groupPhotoName,
+  groupPhotoUrl,
+} from "@/lib/study-groups/group-photo";
+import type { AvatarExtension } from "@/lib/storage/avatar";
 import {
   publishStudyGroupMessage,
   publishStudyGroupUpdate,
@@ -23,7 +30,12 @@ import type {
   UpdateStudyGroupInput,
   UpdateStudyRoomStateInput,
 } from "@/lib/models/study-group.model";
-import type { StudyGroupJoinResult, StudyGroupRecord } from "@/types";
+import type {
+  StudyGroupFileRecord,
+  StudyGroupJoinResult,
+  StudyGroupMessageRecord,
+  StudyGroupRecord,
+} from "@/types";
 
 const DEFAULT_ROOM_FOCUS_MINUTES = 20;
 const DEFAULT_ROOM_BREAK_MINUTES = 5;
@@ -428,7 +440,7 @@ type GroupWithRelations = Prisma.StudyGroupGetPayload<{
   include: typeof groupInclude;
 }>;
 
-async function toStudyGroupRecord(group: GroupWithRelations, viewerUserId: string): Promise<StudyGroupRecord> {
+function toStudyGroupRecord(group: GroupWithRelations, viewerUserId: string): StudyGroupRecord {
   const currentMember = group.members.find((member) => member.userId === viewerUserId) ?? null;
   const canManage = group.ownerId === viewerUserId;
   const roomPermissions = {
@@ -448,6 +460,7 @@ async function toStudyGroupRecord(group: GroupWithRelations, viewerUserId: strin
     inviteCode: group.inviteCode,
     privacy: group.privacy,
     memberLimit: group.memberLimit,
+    photoUrl: groupPhotoUrl(group.id, group.photoName),
     currentUserRole: currentMember?.role ?? null,
     canManage,
     pendingJoinRequestCount: visibleJoinRequests.length,
@@ -469,38 +482,9 @@ async function toStudyGroupRecord(group: GroupWithRelations, viewerUserId: strin
       role: member.role,
       joinedAt: member.joinedAt,
     })),
-    messages: await Promise.all(
-      sortMessagesChronologically(group.messages)
-        .filter((message) => !isRoomStateMessage(message.content))
-        .map(async (message) => {
-        const attachments = await Promise.all(
-          message.attachments.map(async (attachment) => ({
-            id: attachment.id,
-            url: await getDownloadUrl(attachment.storageKey),
-            name: attachment.name,
-            mimeType: attachment.mimeType,
-            sizeBytes: attachment.sizeBytes,
-          })),
-        );
-        const firstAttachment = attachments[0] ?? null;
-
-        return {
-          id: message.id,
-          groupId: message.groupId,
-          authorId: message.authorId,
-          authorName: message.author.name,
-          authorUsername: message.author.username,
-          authorAvatarUrl: message.author.avatarUrl,
-          content: message.content,
-          attachments,
-          attachmentUrl: firstAttachment?.url ?? null,
-          attachmentName: firstAttachment?.name ?? null,
-          attachmentMimeType: firstAttachment?.mimeType ?? null,
-          attachmentSizeBytes: firstAttachment?.sizeBytes ?? null,
-          createdAt: message.createdAt,
-        };
-      }),
-    ),
+    messages: sortMessagesChronologically(group.messages)
+      .filter((message) => !isRoomStateMessage(message.content))
+      .map((message) => toStudyGroupMessageRecord(message)),
     roomState: normalizeRoomState(group),
     roomPermissions,
     roomActivity: getRoomActivity(group),
@@ -510,35 +494,37 @@ async function toStudyGroupRecord(group: GroupWithRelations, viewerUserId: strin
   };
 }
 
-async function toStudyGroupMessageRecord(message: {
-  id: string;
-  groupId: string;
-  authorId: string;
-  content: string | null;
-  createdAt: Date;
-  author: {
+function toStudyGroupMessageRecord(
+  message: {
     id: string;
-    name: string | null;
-    username: string | null;
-    avatarUrl: string | null;
-  };
-  attachments: Array<{
-    id: string;
-    storageKey: string;
-    name: string;
-    mimeType: string;
-    sizeBytes: number;
-  }>;
-}) {
-  const attachments = await Promise.all(
-    message.attachments.map(async (attachment) => ({
-      id: attachment.id,
-      url: await getDownloadUrl(attachment.storageKey),
-      name: attachment.name,
-      mimeType: attachment.mimeType,
-      sizeBytes: attachment.sizeBytes,
-    })),
-  );
+    groupId: string;
+    authorId: string;
+    content: string | null;
+    createdAt: Date;
+    author: {
+      id: string;
+      name: string | null;
+      username: string | null;
+      avatarUrl: string | null;
+    };
+    attachments: Array<{
+      id: string;
+      name: string;
+      mimeType: string;
+      sizeBytes: number;
+    }>;
+  },
+  clientMessageId: string | null = null,
+): StudyGroupMessageRecord {
+  // Files are opened through this app (a member check every time), so the
+  // address never expires the way a signed storage link does.
+  const attachments = message.attachments.map((attachment) => ({
+    id: attachment.id,
+    url: groupFileUrl(message.groupId, attachment.id),
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    sizeBytes: attachment.sizeBytes,
+  }));
   const firstAttachment = attachments[0] ?? null;
 
   return {
@@ -555,6 +541,7 @@ async function toStudyGroupMessageRecord(message: {
     attachmentMimeType: firstAttachment?.mimeType ?? null,
     attachmentSizeBytes: firstAttachment?.sizeBytes ?? null,
     createdAt: message.createdAt,
+    ...(clientMessageId ? { clientMessageId } : {}),
   };
 }
 
@@ -605,6 +592,11 @@ async function assertMembership(userId: string, groupId: string) {
   }
 
   return member;
+}
+
+/** Throws 403 unless the user is in the group. One small query. */
+export async function assertStudyGroupMember(userId: string, groupId: string) {
+  await assertMembership(userId, groupId);
 }
 
 async function assertOwner(userId: string, groupId: string) {
@@ -676,7 +668,7 @@ export async function listStudyGroups(userId: string) {
     orderBy: { updatedAt: "desc" },
   });
 
-  return Promise.all(groups.map((group) => toStudyGroupRecord(group, userId)));
+  return groups.map((group) => toStudyGroupRecord(group, userId));
 }
 
 export async function getStudyGroup(userId: string, groupId: string) {
@@ -1246,14 +1238,30 @@ export async function createStudyGroupMessage(
     sizeBytes: number;
     buffer: Buffer;
   }>,
+  clientMessageId: string | null = null,
 ) {
-  await assertMembership(userId, groupId);
-
   const trimmedContent = input.content?.trim() || null;
 
   if (!trimmedContent && (!attachments || attachments.length === 0)) {
     const error = new Error("Add a message or attach a file before sending.");
     Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  // The member check also brings the author's name and photo, so the new
+  // message needs no second lookup (each database round trip costs ~0.2 s).
+  const member = await prisma.studyGroupMember.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+    select: {
+      user: {
+        select: { id: true, name: true, username: true, avatarUrl: true },
+      },
+    },
+  });
+
+  if (!member) {
+    const error = new Error("You are not a member of this study group.");
+    Object.assign(error, { status: 403 });
     throw error;
   }
 
@@ -1275,40 +1283,192 @@ export async function createStudyGroupMessage(
         )
       : [];
 
-  const createdMessage = await prisma.studyGroupMessage.create({
-    data: {
-      groupId,
-      authorId: userId,
-      content: trimmedContent,
-      attachments: uploadedAttachments.length
-        ? {
-            create: uploadedAttachments,
-          }
-        : undefined,
-    },
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          avatarUrl: true,
-        },
+  const [createdMessage] = await Promise.all([
+    prisma.studyGroupMessage.create({
+      data: {
+        groupId,
+        authorId: userId,
+        content: trimmedContent,
+        attachments: uploadedAttachments.length
+          ? {
+              create: uploadedAttachments,
+            }
+          : undefined,
       },
-      attachments: {
-        orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        groupId: true,
+        authorId: true,
+        content: true,
+        createdAt: true,
+        attachments: uploadedAttachments.length
+          ? {
+              orderBy: { sortOrder: "asc" },
+              select: { id: true, name: true, mimeType: true, sizeBytes: true },
+            }
+          : false,
       },
-    },
-  });
+    }),
+    prisma.studyGroup.update({
+      where: { id: groupId },
+      data: { updatedAt: new Date() },
+      select: { id: true },
+    }),
+  ]);
 
-  await prisma.studyGroup.update({
-    where: { id: groupId },
-    data: { updatedAt: new Date() },
-  });
+  const messageRecord = toStudyGroupMessageRecord(
+    {
+      ...createdMessage,
+      author: member.user,
+      attachments: createdMessage.attachments ?? [],
+    },
+    clientMessageId,
+  );
 
   publishStudyRoomEvent(groupId);
-  publishStudyGroupUpdate(groupId);
-  const messageRecord = await toStudyGroupMessageRecord(createdMessage);
+  // `group:message` carries the whole message, so open chats add it without
+  // reloading the group (a `group:update` here made every member's page
+  // fetch the full group after each message).
   publishStudyGroupMessage(groupId, messageRecord);
   return messageRecord;
+}
+
+/** Every file shared in the group's chat, newest first. Members only. */
+export async function listStudyGroupFiles(
+  userId: string,
+  groupId: string,
+  limit = 200,
+): Promise<StudyGroupFileRecord[]> {
+  await assertMembership(userId, groupId);
+
+  const files = await prisma.studyGroupMessageAttachment.findMany({
+    where: { message: { groupId } },
+    orderBy: [{ createdAt: "desc" }, { sortOrder: "asc" }],
+    take: limit,
+    select: {
+      id: true,
+      name: true,
+      mimeType: true,
+      sizeBytes: true,
+      createdAt: true,
+      message: {
+        select: {
+          id: true,
+          authorId: true,
+          author: { select: { name: true, username: true, avatarUrl: true } },
+        },
+      },
+    },
+  });
+
+  return files.map((file) => ({
+    id: file.id,
+    url: groupFileUrl(groupId, file.id),
+    name: file.name,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    createdAt: file.createdAt,
+    messageId: file.message.id,
+    authorId: file.message.authorId,
+    authorName: file.message.author.name,
+    authorUsername: file.message.author.username,
+    authorAvatarUrl: file.message.author.avatarUrl,
+  }));
+}
+
+/** The stored file behind a chat attachment, for a member of its group. */
+export async function getStudyGroupAttachmentFile(
+  userId: string,
+  groupId: string,
+  attachmentId: string,
+) {
+  await assertMembership(userId, groupId);
+
+  const attachment = await prisma.studyGroupMessageAttachment.findFirst({
+    where: { id: attachmentId, message: { groupId } },
+    select: { storageKey: true, name: true, mimeType: true, sizeBytes: true },
+  });
+
+  if (!attachment) {
+    const error = new Error("File not found.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
+
+  return attachment;
+}
+
+/** The group's picture file, for a member, when `name` is its current picture. */
+export async function getStudyGroupPhotoFile(userId: string, groupId: string, name: string) {
+  const file = groupPhotoFile(groupId, name);
+  if (!file) {
+    return null;
+  }
+
+  await assertMembership(userId, groupId);
+  const group = await prisma.studyGroup.findUnique({
+    where: { id: groupId },
+    select: { photoName: true },
+  });
+
+  return group?.photoName === name ? file : null;
+}
+
+/** Sets the group's picture. Owner only; the image is already checked by type and size. */
+export async function setStudyGroupPhoto(
+  userId: string,
+  groupId: string,
+  image: { bytes: Buffer; extension: AvatarExtension; contentType: string },
+) {
+  await assertOwner(userId, groupId);
+
+  const name = groupPhotoName(groupId, randomUUID(), image.extension);
+  await uploadBuffer(`group-photos/${name}`, image.bytes, image.contentType);
+
+  const previous = await prisma.studyGroup.findUnique({
+    where: { id: groupId },
+    select: { photoName: true },
+  });
+  await prisma.studyGroup.update({
+    where: { id: groupId },
+    data: { photoName: name },
+    select: { id: true },
+  });
+  await removeStoredGroupPhoto(groupId, previous?.photoName ?? null);
+
+  publishStudyGroupUpdate(groupId);
+  return getStudyGroup(userId, groupId);
+}
+
+/** Removes the group's picture. Owner only. */
+export async function removeStudyGroupPhoto(userId: string, groupId: string) {
+  await assertOwner(userId, groupId);
+
+  const previous = await prisma.studyGroup.findUnique({
+    where: { id: groupId },
+    select: { photoName: true },
+  });
+  await prisma.studyGroup.update({
+    where: { id: groupId },
+    data: { photoName: null },
+    select: { id: true },
+  });
+  await removeStoredGroupPhoto(groupId, previous?.photoName ?? null);
+
+  publishStudyGroupUpdate(groupId);
+  return getStudyGroup(userId, groupId);
+}
+
+/** Best effort: a picture left behind in storage is harmless, a failed save is not. */
+async function removeStoredGroupPhoto(groupId: string, name: string | null) {
+  const file = name ? groupPhotoFile(groupId, name) : null;
+  if (!file) {
+    return;
+  }
+
+  try {
+    await deleteObject(file.key);
+  } catch (error) {
+    console.warn("[study-groups] Could not delete an old group photo.", error);
+  }
 }

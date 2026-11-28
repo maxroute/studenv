@@ -37,6 +37,8 @@ export const joinStudyGroupSchema = z.object({
 
 export const createStudyGroupMessageSchema = z.object({
   content: z.string().trim().max(4000).optional().or(z.literal("")),
+  /** The sender page's id for its "sending" bubble; checked again by readClientMessageId. */
+  clientMessageId: z.string().max(64).optional(),
 });
 
 export const updateStudyGroupSchema = z.object({
