@@ -1120,3 +1120,8 @@ test("on an open board, a 'board' reading with change words edits it rather than
   const fresh = await createRanganService(sequenceDeps(reading, ["{}"], { ownsBoard: async () => true }).deps).ask("u1", { question: "make a mind map of deadlock", board: STYLED_BOARD }).catch((error: { status?: number }) => error);
   assert.notEqual((fresh as { kind?: string }).kind, "board-edit", "a new mind map is not an edit");
 });
+
+test("Rangan answers in the student's language, Bengali, Hindi and Hinglish included", async () => {
+  const { RANGAN_SYSTEM_PROMPT } = await import("./rangan.service");
+  for (const words of ["Bengali script gets Bengali", "Devanagari Hindi gets Hindi", "same mix in English letters, never Devanagari", "even when the passages are in another language"]) assert.ok(RANGAN_SYSTEM_PROMPT.includes(words), words);
+});
