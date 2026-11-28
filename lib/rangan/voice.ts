@@ -139,7 +139,7 @@ export function spokenDue(day: string, time: string | null, today: string, local
         : `on ${date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}`;
   if (!time) return when;
   const [hours, minutes] = time.split(":").map(Number);
-  const clock = new Date(Date.UTC(2000, 0, 1, hours, minutes)).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+  const clock = new Date(Date.UTC(2000, 0, 1, hours, minutes)).toLocaleTimeString(locale, { hour: "numeric", hour12: true, minute: "2-digit", timeZone: "UTC" });
   return `${when} by ${clock}`;
 }
 

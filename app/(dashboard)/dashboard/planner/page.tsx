@@ -1,5 +1,6 @@
 "use client";
 
+import { to12Hour } from "@/lib/utils/clock-time";
 import { usePlannerTasks } from "@/hooks/use-planner-tasks";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -440,7 +441,7 @@ export default function PlannerPage() {
                 <span className={isOverdue(task) ? styles.overdueMeta : undefined}>
                   {[
                     isDueOn(task.dueDate, new Date()) ? "Today" : new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
-                    task.dueTime,
+                    task.dueTime ? to12Hour(task.dueTime) : null,
                   ].filter(Boolean).join(", ")}
                 </span>
               ) : null}
