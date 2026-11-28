@@ -10,6 +10,7 @@
 //   --media          let boards search YouTube (spends the shared daily quota)
 //   --out=dir        where to write results.json (default: no file)
 //   --pause=ms       wait between cases, to stay within free rate limits (default 4000)
+//   --dump=dir       save every model call of each case (what was sent, what came back) to dir/<case>.json
 //   --chain=id,id    answer with only these models, in order (groq-large, groq-small,
 //                    cloudflare); the default is the app's own chain with fallbacks
 //
@@ -62,11 +63,14 @@ const onChain = (messages: ChatMessage[], options?: CompletionOptions) =>
 
 /** The models each case's calls landed on, in order: the free tier's limits push some down the chain. */
 const calls: string[] = [];
-const traced = <T extends (...args: never[]) => Promise<{ provider: string }>>(call: T) =>
+/** Each call's messages and reply, kept for --dump. */
+const exchanges: Array<{ provider: string; messages: unknown; reply: string }> = [];
+const traced = <T extends (...args: never[]) => Promise<{ provider: string; text: string }>>(call: T) =>
   (async (...args: Parameters<T>) => {
     try {
       const result = await call(...args);
       calls.push(result.provider);
+      exchanges.push({ provider: result.provider, messages: args[0], reply: result.text });
       return result;
     } catch (problem) {
       calls.push("failed");
@@ -136,6 +140,8 @@ type Outcome = {
   pageFixes?: number;
   /** Citations the support check took off because their passage didn't back the sentence. */
   removedCitations: number;
+  /** Sentences the support check split: the part the passage says kept its citation. */
+  splitSentences: number;
   checks: CheckResult[];
   passed: boolean;
   error?: string;
@@ -155,6 +161,7 @@ async function main() {
     const started = Date.now();
     let reply: RanganReply | null = null;
     calls.length = 0;
+    exchanges.length = 0;
     const factCheck = (value: RanganReply | null) => (value?.kind === "page" ? value.factCheck : undefined);
     let error: string | undefined;
     try {
@@ -166,13 +173,19 @@ async function main() {
     const checks = reply ? test.checks.map((check) => check(reply as RanganReply)) : [{ name: "replied", ok: false, detail: error }];
     const text = reply ? replyText(reply) : "";
     const checkedPage = factCheck(reply);
-    const outcome: Outcome = { pageFixes: checkedPage ? (checkedPage.checked ? checkedPage.fixed : -1) : undefined, id: test.id, area: test.area, language: test.language, ms, provider: reply?.provider ?? null, removedCitations: reply?.support.removed ?? 0, checks, passed: checks.every((check) => check.ok), error, text };
+    const outcome: Outcome = { pageFixes: checkedPage ? (checkedPage.checked ? checkedPage.fixed : -1) : undefined, id: test.id, area: test.area, language: test.language, ms, provider: reply?.provider ?? null, removedCitations: reply?.support.removed ?? 0, splitSentences: reply?.support.split ?? 0, checks, passed: checks.every((check) => check.ok), error, text };
     if (grade && reply) outcome.grade = await gradeReply(test, text);
     outcomes.push(outcome);
+    const dump = args.get("dump");
+    if (dump) {
+      mkdirSync(dump, { recursive: true });
+      writeFileSync(join(dump, `${test.id}.json`), JSON.stringify({ reply, exchanges }, null, 2));
+    }
     const failed = checks.filter((check) => !check.ok).map((check) => `${check.name}${check.detail ? ` (${check.detail})` : ""}`);
     console.log(
       `${outcome.passed ? "PASS" : "FAIL"}  ${test.id.padEnd(24)} ${test.language.padEnd(8)} ${String(Math.round(ms / 100) / 10).padStart(5)}s  ${(outcome.provider ?? "-").padEnd(10)}` +
         `${outcome.pageFixes !== undefined ? `  (page check: ${outcome.pageFixes < 0 ? "didn't run" : `${outcome.pageFixes} fix${outcome.pageFixes === 1 ? "" : "es"}`})` : ""}` +
+        `${outcome.splitSentences ? `  (check split ${outcome.splitSentences} sentence${outcome.splitSentences === 1 ? "" : "s"})` : ""}` +
         `${outcome.removedCitations ? `  (check removed ${outcome.removedCitations} citation${outcome.removedCitations === 1 ? "" : "s"})` : ""}` +
         `  [${calls.join(" → ")}]` +
         `${outcome.grade ? `  grade ${outcome.grade.score ?? "?"}` : ""}${failed.length ? `\n      ✗ ${failed.join("\n      ✗ ")}` : ""}` +
