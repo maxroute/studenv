@@ -1445,3 +1445,126 @@ body:has(.note-keyboard-bar) .rangan-fab {
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
+
+/* Study tools in the panel: pick from the library, take a quiz, see new flashcards. */
+.rangan-study {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rangan-study-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rangan-study-head span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rangan-study-search {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 16px; /* 16px keeps phones from zooming in when it is focused */
+}
+
+.rangan-study-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rangan-study-sources button {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.rangan-study-sources button:hover,
+.rangan-study-sources button:focus-visible {
+  background: var(--surface2);
+}
+
+.rangan-study-sources span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rangan-study-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rangan-study-cards ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rangan-study-cards li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.rangan-study-front {
+  font-weight: 600;
+}
+
+.rangan-study-back {
+  color: var(--muted);
+}
+
+.rangan-study-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The language Talk listens in, inside the voice bar. */
+.rangan-voice-language {
+  min-height: 32px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 2px 8px;
+  color: var(--text);
+  font-size: 12.5px;
+}

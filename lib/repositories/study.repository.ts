@@ -10,10 +10,21 @@ import type { LoadedStudySource } from "@/lib/services/study.service";
 
 /** The user's pages, PDFs with text and videos with transcripts, most recently changed first. */
 export async function listStudySources(ownerId: string): Promise<StudySource[]> {
+  const [versions, indexed, withText] = await Promise.all([
+    listSourceVersions(ownerId),
+    prisma.ranganSource.findMany({ where: { ownerId }, select: { sourceType: true, sourceId: true, version: true } }),
+    prisma.ranganChunk.groupBy({ by: ["sourceType", "sourceId"], where: { ownerId } }),
+  ]);
+  const indexedVersion = new Map(indexed.map((row) => [`${row.sourceType}:${row.sourceId}`, row.version]));
+  const hasText = new Set(withText.map((row) => `${row.sourceType}:${row.sourceId}`));
   const seen = new Set<string>();
   const sources: StudySource[] = [];
-  for (const source of await listSourceVersions(ownerId)) {
-    if (source.type === "item") continue;
+  for (const source of versions) {
+    // Flashcards and quizzes read pages, PDFs and video transcripts; boards and saved articles aren't sources for them.
+    if (source.type !== "note" && source.type !== "pdf" && source.type !== "transcript") continue;
+    const key = `${source.type}:${source.id}`;
+    // Known to be empty: this very version was indexed and had no text. A version not indexed yet is offered (it's read live).
+    if (indexedVersion.get(key) === source.version && !hasText.has(key)) continue;
     const ref = formatRef({ type: source.type === "note" ? "note" : "asset", id: source.id });
     if (seen.has(ref)) continue;
     seen.add(ref);
