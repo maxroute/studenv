@@ -6,6 +6,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { hashToken } from "@/lib/security/crypto";
 import { sendVerificationEmail } from "@/lib/services/email.service";
+import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/security/disposable-email";
 
 const settingsSchema = z.object({
   name: z.string().min(2).max(50).optional().nullable(),
@@ -92,6 +93,9 @@ export async function PATCH(req: Request) {
 
       const currentUser = await prisma.user.findUnique({ where: { id: session.user.id }});
       if (currentUser && currentUser.email !== email) {
+        if (isDisposableEmail(email)) {
+          return new NextResponse(DISPOSABLE_EMAIL_MESSAGE, { status: 400 });
+        }
         const token = crypto.randomBytes(32).toString("hex");
         emailUpdateData = {
           email,

@@ -12,6 +12,7 @@ import {
   hashToken,
   verifyPassword,
 } from "@/lib/security/crypto";
+import { assertNotDisposableEmail } from "@/lib/security/disposable-email";
 import {
   isAccountLocked,
   resetLoginAttempts,
@@ -135,6 +136,9 @@ export async function signup(
     await resendVerificationEmailForUser(existing, appUrl);
     return { outcome: "verification_required" as const };
   }
+
+  // Only brand-new accounts are checked; existing ones keep the flow above.
+  assertNotDisposableEmail(input.email);
 
   const username = await generateUniqueUsername(
     `${input.firstName} ${input.lastName}`,
@@ -445,6 +449,10 @@ export async function updateProfile(
   }
 
   const emailChanged = currentUser.email.toLowerCase() !== input.email.toLowerCase();
+  if (emailChanged) {
+    // An address the account already has is never re-checked.
+    assertNotDisposableEmail(input.email);
+  }
   const verificationToken = emailChanged ? generateResetToken() : null;
   const sentAt = new Date();
 
