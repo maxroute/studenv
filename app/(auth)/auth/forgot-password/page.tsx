@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { apiFetcher } from "@/lib/client/fetcher";
 import { subscribeToAuthSync } from "@/lib/auth/auth-sync";
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -21,7 +22,7 @@ export default function ForgotPasswordPage() {
   }), [router]);
 
   async function handleSubmit() {
-    if (sending) return;
+    if (sending || !email.trim()) return;
     setSending(true);
     try {
       await apiFetcher("/api/auth/forgot-password", {
@@ -39,7 +40,14 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="simple-auth-page">
-      <div className="simple-auth-card">
+      <form
+        className="simple-auth-card"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
+      >
         <div className="auth-title">
           Reset your <em>password</em>
         </div>
@@ -54,13 +62,21 @@ export default function ForgotPasswordPage() {
               <span>Email</span>
               <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={sending || !email.trim()}>
+            <button className="btn-primary" type="submit" disabled={sending || !email.trim()}>
               {sending ? "Sending..." : "Send Reset Link"}
             </button>
           </>
         ) : null}
         <Link href="/auth/signin" target="_self">Back to sign in</Link>
-      </div>
+      </form>
     </div>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<div className="simple-auth-page" />}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }

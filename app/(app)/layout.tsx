@@ -1,8 +1,10 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
 import { AppIntro } from "@/components/intro/app-intro";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth/auth.config";
+import { REQUEST_PATH_HEADER, signInPageFor } from "@/lib/auth/signed-in-redirect";
 
 export default async function AuthenticatedLayout({
   children,
@@ -10,7 +12,7 @@ export default async function AuthenticatedLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/auth/signin");
+    redirect(signInPageFor(headers().get(REQUEST_PATH_HEADER)));
   }
 
   return (

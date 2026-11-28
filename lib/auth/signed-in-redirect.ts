@@ -31,3 +31,28 @@ export function signedInRedirect(pathname: string, searchParams: URLSearchParams
   if (SIGN_IN_PAGES.has(pathname)) return safeLocalPath(searchParams.get("callbackUrl")) ?? DEFAULT_DESTINATION;
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Where a signed-out visitor goes after signing in
+// ---------------------------------------------------------------------------
+//
+// Layouts can't see the URL being opened, so the middleware passes it along in
+// this header. Without it, a signed-out visit to /settings or a note link
+// landed on the dashboard after sign-in instead of the page that was asked for.
+
+/** Header the middleware sets on page requests: the path and query being opened. */
+export const REQUEST_PATH_HEADER = "x-studenv-request-path";
+
+/** The path and query of a page request, without Next's internal `_rsc` marker. */
+export function requestPathOf(pathname: string, searchParams: URLSearchParams): string {
+  const query = new URLSearchParams(searchParams);
+  query.delete("_rsc");
+  const search = query.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+/** The sign-in page, returning afterwards to `requestedPath` when it is a safe local path. */
+export function signInPageFor(requestedPath: string | null | undefined, fallback = DEFAULT_DESTINATION): string {
+  const destination = safeLocalPath(requestedPath) ?? fallback;
+  return `/auth/signin?callbackUrl=${encodeURIComponent(destination)}`;
+}

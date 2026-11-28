@@ -55,6 +55,7 @@ export function SigninContent() {
   }, [authErrorMessage]);
 
   async function handleSignin() {
+    if (loading) return;
     try {
       setLoading(true);
       const result = await signIn("credentials", {
@@ -163,7 +164,14 @@ export function SigninContent() {
       </div>
 
       <div className="auth-right">
-        <div className="auth-form">
+        <form
+          className="auth-form"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSignin();
+          }}
+        >
           <div className="auth-title">
             Welcome <em>back</em>
           </div>
@@ -210,7 +218,12 @@ export function SigninContent() {
           <div className="auth-fields">
             <label className="field">
               <span>Email</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
             </label>
             <div className="field">
               <label htmlFor="signin-password">Password</label>
@@ -240,8 +253,7 @@ export function SigninContent() {
           </div>
           <button
             className="btn-primary"
-            type="button"
-            onClick={handleSignin}
+            type="submit"
             disabled={loading}
           >
             {loading ? "Signing in..." : "Sign In"}
@@ -249,7 +261,7 @@ export function SigninContent() {
           <div className="auth-sub">
             <Link href="/auth/forgot-password">Forgot password?</Link>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

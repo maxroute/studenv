@@ -47,6 +47,8 @@ export function ActivityChart({ items, className }: ActivityChartProps) {
         </div>
         <div className="flex items-center gap-2">
           <button 
+            type="button"
+            aria-label="Previous year"
             onClick={() => setYear(y => y - 1)}
             className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 hover:bg-white/5 text-[#9c9788] transition"
           >
@@ -54,6 +56,8 @@ export function ActivityChart({ items, className }: ActivityChartProps) {
           </button>
           <span className="text-sm font-medium w-10 text-center">{year}</span>
           <button 
+            type="button"
+            aria-label="Next year"
             onClick={() => setYear(y => y + 1)}
             disabled={year >= today.getFullYear()}
             className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 hover:bg-white/5 text-[#9c9788] transition disabled:opacity-30 disabled:hover:bg-transparent"

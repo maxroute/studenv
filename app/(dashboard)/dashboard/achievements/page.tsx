@@ -12,16 +12,14 @@ import {
 } from "lucide-react";
 import useSWR from "swr";
 
+// Throws on failure so SWR keeps the last good stats during a failed refresh
+// instead of replacing them with the error screen.
 const fetcher = async (url: string) => {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      return null;
-    }
-    return await res.json();
-  } catch (err) {
-    return null;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Request failed with status ${res.status}`);
   }
+  return res.json();
 };
 
 function AchievementsSkeleton() {
@@ -29,7 +27,7 @@ function AchievementsSkeleton() {
 }
 
 export default function AchievementsPage() {
-  const { data, error, isLoading } = useSWR("/api/analytics", fetcher, {
+  const { data, isLoading, mutate } = useSWR("/api/analytics", fetcher, {
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     refreshInterval: 5000,
@@ -82,7 +80,7 @@ export default function AchievementsPage() {
         progress:
           totals.focusMinutes >= 600 && totals.streak >= 7
             ? 100
-            : Math.min(100, ((totals.focusMinutes / 600) * 60) + ((totals.streak / 7) * 40)),
+            : Math.min(1, totals.focusMinutes / 600) * 60 + Math.min(1, totals.streak / 7) * 40,
         label:
           totals.focusMinutes >= 600 && totals.streak >= 7
             ? "Completed"
@@ -95,12 +93,19 @@ export default function AchievementsPage() {
 
   if (isLoading) return <AchievementsSkeleton />;
 
-  if (error || !data) {
+  if (!data) {
     return (
-      <div className="min-h-full px-10 py-9 flex items-center justify-center">
-        <div className="flex flex-col items-center text-[#9c9788] gap-3">
-          <AlertCircle className="w-8 h-8 text-red-500/50" />
-          <p>Failed to load achievements. Please try again.</p>
+      <div className="min-h-full px-5 py-7 flex items-center justify-center sm:px-8 sm:py-9 lg:px-10">
+        <div className="flex flex-col items-center text-center text-[#9c9788] gap-3" role="alert">
+          <AlertCircle className="w-8 h-8 text-red-500/50" aria-hidden="true" />
+          <p>Failed to load achievements.</p>
+          <button
+            type="button"
+            onClick={() => void mutate()}
+            className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-[#e4dfcf] transition hover:bg-white/[0.06]"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );
@@ -110,7 +115,7 @@ export default function AchievementsPage() {
   const inProgress = achievements.filter((item) => !item.done);
 
   return (
-    <div className="min-h-full px-10 py-9">
+    <div className="min-h-full px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
           <h1 className="font-[family:var(--font-fraunces)] text-[32px] font-normal leading-none text-[#e4dfcf]">

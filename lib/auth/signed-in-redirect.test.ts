@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { safeLocalPath, signedInRedirect } from "./signed-in-redirect";
+import { requestPathOf, safeLocalPath, signedInRedirect, signInPageFor } from "./signed-in-redirect";
 
 const params = (query = "") => new URLSearchParams(query);
 
@@ -23,4 +23,20 @@ test("a callback can't send you to another site or back into sign-in", () => {
     assert.equal(signedInRedirect("/auth/signin", params(`callbackUrl=${encodeURIComponent(bad)}`)), "/dashboard");
   }
   assert.equal(safeLocalPath("/workspaces/w1#node"), "/workspaces/w1#node");
+});
+
+test("signed out, the sign-in page returns you to the page you opened", () => {
+  assert.equal(signInPageFor("/settings?section=privacy"), "/auth/signin?callbackUrl=%2Fsettings%3Fsection%3Dprivacy");
+  assert.equal(signInPageFor("/notes/n1"), "/auth/signin?callbackUrl=%2Fnotes%2Fn1");
+  assert.equal(signInPageFor(null), "/auth/signin?callbackUrl=%2Fdashboard");
+  assert.equal(signInPageFor(undefined, "/auth/onboarding"), "/auth/signin?callbackUrl=%2Fauth%2Fonboarding");
+  for (const bad of ["https://evil.example", "//evil.example", "/auth/signin", ""]) {
+    assert.equal(signInPageFor(bad), "/auth/signin?callbackUrl=%2Fdashboard", JSON.stringify(bad));
+  }
+});
+
+test("the request path keeps the query but not Next's internal _rsc marker", () => {
+  assert.equal(requestPathOf("/settings", params("section=privacy&_rsc=abc")), "/settings?section=privacy");
+  assert.equal(requestPathOf("/dashboard/planner", params("_rsc=1")), "/dashboard/planner");
+  assert.equal(requestPathOf("/notes/n1", params()), "/notes/n1");
 });

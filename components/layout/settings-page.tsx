@@ -555,10 +555,6 @@ export function SettingsPage() {
   const { data: rawSettings, error, isLoading, mutate } = useSWR<any>("/api/user/profile", apiFetcher);
 
   const settings: UserSettings = useMemo(() => {
-    // Temporary debug logs
-    console.log("[SETTINGS] Raw API data:", rawSettings);
-    if (error) console.error("[SETTINGS] Fetch error:", error);
-
     const mapped: UserSettings = {
       account: {
         name: rawSettings?.name || "",
@@ -588,9 +584,8 @@ export function SettingsPage() {
       },
     };
 
-    console.log("[SETTINGS] Mapped settings object:", mapped);
     return mapped;
-  }, [rawSettings, error]);
+  }, [rawSettings]);
 
   const setSection = (id: SectionId) => {
     const params = new URLSearchParams(searchParams);
@@ -625,6 +620,19 @@ export function SettingsPage() {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-amber" />
+      </div>
+    );
+  }
+
+  // Without the profile, the account form would show blank fields that could be saved over it.
+  if (error && !rawSettings) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center text-muted" role="alert">
+        <AlertTriangle className="h-6 w-6 text-amber" aria-hidden="true" />
+        <p>We couldn&apos;t load your settings.</p>
+        <Button type="button" variant="ghost" onClick={() => void mutate()}>
+          Try again
+        </Button>
       </div>
     );
   }
