@@ -157,7 +157,7 @@ export const CASES: EvalCase[] = [
     area: "page",
     language: "en",
     input: { question: "Write me a revision page on photosynthesis" },
-    checks: [kindIs("page"), hasHeadings(3), cites("fxphoto"), citationMarksValid],
+    checks: [kindIs("page"), hasHeadings(3), cites("fxphoto"), citationMarksValid, excludes(/Q:\s*\/\s*A:/, "a stray Q:/A:")],
     expect: "A clear revision page: overall equation, light reactions (thylakoid, photolysis, ATP/NADPH), Calvin cycle (stroma, RuBisCO), with citations.",
   },
   {
@@ -165,7 +165,7 @@ export const CASES: EvalCase[] = [
     area: "page",
     language: "en",
     input: { question: "Make an exam prep page on trigonometry identities with practice questions" },
-    checks: [kindIs("page"), hasHeadings(3), includes(/\$[^$]+\$|\\\(|sin\^?2|sin²/i, "formulas")],
+    checks: [kindIs("page"), hasHeadings(3), includes(/\$[^$]+\$|\\\(|sin\^?2|sin²/i, "formulas"), cites("fxtrig"), excludes(/Q:\s*\/\s*A:/, "a stray Q:/A:")],
     expect: "Identities with correct formulas (sin²θ + cos²θ = 1, 1 + tan²θ = sec²θ), worked examples and practice questions with answers.",
   },
   {
@@ -173,7 +173,7 @@ export const CASES: EvalCase[] = [
     area: "page",
     language: "bn",
     input: { question: "কোষ বিভাজন নিয়ে একটা নোট লেখো" },
-    checks: [kindIs("page"), writtenIn("bengali"), hasHeadings(2)],
+    checks: [kindIs("page"), writtenIn("bengali"), hasHeadings(2), excludes(/Q:\s*\/\s*A:/, "a stray Q:/A:"), excludes(/^#{2,3} (Check yourself|Next steps|Test yourself)/m, "English section names")],
     expect: "A page in Bengali on mitosis and meiosis, from the student's Bengali notes.",
   },
   // ── boards ──

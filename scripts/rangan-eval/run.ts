@@ -13,6 +13,10 @@
 //   --chain=id,id    answer with only these models, in order (groq-large, groq-small,
 //                    cloudflare); the default is the app's own chain with fallbacks
 //
+// Testing keys: EVAL_GROQ_API_KEY, EVAL_CLOUDFLARE_ACCOUNT_ID and
+// EVAL_CLOUDFLARE_API_TOKEN in .env.local, when set, are used instead of the
+// app's own, so test runs don't spend the free limits the app needs.
+//
 // Rangan runs as in the app (same prompts, models and Wikipedia), but with
 // the sample library in memory and questions counted in memory: nothing is
 // read from or written to the database.
@@ -28,6 +32,13 @@ import { findYouTubeVideo } from "@/lib/web/youtube-search";
 import { CASES, type EvalCase } from "./cases";
 import { replyText, type CheckResult } from "./checks";
 import { loadSource, searchLibrary } from "./library";
+
+// Before anything calls a model: the providers read these at call time.
+for (const name of ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"] as const) {
+  const testing = process.env[`EVAL_${name}`];
+  if (testing) process.env[name] = testing;
+}
+const usingTestKeys = ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"].filter((name) => process.env[`EVAL_${name}`]);
 
 const args = new Map(
   process.argv.slice(2).map((arg) => {
@@ -49,14 +60,28 @@ const env = { GROQ_API_KEY: process.env.GROQ_API_KEY, CLOUDFLARE_ACCOUNT_ID: pro
 const onChain = (messages: ChatMessage[], options?: CompletionOptions) =>
   completeWithFallback(messages, options ?? {}, { fetch, env, now: Date.now, cooldowns: new Map() }, chosen ?? PROVIDER_CHAIN);
 
+/** The models each case's calls landed on, in order: the free tier's limits push some down the chain. */
+const calls: string[] = [];
+const traced = <T extends (...args: never[]) => Promise<{ provider: string }>>(call: T) =>
+  (async (...args: Parameters<T>) => {
+    try {
+      const result = await call(...args);
+      calls.push(result.provider);
+      return result;
+    } catch (problem) {
+      calls.push("failed");
+      throw problem;
+    }
+  }) as T;
+
 const rangan = createRanganService({
   dailyLimit: 10_000,
   now: () => new Date(),
   getUsedCount: async () => 0,
   consumeQuestion: async () => ({ allowed: true, used: 1 }),
   refundQuestion: async () => undefined,
-  complete: chosen ? onChain : complete,
-  completeQuick: chosen ? onChain : completeQuick,
+  complete: traced(chosen ? onChain : complete),
+  completeQuick: traced(chosen ? onChain : completeQuick),
   searchLibrary: (_user, query, limit) => searchLibrary(query, limit),
   loadSource: (_user, type, id) => loadSource(type, id),
   recentNoteIds: async () => ["fxjwt", "fxphoto", "fxtrig", "fxcell"],
@@ -80,6 +105,7 @@ const rangan = createRanganService({
 const GRADER = [
   "You grade replies from Rangan, a study assistant for school and college students.",
   "Judge only what is asked: is it correct, does it answer the request, is it clear for a student, is it in the language the student used?",
+  "Before judging, solve every question, example and answer in the reply yourself and check every fact and formula: one wrong answer a student would learn caps the score at 2.",
   'Reply with only JSON: {"score": 1-5, "problems": ["short problem", ...]}. 5 = correct and excellent; 3 = usable with flaws; 1 = wrong or useless.',
 ].join("\n");
 
@@ -90,7 +116,7 @@ async function gradeReply(test: EvalCase, text: string): Promise<{ score: number
         { role: "system", content: GRADER },
         { role: "user", content: `Student's request: """${test.input.question}"""\nA good reply: ${test.expect}\n\nRangan's reply:\n"""${text.slice(0, 6_000)}"""` },
       ],
-      { maxTokens: 600, temperature: 0 },
+      { maxTokens: 4_000, temperature: 0, reasoning: "medium", timeoutMs: 45_000 },
     );
     const json = JSON.parse(result.text.slice(result.text.indexOf("{"), result.text.lastIndexOf("}") + 1));
     const score = Number(json.score);
@@ -106,6 +132,8 @@ type Outcome = {
   language: string;
   ms: number;
   provider: string | null;
+  /** Corrections the page check applied; -1 when it couldn't run. */
+  pageFixes?: number;
   /** Citations the support check took off because their passage didn't back the sentence. */
   removedCitations: number;
   checks: CheckResult[];
@@ -118,6 +146,7 @@ type Outcome = {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
+  console.log(usingTestKeys.length ? `using testing keys: ${usingTestKeys.join(", ")}` : "using the app's keys (set EVAL_GROQ_API_KEY in .env.local to keep tests off them)");
   const cases = CASES.filter((test) => (!only || only.includes(test.id)) && (!area || test.area === area));
   if (!process.env.GROQ_API_KEY && !process.env.CLOUDFLARE_API_TOKEN) throw new Error("No AI keys: run with --env-file=.env.local");
   const outcomes: Outcome[] = [];
@@ -125,6 +154,8 @@ async function main() {
     if (index) await wait(pause);
     const started = Date.now();
     let reply: RanganReply | null = null;
+    calls.length = 0;
+    const factCheck = (value: RanganReply | null) => (value?.kind === "page" ? value.factCheck : undefined);
     let error: string | undefined;
     try {
       reply = await rangan.ask("eval-user", test.input);
@@ -134,13 +165,16 @@ async function main() {
     const ms = Date.now() - started;
     const checks = reply ? test.checks.map((check) => check(reply as RanganReply)) : [{ name: "replied", ok: false, detail: error }];
     const text = reply ? replyText(reply) : "";
-    const outcome: Outcome = { id: test.id, area: test.area, language: test.language, ms, provider: reply?.provider ?? null, removedCitations: reply?.support.removed ?? 0, checks, passed: checks.every((check) => check.ok), error, text };
+    const checkedPage = factCheck(reply);
+    const outcome: Outcome = { pageFixes: checkedPage ? (checkedPage.checked ? checkedPage.fixed : -1) : undefined, id: test.id, area: test.area, language: test.language, ms, provider: reply?.provider ?? null, removedCitations: reply?.support.removed ?? 0, checks, passed: checks.every((check) => check.ok), error, text };
     if (grade && reply) outcome.grade = await gradeReply(test, text);
     outcomes.push(outcome);
     const failed = checks.filter((check) => !check.ok).map((check) => `${check.name}${check.detail ? ` (${check.detail})` : ""}`);
     console.log(
       `${outcome.passed ? "PASS" : "FAIL"}  ${test.id.padEnd(24)} ${test.language.padEnd(8)} ${String(Math.round(ms / 100) / 10).padStart(5)}s  ${(outcome.provider ?? "-").padEnd(10)}` +
+        `${outcome.pageFixes !== undefined ? `  (page check: ${outcome.pageFixes < 0 ? "didn't run" : `${outcome.pageFixes} fix${outcome.pageFixes === 1 ? "" : "es"}`})` : ""}` +
         `${outcome.removedCitations ? `  (check removed ${outcome.removedCitations} citation${outcome.removedCitations === 1 ? "" : "s"})` : ""}` +
+        `  [${calls.join(" → ")}]` +
         `${outcome.grade ? `  grade ${outcome.grade.score ?? "?"}` : ""}${failed.length ? `\n      ✗ ${failed.join("\n      ✗ ")}` : ""}` +
         `${outcome.grade?.problems.length ? `\n      · ${outcome.grade.problems.join("\n      · ")}` : ""}`,
     );
