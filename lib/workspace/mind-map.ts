@@ -15,7 +15,7 @@
 // credit under each; Wikipedia articles used go in a "Further reading" row.
 
 import { z } from "zod";
-import type { ConnectorNode, StudioItem } from "@/types/workspace";
+import { DEFAULT_WORKSPACE_VIEWPORT, type ConnectorNode, type StudioItem } from "@/types/workspace";
 
 export const MAP_MAX_BRANCHES = 8;
 export const MAP_MAX_CHILDREN = 5;
@@ -506,11 +506,15 @@ export const mapDraftSchema = z
   })
   .strict();
 
-/** The items moved so the map's top-left corner is at (0, 0), with a camera that shows it whole. */
+/**
+ * The items moved so the map's top-left corner is at (0, 0). The camera is left
+ * at the default view, which the board treats as "never moved" and fits to the
+ * screen it is first opened on, whatever its size.
+ */
 export function framedMap(items: StudioItem[]): { items: StudioItem[]; viewport: { x: number; y: number; zoom: number } } {
   const solid = items.filter((item) => item.type !== "connector");
   const minX = Math.min(...solid.map((item) => item.x));
   const minY = Math.min(...solid.map((item) => item.y));
   const moved = items.map((item) => (item.type === "connector" ? item : ({ ...item, x: item.x - minX, y: item.y - minY } as StudioItem)));
-  return { items: moved, viewport: { x: 40, y: 40, zoom: 0.5 } };
+  return { items: moved, viewport: { ...DEFAULT_WORKSPACE_VIEWPORT } };
 }
