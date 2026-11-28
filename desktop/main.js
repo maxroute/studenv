@@ -1,14 +1,20 @@
-// Studenv desktop prototype: the website in a window, and a small timer that
+// The Studenv desktop app: the website in a window, and a small timer that
 // floats above other apps while a focus session runs and Studenv is not in front.
 // The website owns the session; the small timer only shows it and asks for changes.
-const { app, BrowserWindow, Menu, ipcMain, screen, session, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, screen } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const logic = require("./timer-logic");
+const studenv = require("./app-shell");
+const { MIN_SIZE } = require("./shell-rules");
+const { smokeTest } = require("./smoke-test");
 
-const APP_URL = logic.appUrl(process.env.STUDENV_APP_URL);
+// The installed app opens the live site; `npm start` opens the copy on this computer.
+const APP_URL = logic.appUrl(
+  process.env.STUDENV_APP_URL || (app.isPackaged ? "https://studenv-online.vercel.app" : undefined),
+);
 const MINI_SIZE = { width: 340, height: 84 };
-const BACKGROUND = "#141310";
+const BACKGROUND = studenv.BACKGROUND;
 
 let mainWindow = null;
 let miniWindow = null;
@@ -112,27 +118,34 @@ function createMiniWindow() {
 
 // ─── Main window ─────────────────────────────────────────────
 function createMainWindow() {
+  const areas = [screen.getPrimaryDisplay(), ...screen.getAllDisplays()].map((display) => display.workArea);
+  const { maximized, ...bounds } = studenv.savedWindow(areas);
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 380,
-    minHeight: 560,
+    ...bounds,
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
     backgroundColor: BACKGROUND,
     title: "Studenv",
+    icon: studenv.ICON,
+    // Windows: the menu stays out of the way until Alt is pressed.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: true,
       // The timer must keep counting while the window is behind other apps.
       backgroundThrottling: false,
     },
   });
+  if (maximized) mainWindow.maximize();
+  studenv.rememberWindow(mainWindow);
 
   for (const event of ["focus", "blur", "show", "hide", "minimize", "restore"]) {
     mainWindow.on(event, refreshAfterFocusChange);
   }
-  // Closing the window keeps the session going; Quit ends the app.
+  // On a Mac, closing the window keeps the session going; Quit ends the app.
   mainWindow.on("close", (event) => {
     if (quitting || process.platform !== "darwin") return;
     event.preventDefault();
@@ -147,15 +160,8 @@ function createMainWindow() {
     mainWindow = null;
     if (!quitting) app.quit();
   });
-  mainWindow.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
-    // -3 is a load the page itself cancelled.
-    if (!isMainFrame || code === -3) return;
-    void mainWindow.loadFile(path.join(__dirname, "offline.html"), { query: { app: APP_URL.href } });
-  });
 
-  void mainWindow.loadURL(APP_URL.href).catch(() => {
-    // did-fail-load shows the "can't reach Studenv" page.
-  });
+  studenv.openStudenv(mainWindow, APP_URL);
 }
 
 function showMainWindow() {
@@ -205,77 +211,34 @@ ipcMain.on("mini:action", (event, action) => {
   }
 });
 
-// ─── Safety ──────────────────────────────────────────────────
-/** Pages stay on Studenv; every other link opens in the system browser. */
-app.on("web-contents-created", (_event, contents) => {
-  const openOutside = (url) => {
-    if (logic.canOpenOutside(url)) void shell.openExternal(url);
-  };
-  const stayOnStudenv = (details) => {
-    // Frames inside a page (a video player, say) may move as they like.
-    if (details.isMainFrame === false || logic.sameOrigin(details.url, APP_URL.origin)) return;
-    details.preventDefault();
-    openOutside(details.url);
-  };
-  contents.on("will-navigate", stayOnStudenv);
-  contents.on("will-redirect", stayOnStudenv);
-  contents.on("will-attach-webview", (event) => event.preventDefault());
-  contents.setWindowOpenHandler(({ url }) => {
-    if (logic.sameOrigin(url, APP_URL.origin)) return { action: "allow" };
-    openOutside(url);
-    return { action: "deny" };
-  });
-});
-
-const ALLOWED_FOR_STUDENV = new Set(["media", "notifications", "clipboard-sanitized-write", "clipboard-read"]);
-
-function limitPermissions() {
-  const allowed = (permission, url) =>
-    permission === "fullscreen" || (ALLOWED_FOR_STUDENV.has(permission) && logic.sameOrigin(url, APP_URL.origin));
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, done, details) => {
-    done(allowed(permission, details.requestingUrl));
-  });
-  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-    allowed(permission, requestingOrigin),
-  );
-}
-
 // ─── Menu ────────────────────────────────────────────────────
-function buildMenu() {
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      ...(process.platform === "darwin" ? [{ role: "appMenu" }] : []),
-      { role: "fileMenu" },
-      { role: "editMenu" },
-      { role: "viewMenu" },
+function timerMenu() {
+  return {
+    label: "Timer",
+    submenu: [
       {
-        label: "Timer",
-        submenu: [
-          {
-            label: "Show timer when I switch away",
-            type: "checkbox",
-            checked: settings.showOnSwitch,
-            click: (item) => {
-              settings.showOnSwitch = item.checked;
-              // Turning it on again also brings back a timer hidden earlier.
-              if (item.checked) hiddenSessionId = null;
-              saveSettings();
-              refreshMini();
-            },
-          },
-        ],
+        label: "Show timer when I switch away",
+        type: "checkbox",
+        checked: settings.showOnSwitch,
+        click: (item) => {
+          settings.showOnSwitch = item.checked;
+          // Turning it on again also brings back a timer hidden earlier.
+          if (item.checked) hiddenSessionId = null;
+          saveSettings();
+          refreshMini();
+        },
       },
-      { role: "windowMenu" },
-    ]),
-  );
+    ],
+  };
 }
 
 // ─── Life cycle ──────────────────────────────────────────────
-app.setName("Studenv");
+studenv.brand();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  studenv.keepOnStudenv(APP_URL);
   app.on("second-instance", showMainWindow);
   app.on("activate", showMainWindow);
   app.on("before-quit", () => {
@@ -285,9 +248,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => app.quit());
   void app.whenReady().then(() => {
     loadSettings();
-    limitPermissions();
-    buildMenu();
+    studenv.limitPermissions(APP_URL);
+    studenv.watchDownloads();
+    studenv.buildMenu({ appUrl: APP_URL, mainWindow: () => mainWindow, timerMenu: timerMenu() });
     createMainWindow();
     createMiniWindow();
+    smokeTest(mainWindow, APP_URL);
   });
 }

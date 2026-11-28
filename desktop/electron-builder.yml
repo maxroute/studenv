@@ -1,0 +1,35 @@
+# The Windows installer, built by .github/workflows/build-apps.yml.
+# (The Mac app is built by scripts/package-mac.js.)
+appId: online.studenv.app
+productName: Studenv
+copyright: © 2026 Studenv
+directories:
+  output: dist/windows
+  buildResources: assets
+files:
+  - "*.js"
+  - "*.html"
+  - "*.css"
+  - package.json
+  - assets/icon.png
+  - assets/mark.svg
+  - "!*.test.js"
+npmRebuild: false
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Studenv-${version}-windows-setup.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  shortcutName: Studenv
+  uninstallDisplayName: Studenv
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+publish: null

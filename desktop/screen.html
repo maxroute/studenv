@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'" />
+    <title>Studenv</title>
+    <link rel="stylesheet" href="screen.css" />
+  </head>
+  <body data-state="loading">
+    <main>
+      <img src="assets/mark.svg" alt="" width="96" height="96" />
+      <p class="loading" role="status">Opening Studenv…</p>
+      <div class="offline">
+        <h1>Can't reach Studenv</h1>
+        <p>Check your internet connection, then try again.</p>
+        <a id="retry" href="#">Try again</a>
+      </div>
+    </main>
+    <script src="screen.js"></script>
+  </body>
+</html>

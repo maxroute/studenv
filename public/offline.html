@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050505" />
+    <title>Studenv is offline</title>
+    <style>
+      body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box;
+        background: #050505; color: #eee9dc; font: 15px/1.6 system-ui, -apple-system, sans-serif; text-align: center; }
+      svg { width: 84px; height: 84px; }
+      h1 { font-size: 21px; margin: 18px 0 6px; }
+      p { color: #9b9588; margin: 0 0 22px; max-width: 320px; }
+      button { font: 600 15px system-ui, -apple-system, sans-serif; padding: 12px 24px; border: 0; border-radius: 9px; background: #ffde0a; color: #050505; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- The logo is drawn here so the page needs no other file. -->
+      <svg viewBox="0 0 800 800" aria-hidden="true">
+        <circle cx="400" cy="400" r="400" fill="#ffde0a" />
+        <g transform="translate(-12 -18)">
+          <g fill="none" stroke="#050505" stroke-width="35" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M318 423C270 405 242 356 243 300C244 218 312 163 410 163L470 163" />
+            <path d="M430 120L474 162L430 199" />
+            <path d="M513 406C566 425 596 472 596 525C596 611 524 669 428 669L356 669" />
+            <path d="M397 628L351 669L397 718" />
+          </g>
+          <circle cx="412" cy="418" r="47" fill="#050505" />
+        </g>
+      </svg>
+      <h1>You're offline</h1>
+      <p>Studenv needs the internet. Check your connection, then try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+    <script>
+      addEventListener("online", () => location.reload());
+    </script>
+  </body>
+</html>

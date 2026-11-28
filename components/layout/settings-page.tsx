@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/config/site";
 import { apiFetcher } from "@/lib/client/fetcher";
+import { askText } from "@/components/notes/note-dialogs";
+import "@/components/notes/note-dialogs.css";
 
 // --- Types ---
 
@@ -235,7 +237,13 @@ function AccountSection({ settings, onUpdate, onRefresh }: { settings: UserSetti
   };
 
   const handleDeleteAccount = async () => {
-    const confirmation = window.prompt('Type "DELETE" to confirm account deletion.');
+    // Not window.prompt: the desktop app doesn't support it.
+    const confirmation = await askText({
+      title: "Delete your account?",
+      label: 'Type "DELETE" to confirm account deletion.',
+      confirmText: "Delete account",
+      validate: (value) => (value === "DELETE" ? null : 'Type "DELETE" exactly, in capitals.'),
+    });
     if (confirmation !== "DELETE") return;
 
     setIsDeleting(true);

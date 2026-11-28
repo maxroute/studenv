@@ -20,75 +20,6 @@ function AuthCrossTabSync() {
   return null;
 }
 
-function MobileAppInitializer() {
-  const router = useRouter();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const capacitor = (window as any).Capacitor;
-    if (capacitor) {
-      console.log("[MobileAppInitializer] Running inside Capacitor WebView");
-
-      // Set dataset.desktopApp so that existing code knows we are in app wrapper
-      document.documentElement.dataset.desktopApp = "true";
-
-      const { App } = capacitor.Plugins || {};
-      if (App) {
-        const handleAppUrlOpen = async (event: { url: string }) => {
-          console.log("[MobileAppInitializer] App opened with URL:", event.url);
-          
-          try {
-            const parsedUrl = new URL(event.url);
-            
-            if (parsedUrl.protocol === "studenv:" && parsedUrl.hostname === "auth") {
-              const token = parsedUrl.searchParams.get("token");
-              if (token) {
-                console.log("[MobileAppInitializer] Found session token in app URL, setting native cookies...");
-                
-                const CapacitorCookies = (window as any).CapacitorCookies || (window as any).Capacitor?.Plugins?.CapacitorCookies;
-                if (CapacitorCookies) {
-                  const domainUrl = window.location.origin;
-                  
-                  await CapacitorCookies.setCookie({
-                    url: domainUrl,
-                    key: "next-auth.session-token",
-                    value: token,
-                    path: "/",
-                  });
-                  
-                  await CapacitorCookies.setCookie({
-                    url: domainUrl,
-                    key: "__Secure-next-auth.session-token",
-                    value: token,
-                    path: "/",
-                  });
-                  
-                  console.log("[MobileAppInitializer] Cookies set successfully, redirecting to dashboard");
-                  router.push("/dashboard");
-                  router.refresh();
-                } else {
-                  console.warn("[MobileAppInitializer] CapacitorCookies plugin not found on window");
-                }
-              }
-            }
-          } catch (e) {
-            console.error("[MobileAppInitializer] Error handling app URL open:", e);
-          }
-        };
-
-        App.addListener("appUrlOpen", handleAppUrlOpen);
-
-        return () => {
-          App.removeAllListeners();
-        };
-      }
-    }
-  }, [router]);
-
-  return null;
-}
-
 export function Providers({ children, session }: PropsWithChildren<{ session?: Session | null }>) {
   return (
     <SessionProvider
@@ -98,7 +29,6 @@ export function Providers({ children, session }: PropsWithChildren<{ session?: S
       refetchWhenOffline={false}
     >
       <AuthCrossTabSync />
-      <MobileAppInitializer />
       <SWRConfig
         value={{
           revalidateOnFocus: false,

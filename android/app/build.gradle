@@ -1,0 +1,46 @@
+plugins {
+    id "com.android.application"
+}
+
+// The release key is never in the repository. The build machine puts it in a
+// file and names it here. Without it the app is signed with a throwaway debug
+// key: fine for trying out, but a later build can't update it, and Android
+// won't link it to the website (so Chrome keeps an address bar).
+def keystoreFile = System.getenv("STUDENV_KEYSTORE_FILE")
+
+android {
+    namespace "online.studenv.app"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "online.studenv.app"
+        minSdk 23
+        targetSdk 35
+        // Raise versionCode with every new .apk, or phones won't take the update.
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        if (keystoreFile) {
+            release {
+                storeFile file(keystoreFile)
+                storeType "pkcs12"
+                storePassword System.getenv("STUDENV_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("STUDENV_KEY_ALIAS")
+                keyPassword System.getenv("STUDENV_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.6.2"
+}

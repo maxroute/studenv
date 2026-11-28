@@ -1,0 +1,17 @@
+/* Until the intro can start, an installed phone app stays black (as the intro's
+   first frame is) rather than showing the sign-in form for a moment. */
+.cover { display: none; }
+
+@media (display-mode: standalone) {
+  .cover {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 19999;
+    background: #050505;
+    /* If the page's script never runs, the cover still gets out of the way. */
+    animation: giveUp 0s linear 6s forwards;
+  }
+}
+
+@keyframes giveUp { to { visibility: hidden; } }
