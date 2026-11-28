@@ -114,3 +114,13 @@ test("only a plain client message id is echoed back", () => {
     assert.equal(readClientMessageId(bad), null, String(bad));
   }
 });
+
+test("only safe types are previewed in the app; anything a browser could run is download only", async () => {
+  const { previewKind } = await import("./file-delivery");
+  assert.equal(previewKind("application/pdf"), "pdf");
+  assert.equal(previewKind("IMAGE/PNG"), "image");
+  assert.equal(previewKind("video/mp4"), "video");
+  assert.equal(previewKind("audio/mpeg"), "audio");
+  assert.equal(previewKind("text/plain"), "text");
+  for (const type of ["image/svg+xml", "text/html", "application/zip", ""]) assert.equal(previewKind(type), null, type);
+});

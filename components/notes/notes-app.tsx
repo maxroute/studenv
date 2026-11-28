@@ -614,7 +614,7 @@ function HistoryPanel({
               <li key={revision.id}>
                 <div>
                   <div className="notes-history-title">{revision.title || "Untitled"}</div>
-                  <div className="notes-muted">{REASON_LABELS[revision.reason] ?? revision.reason} · {new Date(revision.createdAt).toLocaleString()}</div>
+                  <div className="notes-muted">{REASON_LABELS[revision.reason] ?? revision.reason} · {new Date(revision.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", hour12: true })}</div>
                 </div>
                 <button
                   type="button"

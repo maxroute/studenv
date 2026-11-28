@@ -584,6 +584,8 @@ model StudyGroupMember {
   userId        String
   role          StudyGroupMemberRole @default(member)
   joinedAt      DateTime             @default(now())
+  /// Messages after this are unread for this member.
+  lastReadAt    DateTime             @default(now())
 
   group         StudyGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)

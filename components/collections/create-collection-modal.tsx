@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Modal } from "@/components/ui/modal";
 import type { ItemRecord } from "@/types";
@@ -34,6 +34,14 @@ export function CreateCollectionModal({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [titleError, setTitleError] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // The modal stays mounted while closed, so autoFocus would grab focus as soon as
+  // the Library opened and, on phones, pop up the keyboard. Focus only on open,
+  // and only with a mouse: on touch the keyboard waits until the field is tapped.
+  useEffect(() => {
+    if (open && window.matchMedia("(pointer: fine)").matches) titleRef.current?.focus({ preventScroll: true });
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -121,7 +129,7 @@ export function CreateCollectionModal({
       <div className="field">
         <label>Collection Name *</label>
         <input
-          autoFocus
+          ref={titleRef}
           className={titleError ? "err" : ""}
           placeholder="Reading sprint, Marvel lore, Research stack..."
           value={title}

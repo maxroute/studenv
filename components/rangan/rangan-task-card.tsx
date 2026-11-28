@@ -13,7 +13,7 @@ const PLANNER_PATH = "/dashboard/planner";
 /** "11:59 pm" in the reader's own style; the task keeps "23:59". */
 function timeLabel(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
-  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, { hour: "numeric", hour12: true, minute: "2-digit" });
 }
 
 function whenLabel(task: RanganTaskDraft) {

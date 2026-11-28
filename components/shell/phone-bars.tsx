@@ -10,6 +10,7 @@ import { useRanganStore } from "@/hooks/use-rangan-store";
 import { hidesPhoneBars, shellPlace, type ShellPlace } from "@/lib/client/shell-nav";
 import { AccountMenu, type ShellUser } from "./account-menu";
 import { FocusClock } from "./focus-clock";
+import { GroupsBadge } from "./groups-badge";
 import { NewMenu } from "./new-menu";
 import { useShellStore } from "./shell-store";
 import type { ShellNavigate } from "./app-sidebar";
@@ -57,6 +58,7 @@ export function PhoneTabBar({ onNavigate }: { onNavigate?: ShellNavigate }) {
       >
         <Icon size={20} aria-hidden="true" />
         <span>{label}</span>
+        {key === "groups" ? <GroupsBadge /> : null}
       </Link>
     );
   };

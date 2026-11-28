@@ -75,7 +75,7 @@ export function mergeUsage(current: RanganUsageSummary | null, incoming: RanganU
 export function resetLabel(resetAt: string, options: { locale?: string; timeZone?: string } = {}): string {
   const time = Date.parse(resetAt);
   if (Number.isNaN(time)) return "";
-  return new Intl.DateTimeFormat(options.locale ?? undefined, { hour: "numeric", minute: "2-digit", timeZone: options.timeZone }).format(new Date(time)).toLowerCase();
+  return new Intl.DateTimeFormat(options.locale ?? undefined, { hour: "numeric", hour12: true, minute: "2-digit", timeZone: options.timeZone }).format(new Date(time)).toLowerCase();
 }
 
 export type SpendDeps = {

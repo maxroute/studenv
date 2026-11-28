@@ -7,6 +7,8 @@
 // that happens to share a word with the previous question. These messages get
 // a short reply straight away, and cost no daily question.
 
+import { mainScript } from "@/lib/rangan/request";
+
 export type SmallTalk = "greeting" | "thanks" | "identity" | "wellbeing" | "goodbye" | "ack";
 
 const clean = (message: string) =>
@@ -48,4 +50,26 @@ const REPLIES: Record<SmallTalk, string> = {
 export function smallTalkReply(kind: SmallTalk, message: string): string {
   if (kind === "greeting" && /\bgood night\b/.test(clean(message))) return REPLIES.goodbye;
   return REPLIES[kind];
+}
+
+const WHAT_ABOUT: Record<"page" | "board", Record<"en" | "bn" | "hi", string>> = {
+  page: {
+    en: 'Sure! What should the page be about? Tell me the topic, for example "a page on photosynthesis".',
+    bn: "নিশ্চয়ই! কোন বিষয়ে নোট বানাব? বিষয়টা বলো, যেমন \"সালোকসংশ্লেষ নিয়ে একটা নোট\"।",
+    hi: "ज़रूर! नोट किस विषय पर बनाऊँ? विषय बताओ, जैसे \"प्रकाश संश्लेषण पर एक नोट\"।",
+  },
+  board: {
+    en: 'Sure! What should the mind map be about? Tell me the topic, for example "a mind map of the cell".',
+    bn: "নিশ্চয়ই! কোন বিষয়ে মাইন্ড ম্যাপ বানাব? বিষয়টা বলো, যেমন \"কোষের মাইন্ড ম্যাপ\"।",
+    hi: "ज़रूर! माइंड मैप किस विषय पर बनाऊँ? विषय बताओ, जैसे \"कोशिका का माइंड मैप\"।",
+  },
+};
+
+/**
+ * "Can you make a note?" with no topic: Rangan asks what it should be about,
+ * in the student's script, instead of guessing one from whatever the library has.
+ */
+export function whatAboutReply(kind: "page" | "board", message: string): string {
+  const script = mainScript(message);
+  return WHAT_ABOUT[kind][script === "Bengali" ? "bn" : script === "Devanagari" ? "hi" : "en"];
 }

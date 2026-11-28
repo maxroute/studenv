@@ -12,7 +12,7 @@ function whenLabel(iso: string) {
   const date = new Date(iso);
   const now = new Date();
   const days = Math.round((new Date(now.toDateString()).getTime() - new Date(date.toDateString()).getTime()) / 86_400_000);
-  if (days === 0) return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days === 0) return date.toLocaleTimeString(undefined, { hour: "numeric", hour12: true, minute: "2-digit" });
   if (days === 1) return "Yesterday";
   return date.toLocaleDateString(undefined, { weekday: days < 7 ? "short" : undefined, month: "short", day: "numeric" });
 }

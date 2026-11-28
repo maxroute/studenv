@@ -15,6 +15,7 @@ import { shellPlace, type ShellPlace } from "@/lib/client/shell-nav";
 import { AccountMenu, type ShellUser } from "./account-menu";
 import { FocusClock } from "./focus-clock";
 import { NewMenu } from "./new-menu";
+import { GroupsBadge } from "./groups-badge";
 import { useShellStore } from "./shell-store";
 import { useShellShortcuts } from "./use-shell-shortcuts";
 import "./shell.css";
@@ -121,7 +122,7 @@ export function AppSidebar({ user, onNavigate }: { user?: ShellUser; onNavigate?
       <nav className="shell-nav">
         {PLACES.map(({ key, label, href, icon: Icon }) => (
           <div key={key}>
-            {navLink(key, href, "shell-link", <><Icon size={17} aria-hidden="true" /><span>{label}</span></>)}
+            {navLink(key, href, "shell-link", <><Icon size={17} aria-hidden="true" /><span>{label}</span>{key === "groups" ? <GroupsBadge /> : null}</>)}
             {key === "planner"
               ? navLink("focus", "/dashboard/focus", "shell-link shell-sublink", <><Timer size={14} aria-hidden="true" /><span>Focus</span><FocusClock /></>)
               : null}

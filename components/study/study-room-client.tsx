@@ -170,6 +170,7 @@ function playTimerSound() {
 function formatTime(value: string | Date) {
   return new Intl.DateTimeFormat("en", {
     hour: "numeric",
+    hour12: true,
     minute: "2-digit",
     month: "short",
     day: "numeric",

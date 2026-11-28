@@ -74,14 +74,18 @@ test("the expected-words list is never taken for something said", async () => {
   assert.equal(cleanTranscript("Explain the fs module"), "Explain the fs module");
 });
 
-test("Talk listens in the chosen language, or in the script the student last typed", async () => {
-  const { listeningLanguage, scriptLanguage, speechLanguage, voiceHint, isTalkLanguage, VOICE_VOCABULARY: english } = await import("./voice");
+test("Talk listens in the chosen language; in Auto the server decides each turn", async () => {
+  const { judgedLanguage, transcriptChoice, listeningLanguage, scriptLanguage, speechLanguage, voiceHint, isTalkLanguage, VOICE_VOCABULARY: english } = await import("./voice");
   assert.equal(scriptLanguage("সালোকসংশ্লেষণ কী? CO2"), "bn");
   assert.equal(scriptLanguage("प्रकाश संश्लेषण क्या है"), "hi");
   assert.equal(scriptLanguage("bhai JWT kya hai"), null);
-  assert.equal(listeningLanguage("bn", []), "bn");
-  assert.equal(listeningLanguage("auto", ["What is JWT?", "মাইটোসিস কী?", "ok"]), "bn", "the latest Bengali or Hindi question decides");
-  assert.equal(listeningLanguage("auto", ["what is jwt"]), null, "English and Hinglish: the model guesses");
+  assert.equal(listeningLanguage("bn"), "bn");
+  assert.equal(listeningLanguage("auto"), null, "no lock-in from earlier turns: one misheard turn mustn't force the rest");
+  assert.equal(judgedLanguage("B"), "bn");
+  assert.equal(judgedLanguage(" A\n"), "hi");
+  assert.equal(judgedLanguage("The answer is B."), "bn");
+  assert.equal(judgedLanguage("not sure"), null);
+  assert.equal(transcriptChoice("झाल", "ঝাল"), "A: झाल\nB: ঝাল");
   assert.equal(voiceHint("en"), english);
   assert.match(voiceHint("bn"), /[ঀ-৿]/u);
   assert.ok(!voiceHint("bn").includes("LeetCode"), "no English list with Bengali speech");

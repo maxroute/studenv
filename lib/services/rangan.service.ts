@@ -17,7 +17,7 @@ import { snippet } from "@/lib/rangan/ranking";
 import { spendQuestion, usageSummary, utcDayStart } from "@/lib/rangan/usage";
 import { coveringResult, exploreInstruction, parseExploreReply } from "@/lib/rangan/discover";
 import { draftLinks, editInstruction, finishDraft, guessPageKind, newPageTopic, outline, PAGE_SYSTEM_PROMPT, pageInstruction, parseEditPlan, unlinkMissing, type PageChange, type PageKind } from "@/lib/rangan/page";
-import { smallTalk, smallTalkReply } from "@/lib/rangan/small-talk";
+import { smallTalk, smallTalkReply, whatAboutReply } from "@/lib/rangan/small-talk";
 import { looksLikePageEdit, pageToolsInstruction, parsePageOps, PAGE_TOOLS_SYSTEM_PROMPT, type PageOp, type PageToolBlock } from "@/lib/rangan/page-ops";
 import { asksForTask, clockOrUtc, parseTaskDrafts, TASK_SYSTEM_PROMPT, taskInstruction, type RanganTaskDraft } from "@/lib/rangan/task";
 import { aboutSubject, countMentioned, mentionsAny, parseReading, READING_SYSTEM_PROMPT, readingInstruction, type RequestReading } from "@/lib/rangan/request";
@@ -744,6 +744,13 @@ export function createRanganService(deps: RanganDeps) {
         ]);
         return { answer: withoutBeyondCitations(normalizeCitationMarks(result.text)).trim(), provider: result.provider, usage, citations: [], support: { checked: true, removed: 0 } };
       }
+      // "Can you make a note?" names no topic: ask for one instead of guessing it from the library,
+      // and give the question back, since nothing was made.
+      if (!input.focus && !input.page && !input.board && !pageTopic && reading && !reading.subject && (reading.actions.includes("page") || reading.actions.includes("board"))) {
+        await deps.refundQuestion(userId, utcDayStart(deps.now()));
+        const kind = reading.actions.includes("page") ? "page" : "board";
+        return { answer: whatAboutReply(kind, input.question), provider: "rangan", usage: await getUsage(userId), citations: [], support: { checked: true, removed: 0 } };
+      }
       const makesOther = Boolean(reading?.actions.includes("page") || reading?.actions.includes("board"));
       // With a page open, its tools come first: "bold this", "tick off revise stacks", "embed a video here".
       // With a board open, its tools come first too: "arrange these as a tree", "make the stickies blue".
@@ -764,7 +771,7 @@ export function createRanganService(deps: RanganDeps) {
       if (!editsPage && !editsBoard && !input.focus && ((reading?.actions.includes("task") && !makesOther) || asksForTask(input.question))) return draftTasks(input, usage);
       const query = input.focus
         ? `${input.focus.text.slice(0, 400)} ${input.question}`.slice(0, 500)
-        : (reading?.search ?? retrievalQuery(input.question, input.history));
+        : reading?.search || retrievalQuery(input.question, input.history);
       // A change to the open page or board already sends it whole; otherwise it is the first place to look.
       const editing = Boolean((reading?.actions.includes("edit") && (input.board || input.page)) || editsPage || editsBoard);
       const passages = await passagesFor(userId, query, reading, editing ? null : { question: input.question, page: input.page, board: input.board });

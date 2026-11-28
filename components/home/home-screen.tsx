@@ -1,5 +1,6 @@
 "use client";
 
+import { to12Hour } from "@/lib/utils/clock-time";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -65,7 +66,7 @@ function ago(value: string, now: Date) {
 }
 
 const taskDetail = (task: HomeTask) =>
-  [task.dueTime, task.estimatedDuration ? `${task.estimatedDuration} min` : null, task.category.charAt(0).toUpperCase() + task.category.slice(1)].filter(Boolean).join(" · ");
+  [task.dueTime ? to12Hour(task.dueTime) : null, task.estimatedDuration ? `${task.estimatedDuration} min` : null, task.category.charAt(0).toUpperCase() + task.category.slice(1)].filter(Boolean).join(" · ");
 
 /** Home answers: what needs attention, and what should I do now? The Planner holds the rest. */
 export function HomeScreen() {

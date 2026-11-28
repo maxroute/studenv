@@ -146,10 +146,9 @@ function savedTalkLanguage(): TalkLanguage {
   }
 }
 
-/** The language to listen in now: the choice, or the script of the student's recent questions. */
+/** The language to listen in now: the student's choice, or none in Auto (the server works it out). */
 function talkLanguageNow() {
-  const questions = useRanganStore.getState().turns.filter((turn) => turn.role === "user").slice(-4).map((turn) => turn.content);
-  return listeningLanguage(useVoiceStore.getState().language, questions);
+  return listeningLanguage(useVoiceStore.getState().language);
 }
 
 /** Voice mode: listen, send, read the reply, and again, until stopped or nobody speaks. */

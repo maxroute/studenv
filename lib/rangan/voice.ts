@@ -139,7 +139,7 @@ export function spokenDue(day: string, time: string | null, today: string, local
         : `on ${date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}`;
   if (!time) return when;
   const [hours, minutes] = time.split(":").map(Number);
-  const clock = new Date(Date.UTC(2000, 0, 1, hours, minutes)).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+  const clock = new Date(Date.UTC(2000, 0, 1, hours, minutes)).toLocaleTimeString(locale, { hour: "numeric", hour12: true, minute: "2-digit", timeZone: "UTC" });
   return `${when} by ${clock}`;
 }
 
@@ -204,17 +204,31 @@ export function scriptLanguage(text: string): "bn" | "hi" | null {
 }
 
 /**
- * The language to listen in: the student's choice, or with "auto", the
- * language of what they last typed in Bengali or Hindi script. Null lets the
- * speech model guess (English and Hinglish).
+ * The language to name when transcribing: the student's choice, or null in Auto
+ * so the server works it out each turn. Earlier turns don't decide it: a
+ * Bengali question once heard as Hindi then forced every later turn to Hindi.
  */
-export function listeningLanguage(choice: TalkLanguage, recentQuestions: readonly string[]): "en" | "bn" | "hi" | null {
-  if (choice !== "auto") return choice;
-  for (const question of [...recentQuestions].reverse()) {
-    const language = scriptLanguage(question);
-    if (language) return language;
-  }
-  return null;
+export function listeningLanguage(choice: TalkLanguage): "en" | "bn" | "hi" | null {
+  return choice === "auto" ? null : choice;
+}
+
+/**
+ * Whisper often hears Bengali as Hindi (and the reverse) when no language is
+ * named. In Auto, the recording is written both ways and a quick model picks
+ * the version that is a real sentence; this is that model's brief.
+ */
+export const TRANSCRIPT_JUDGE =
+  "A student spoke to a study app in Hindi or Bengali. A speech model wrote the same recording twice: A in Hindi (Devanagari) and B in Bengali (Bengali script). One is what was really said; the other forces the sounds into the wrong language and reads as broken or meaningless. Reply with only the letter A or B.";
+
+/** The judge's message for the two versions. */
+export function transcriptChoice(hindi: string, bengali: string): string {
+  return `A: ${hindi.slice(0, 600)}\nB: ${bengali.slice(0, 600)}`;
+}
+
+/** The language the judge picked from its reply, or null when it didn't clearly answer. */
+export function judgedLanguage(reply: string): "hi" | "bn" | null {
+  const answer = reply.trim().match(/(?:^|[^A-Za-z])([AB])[^A-Za-z]*$/);
+  return answer ? (answer[1] === "A" ? "hi" : "bn") : null;
 }
 
 /** The voice to read a reply in: Bengali or Hindi by its script, else the page's language. */

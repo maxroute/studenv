@@ -1,3 +1,4 @@
+import type { GroupInboxEntry } from "@/lib/study-groups/inbox";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -669,6 +670,72 @@ export async function listStudyGroups(userId: string) {
   });
 
   return groups.map((group) => toStudyGroupRecord(group, userId));
+}
+
+type InboxRow = {
+  groupId: string;
+  unreadCount: number;
+  id: string | null;
+  content: string | null;
+  authorId: string | null;
+  authorName: string | null;
+  createdAt: Date | null;
+  attachmentCount: number | null;
+  attachmentName: string | null;
+};
+
+/**
+ * Each of the student's groups with its newest message and unread count. One
+ * query, scoped by their memberships: it is polled, so it stays small. Study
+ * room status updates are stored as messages and are not counted or shown.
+ */
+export async function listStudyGroupInbox(userId: string): Promise<GroupInboxEntry[]> {
+  const rows = await prisma.$queryRaw<InboxRow[]>`
+    SELECT m."groupId",
+      (SELECT COUNT(*)::int FROM "StudyGroupMessage" x
+        WHERE x."groupId" = m."groupId" AND x."authorId" <> m."userId" AND x."createdAt" > m."lastReadAt"
+          AND (x."content" IS NULL OR NOT starts_with(x."content", ${ROOM_STATE_PREFIX}))) AS "unreadCount",
+      l."id", LEFT(l."content", 200) AS "content", l."authorId", l."createdAt",
+      COALESCE(u."name", u."username") AS "authorName",
+      f."attachmentCount", f."attachmentName"
+    FROM "StudyGroupMember" m
+    LEFT JOIN LATERAL (
+      SELECT y."id", y."content", y."authorId", y."createdAt" FROM "StudyGroupMessage" y
+      WHERE y."groupId" = m."groupId" AND (y."content" IS NULL OR NOT starts_with(y."content", ${ROOM_STATE_PREFIX}))
+      ORDER BY y."createdAt" DESC, y."id" DESC LIMIT 1
+    ) l ON TRUE
+    LEFT JOIN "User" u ON u."id" = l."authorId"
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS "attachmentCount", MIN(a."name") AS "attachmentName"
+      FROM "StudyGroupMessageAttachment" a WHERE a."messageId" = l."id"
+    ) f ON TRUE
+    WHERE m."userId" = ${userId}`;
+
+  return rows.map((row) => ({
+    groupId: row.groupId,
+    unreadCount: row.unreadCount,
+    lastMessage:
+      row.id && row.authorId && row.createdAt
+        ? {
+            id: row.id,
+            content: row.content,
+            authorId: row.authorId,
+            authorName: row.authorName,
+            createdAt: row.createdAt.toISOString(),
+            attachmentCount: row.attachmentCount ?? 0,
+            attachmentName: row.attachmentName,
+          }
+        : null,
+  }));
+}
+
+/** Records how far a member has read. It only moves forward. */
+export async function markStudyGroupRead(userId: string, groupId: string, upTo: Date) {
+  await assertMembership(userId, groupId);
+  await prisma.studyGroupMember.updateMany({
+    where: { groupId, userId, lastReadAt: { lt: upTo } },
+    data: { lastReadAt: upTo },
+  });
 }
 
 export async function getStudyGroup(userId: string, groupId: string) {

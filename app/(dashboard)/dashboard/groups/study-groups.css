@@ -6347,3 +6347,815 @@
     display: flex;
   }
 }
+
+/* A shared file, shown over the chat. Portaled to <body>, so no page scope. */
+.group-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: #0b0b0b;
+  color: #f2efe8;
+}
+
+.group-viewer-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #242424;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+}
+
+.group-viewer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-viewer-btn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: inherit;
+}
+
+.group-viewer-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.group-viewer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.group-viewer-body > img,
+.group-viewer-body > video {
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+}
+
+.group-viewer-body > audio {
+  width: min(100%, 480px);
+  margin: auto;
+}
+
+.group-viewer-body > pre {
+  width: min(100%, 760px);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.group-viewer-pdf {
+  width: min(100%, 900px);
+}
+
+.group-viewer-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-viewer-pages canvas {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+}
+
+.group-viewer-note {
+  margin: auto;
+  padding: 16px;
+  color: #a8a49b;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Group info tabs: Members, Files, Settings (owner). One shows at a time. */
+.study-groups-page .info-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 4px;
+}
+
+.study-groups-page .info-tab {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 6px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.study-groups-page .info-tab.active {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.study-groups-page .info-tab-count {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.study-groups-page .info-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--amber);
+}
+
+.study-groups-page .info-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.study-groups-page .group-hero-actions {
+  flex-direction: row;
+}
+
+/* globals.css makes every input full width, which stretched this checkbox. */
+.study-groups-page .settings-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #f5a623;
+}
+
+.study-groups-page.mobile-about-open .info-tab-panel .info-section,
+.study-groups-page.mobile-about-open .group-hero {
+  background: transparent;
+}
+
+/* The desktop info column is narrow: let each tab take the width its label needs. */
+@media (min-width: 768px) {
+  .study-groups-page .info-tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .study-groups-page .info-tab {
+    flex: 1 0 auto;
+    gap: 3px;
+    padding: 0 4px;
+    font-size: 11.5px;
+  }
+
+  .study-groups-page .info-tab-count {
+    font-size: 10px;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Chat layout (groups list + chat), header, messages and group info.
+   Kept last so it wins over the older rules above.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* The same heading face as Library, Planner and Home. */
+.study-groups-page .page-heading {
+  font-family: var(--font-fraunces), serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.study-groups-page .chat-head-who {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.study-groups-page .chat-head-who .chat-avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #3d2c0c, #2a1f0a);
+  color: #f5a623;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.study-groups-page .chat-head-who .chat-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.study-groups-page .chat-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.study-groups-page .chat-head-text .chat-title,
+.study-groups-page .chat-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study-groups-page .chat-head-text .chat-title {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.study-groups-page .chat-status {
+  color: #8d8980;
+  font-size: 12px;
+}
+
+.study-groups-page .chat-online {
+  color: #f5a623;
+}
+
+.study-groups-page .msg-day {
+  align-self: center;
+  margin: 6px 0;
+}
+
+.study-groups-page .msg-day span {
+  border-radius: 999px;
+  background: #22221f;
+  padding: 4px 12px;
+  color: #a8a49b;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* Nothing open yet. */
+.study-groups-page .chat-welcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.study-groups-page .chat-welcome-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: var(--amber-bg);
+  color: #f5a623;
+}
+
+.study-groups-page .chat-welcome-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.study-groups-page .chat-welcome h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-fraunces), serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.study-groups-page .chat-welcome > p {
+  margin: 8px 0 22px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.study-groups-page .chat-welcome-features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 380px);
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.study-groups-page .chat-welcome-features li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #262622;
+  border-radius: 14px;
+  background: #151513;
+  padding: 12px 14px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.study-groups-page .chat-welcome-features svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: #f5a623;
+}
+
+.study-groups-page .chat-welcome-features strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+/* ── Group info ── */
+.study-groups-page .members-panel .group-hero {
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.study-groups-page .group-hero-frame {
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.study-groups-page .group-hero-frame .group-hero-photo {
+  width: 104px;
+  height: 104px;
+  margin: 0;
+  background: linear-gradient(145deg, #3d2c0c, #2a1f0a);
+  color: #f5a623;
+  font-size: 32px;
+  overflow: hidden;
+}
+
+.study-groups-page .group-hero-frame .group-hero-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.study-groups-page .group-hero-camera {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 3px solid #111110;
+  border-radius: 999px;
+  background: #f5a623;
+  color: #171306;
+  cursor: pointer;
+}
+
+.study-groups-page .group-hero-camera svg {
+  width: 15px;
+  height: 15px;
+}
+
+.study-groups-page .group-hero-camera:disabled {
+  opacity: 0.55;
+}
+
+.study-groups-page .members-panel .group-hero-title {
+  font-family: var(--font-fraunces), serif;
+  font-size: 21px;
+}
+
+.study-groups-page .members-panel .group-hero-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8d8980;
+}
+
+.study-groups-page .group-hero-sub svg {
+  width: 12px;
+  height: 12px;
+}
+
+.study-groups-page .group-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.study-groups-page .group-quick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 62px;
+  border: 1px solid #282824;
+  border-radius: 14px;
+  background: #181816;
+  color: #f5a623;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.study-groups-page .group-quick:hover {
+  background: #1f1f1c;
+}
+
+.study-groups-page .group-quick svg {
+  width: 18px;
+  height: 18px;
+}
+
+.study-groups-page .group-hero-about {
+  width: 100%;
+  margin: 6px 0 0;
+  border: 1px solid #282824;
+  border-radius: 14px;
+  background: #151513;
+  padding: 12px 14px;
+  color: #c9c5bb;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.study-groups-page .members-panel .info-tabs {
+  gap: 0;
+  border: 0;
+  border-bottom: 1px solid #262622;
+  border-radius: 0;
+  background: #111110;
+  padding: 0;
+}
+
+.study-groups-page .members-panel .info-tab {
+  flex: 1;
+  min-height: 42px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.study-groups-page .members-panel .info-tab.active {
+  border-bottom: 2px solid #f5a623;
+  background: transparent;
+  color: #f5a623;
+}
+
+.study-groups-page .members-panel .member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  border-radius: 12px;
+  padding: 8px 4px;
+}
+
+.study-groups-page .members-panel .member-row .m-av {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.study-groups-page .members-panel .member-row .m-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.study-groups-page .members-panel .member-row .m-name {
+  font-size: 13.5px;
+}
+
+.study-groups-page .members-panel .m-role-status {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: #77736a;
+}
+
+.study-groups-page .members-panel .m-role-status.online {
+  color: #f5a623;
+}
+
+.study-groups-page .m-owner-tag {
+  border-radius: 999px;
+  background: var(--amber-bg);
+  padding: 3px 9px;
+  color: #f5a623;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.study-groups-page .members-panel .code-box {
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.study-groups-page .members-panel .settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.study-groups-page .settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #a8a49b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.study-groups-page .settings-field input,
+.study-groups-page .settings-field textarea,
+.study-groups-page .settings-field select {
+  width: 100%;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.study-groups-page .settings-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #a8a49b;
+  font-size: 12.5px;
+}
+
+@media (max-width: 767px) {
+  .study-groups-page .page-heading {
+    font-size: 24px;
+  }
+
+  .study-groups-page .settings-field input,
+  .study-groups-page .settings-field textarea,
+  .study-groups-page .settings-field select {
+    /* 16px stops iOS zooming the page when a field is tapped. */
+    font-size: 16px;
+  }
+
+  .study-groups-page .chat-welcome {
+    display: none;
+  }
+}
+
+/* Tablet and desktop: two columns, as in chat apps. Group info slides over the chat. */
+@media (min-width: 768px) {
+  .study-groups-page .groups-body {
+    position: relative;
+    grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  }
+
+  .study-groups-page .members-panel {
+    display: none;
+  }
+
+  .study-groups-page.mobile-about-open .members-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 35;
+    display: flex;
+    flex-direction: column;
+    width: min(380px, 100%);
+    border-left: 1px solid #262622;
+    background: #111110;
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .study-groups-page .members-panel .mobile-about-head {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #262622;
+    padding: 12px 16px;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .study-groups-page .members-panel .mobile-about-head button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    padding: 0;
+    color: #a8a49b;
+    cursor: pointer;
+  }
+
+  .study-groups-page .members-panel .mobile-about-head button:hover {
+    background: #1f1f1c;
+  }
+
+  .study-groups-page .members-panel .mobile-about-head svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .study-groups-page .members-panel .members-panel-scroll {
+    padding: 20px 18px 28px;
+    gap: 18px;
+  }
+
+  .study-groups-page .chat-head {
+    align-items: center;
+    gap: 14px;
+    min-height: 66px;
+    padding: 10px 18px;
+  }
+
+  .study-groups-page .chat-head .mobile-back-btn,
+  .study-groups-page .chat-head .mobile-more-btn {
+    display: none;
+  }
+
+  .study-groups-page .chat-head-right {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .study-groups-page .chat-head-right > .btn {
+    display: inline-flex;
+    min-height: 36px;
+    border-radius: 999px;
+  }
+
+  .study-groups-page .messages {
+    gap: 8px;
+    background-color: #121210;
+    background-image: radial-gradient(rgba(245, 166, 35, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .study-groups-page .messages .msg {
+    display: flex;
+    align-items: flex-end;
+    align-self: flex-start;
+    gap: 10px;
+    max-width: min(72%, 620px);
+    margin: 0;
+  }
+
+  .study-groups-page .messages .msg .avatar {
+    flex-shrink: 0;
+  }
+
+  .study-groups-page .messages .msg .msg-body {
+    min-width: 0;
+    border-radius: 16px 16px 16px 5px;
+    background: #20201d;
+    padding: 8px 13px 9px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .study-groups-page .messages .msg .msg-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .study-groups-page .messages .msg .msg-name {
+    color: #f5a623;
+    font-size: 12px;
+  }
+
+  .study-groups-page .messages .msg .msg-text {
+    color: #ece8de;
+    font-size: 13.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .study-groups-page .messages .msg .msg-time {
+    color: #8d8980;
+  }
+
+  .study-groups-page .messages .msg.mine {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+  }
+
+  .study-groups-page .messages .msg.mine .avatar,
+  .study-groups-page .messages .msg.mine .msg-name {
+    display: none;
+  }
+
+  .study-groups-page .messages .msg.mine .msg-body {
+    border-radius: 16px 16px 5px 16px;
+    background: #3b2c0f;
+  }
+
+  .study-groups-page .messages .msg.mine .msg-meta {
+    justify-content: flex-end;
+  }
+}
+
+/* Group rows: time on top, unread count under it, on every screen size.
+   (The column was hidden on desktop, so a count could never show there.) */
+.study-groups-page .group-item .group-right {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.study-groups-page .group-item .group-time {
+  color: #77736a;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.study-groups-page .group-item .group-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #f5a623;
+  padding: 0 6px;
+  color: #171306;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.study-groups-page .group-item.unread .group-time {
+  color: #f5a623;
+}
+
+.study-groups-page .group-item.unread .group-meta {
+  color: #d8d4ca;
+  font-weight: 600;
+}

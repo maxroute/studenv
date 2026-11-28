@@ -46,3 +46,18 @@ export function unsentMessages<P extends { clientMessageId: string }>(
   );
   return pending.filter((message) => !deliveredIds.has(message.clientMessageId));
 }
+
+/** True when two times fall on the same day on this device. */
+export function sameDay(first: string | Date, second: string | Date): boolean {
+  return new Date(first).toDateString() === new Date(second).toDateString();
+}
+
+/** The divider above a day's messages: "Today", "Yesterday" or the date. */
+export function dayLabel(value: string | Date, now: Date = new Date()): string {
+  const day = new Date(value);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(day, now)) return "Today";
+  if (sameDay(day, yesterday)) return "Yesterday";
+  return day.toLocaleDateString([], { day: "numeric", month: "long", ...(day.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
+}

@@ -331,3 +331,12 @@
 
 /* Focus zen mode: the whole frame steps aside for the timer. */
 html.focus-zen :is(.shell-sidebar-slot, .shell-phone-header, .shell-phone-bottom, .shell-planner-switch) { display: none; }
+
+/* Unread group messages, on the Groups button. */
+.shell-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 999px; background: var(--amber); padding: 0 5px; color: #171306; font-size: 10.5px; font-weight: 700; line-height: 1; }
+.shell-link .shell-badge { margin-left: auto; }
+.shell-tab { position: relative; }
+.shell-tab .shell-badge { position: absolute; top: 4px; left: calc(50% + 5px); }
+/* A narrow sidebar keeps the count as a small mark on the icon. */
+.shell-sidebar.collapsed .shell-link { position: relative; }
+.shell-sidebar.collapsed .shell-link > .shell-badge { position: absolute; top: 2px; right: 6px; width: auto; max-width: none; min-width: 16px; height: 16px; opacity: 1; font-size: 9.5px; }
