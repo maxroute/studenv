@@ -1,6 +1,6 @@
 "use client";
 
-import { audioType, createSpeechEndDetector, MAX_RECORDING_MS } from "@/lib/rangan/voice";
+import { audioType, createSpeechEndDetector, MAX_RECORDING_MS, speechLanguage } from "@/lib/rangan/voice";
 
 // The browser side of talking with Rangan: the microphone, a recording that
 // ends when the speaker stops, the words in it, and reading replies aloud.
@@ -179,10 +179,11 @@ export function record(stream: MediaStream, options: { untilPause: boolean; onLe
 }
 
 /** The words in a recording; "" when nothing was said. */
-export async function transcribeAudio(audio: Blob): Promise<string> {
+export async function transcribeAudio(audio: Blob, language: "en" | "bn" | "hi" | null = null): Promise<string> {
   const type = audioType(audio.type) ?? "audio/webm";
   const form = new FormData();
   form.append("audio", new Blob([audio], { type }), `voice.${type.split("/")[1]}`);
+  if (language) form.append("language", language);
   const response = await fetch("/api/rangan/transcribe", { method: "POST", body: form });
   const json = (await response.json().catch(() => null)) as { ok?: boolean; data?: { text?: unknown }; error?: unknown } | null;
   if (!response.ok || !json?.ok) {
@@ -200,9 +201,11 @@ export function speak(text: string): Promise<void> {
   stopSpeaking();
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    const language = document.documentElement.lang || navigator.language || "en-US";
+    // A Bengali or Hindi reply is read by a voice for that language, not the page's English one.
+    const language = speechLanguage(text, document.documentElement.lang || navigator.language || "en-US");
     utterance.lang = language;
-    const voice = window.speechSynthesis.getVoices().find((option) => option.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase()) && option.localService);
+    const voices = window.speechSynthesis.getVoices().filter((option) => option.lang.toLowerCase().replace("_", "-").startsWith(language.slice(0, 2).toLowerCase()));
+    const voice = voices.find((option) => option.localService) ?? voices[0];
     if (voice) utterance.voice = voice;
     utterance.rate = 1.05;
     // Some browsers never say a long or interrupted utterance ended: a generous
