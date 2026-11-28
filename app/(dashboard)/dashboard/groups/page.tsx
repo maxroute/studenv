@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  Fragment,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ import {
   ArrowLeft,
   Camera,
   Check,
+  Copy,
   Globe2,
   Lock,
   MessageCircle,
@@ -36,6 +38,8 @@ import {
 import { toast } from "react-hot-toast";
 import { useDashboardNavigation } from "../../dashboard-navigation";
 import { useStudyGroups, useStudyGroup } from "@/hooks/useStudyGroups";
+import { useGroupInbox, usePageVisible } from "@/hooks/useGroupInbox";
+import { inboxPreview, sortByActivity, unreadLabel } from "@/lib/study-groups/inbox";
 import { BUILT_IN_STUDY_ROOM_TEMPLATES } from "@/lib/utils/study-room-templates";
 import { apiFetcher } from "@/lib/client/fetcher";
 import {
@@ -43,6 +47,8 @@ import {
   isNearBottom,
   unsentMessages,
   type PendingMessageState,
+  dayLabel,
+  sameDay,
 } from "@/lib/study-groups/chat";
 import {
   GroupFileCard,
@@ -80,6 +86,8 @@ type PendingMessage = {
 
 /** The live socket pushes who is online; this snapshot is only a fallback. */
 const PRESENCE_REFRESH_MS = 15_000;
+// Each check is a database query on a free plan: often enough to feel live.
+const INBOX_REFRESH_MS = 6_000;
 
 function newClientMessageId() {
   const random =
@@ -93,15 +101,26 @@ const MAX_TOTAL_ATTACHMENT_SIZE = 150 * 1024 * 1024;
 const DEFAULT_STUDY_ROOM_TEMPLATE =
   BUILT_IN_STUDY_ROOM_TEMPLATES.find((template) => template.id === "focus") ??
   BUILT_IN_STUDY_ROOM_TEMPLATES[0];
-const GROUP_READ_MARKERS_STORAGE_KEY = "studenv.studyGroups.readMarkers.v1";
 
 function formatTime(value: string | Date) {
   return new Intl.DateTimeFormat("en", {
     hour: "numeric",
+    hour12: true,
     minute: "2-digit",
     month: "short",
     day: "numeric",
   }).format(new Date(value));
+}
+
+/** In the group list: the time for today's message, otherwise the day. */
+function formatListTime(value: string | Date) {
+  if (sameDay(value, new Date())) return formatClock(value);
+  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(new Date(value));
+}
+
+/** The time alone: the day is on the divider above the messages. */
+function formatClock(value: string | Date) {
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", hour12: true, minute: "2-digit" }).format(new Date(value));
 }
 
 function getMessagePreview(message: StudyGroupMessageRecord) {
@@ -118,48 +137,6 @@ function getMessagePreview(message: StudyGroupMessageRecord) {
   }
 
   return "No messages yet";
-}
-
-function getLatestVisibleMessageAt(group: StudyGroupRecord) {
-  return (
-    group.messages[group.messages.length - 1]?.createdAt ?? group.updatedAt
-  );
-}
-
-function loadGroupReadMarkers() {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    const rawMarkers = window.localStorage.getItem(
-      GROUP_READ_MARKERS_STORAGE_KEY,
-    );
-    const parsed = rawMarkers ? JSON.parse(rawMarkers) : {};
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] =>
-          typeof entry[0] === "string" && typeof entry[1] === "string",
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function saveGroupReadMarkers(markers: Record<string, string>) {
-  try {
-    window.localStorage.setItem(
-      GROUP_READ_MARKERS_STORAGE_KEY,
-      JSON.stringify(markers),
-    );
-  } catch {
-    // Ignore storage failures; the in-memory marker still updates this session.
-  }
 }
 
 function StudyGroupsContentSkeleton() {
@@ -246,9 +223,6 @@ export default function StudyGroupsPage() {
   const [mobileAboutOpen, setMobileAboutOpen] = useState(false);
   const [groupSearch, setGroupSearch] = useState("");
   const [groupPanelSearchOpen, setGroupPanelSearchOpen] = useState(false);
-  const [groupReadMarkers, setGroupReadMarkers] = useState<
-    Record<string, string>
-  >(() => loadGroupReadMarkers());
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [savingPhoto, setSavingPhoto] = useState(false);
   // Group info shows one tab at a time, so a long member list doesn't push files and settings away.
@@ -260,11 +234,10 @@ export default function StudyGroupsPage() {
   const scrolledGroupIdRef = useRef<string | null>(null);
 
   const listGroup = useMemo(
-    () =>
-      groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null,
+    () => groups.find((group) => group.id === selectedGroupId) ?? null,
     [groups, selectedGroupId],
   );
-  const activeGroup = activeGroupDetails || listGroup;
+  const activeGroup = selectedGroupId ? activeGroupDetails || listGroup : null;
   // Settings is the owner's tab; anyone else falls back to the member list.
   const shownTab = infoTab === "settings" && !activeGroup?.canManage ? "members" : infoTab;
   const {
@@ -277,7 +250,10 @@ export default function StudyGroupsPage() {
     apiFetcher,
     { revalidateOnFocus: false, dedupingInterval: 10_000 },
   );
-  const filteredGroups = useMemo(() => {
+  const { inbox, markRead, refreshInbox } = useGroupInbox(INBOX_REFRESH_MS);
+  const inboxById = useMemo(() => new Map((inbox ?? []).map((entry) => [entry.groupId, entry])), [inbox]);
+  const pageVisible = usePageVisible();
+  const matchingGroups = useMemo(() => {
     const query = groupSearch.trim().toLowerCase();
     if (!query) {
       return groups;
@@ -292,6 +268,7 @@ export default function StudyGroupsPage() {
       ].some((value) => value?.toLowerCase().includes(query));
     });
   }, [groups, groupSearch]);
+  const filteredGroups = useMemo(() => sortByActivity(matchingGroups, inboxById), [matchingGroups, inboxById]);
   const activeMemberIds = useMemo(() => {
     if (!activeGroup) {
       return new Set<string>();
@@ -304,35 +281,6 @@ export default function StudyGroupsPage() {
     return memberIds;
   }, [activeGroup, activeUserIds]);
 
-  // Auto-select the first group when groups are loaded and nothing is selected.
-  useEffect(() => {
-    if (!selectedGroupId && groups.length > 0) {
-      setSelectedGroupId(groups[0]?.id ?? null);
-    }
-  }, [groups, selectedGroupId]);
-
-  useEffect(() => {
-    if (!selectedGroupId) {
-      return;
-    }
-
-    const selectedGroup = groups.find((group) => group.id === selectedGroupId);
-    if (!selectedGroup) {
-      return;
-    }
-
-    setGroupReadMarkers((current) => {
-      const nextReadAt = new Date(
-        getLatestVisibleMessageAt(selectedGroup),
-      ).toISOString();
-      if (current[selectedGroupId] === nextReadAt) {
-        return current;
-      }
-      const next = { ...current, [selectedGroupId]: nextReadAt };
-      saveGroupReadMarkers(next);
-      return next;
-    });
-  }, [groups, selectedGroupId]);
 
   useEffect(() => {
     if (!activeGroup?.id) {
@@ -342,13 +290,16 @@ export default function StudyGroupsPage() {
       return;
     }
 
+    // Held for the socket and timer callbacks below, which run later.
+    const { id: groupId, currentUserId } = activeGroup;
+
     let cancelled = false;
     let socket: Socket | null = null;
 
     async function refreshPresenceSnapshot() {
       try {
         const payload = await readJson<GroupPresencePayload>(
-          await fetch(`/api/study-groups/${activeGroup.id}/presence`, {
+          await fetch(`/api/study-groups/${groupId}/presence`, {
             cache: "no-store",
           }),
         );
@@ -367,7 +318,7 @@ export default function StudyGroupsPage() {
     async function connectSocket() {
       try {
         const payload = await readJson<{ token: string }>(
-          await fetch(`/api/study-groups/${activeGroup.id}/socket-token`, {
+          await fetch(`/api/study-groups/${groupId}/socket-token`, {
             cache: "no-store",
           }),
         );
@@ -385,10 +336,10 @@ export default function StudyGroupsPage() {
 
         socket.on("connect", () => {
           setActiveUserIds((current) => {
-            if (current.includes(activeGroup.currentUserId)) {
+            if (current.includes(currentUserId)) {
               return current;
             }
-            return [...current, activeGroup.currentUserId];
+            return [...current, currentUserId];
           });
           void refreshPresenceSnapshot();
         });
@@ -401,10 +352,10 @@ export default function StudyGroupsPage() {
                 (participant) => participant.userId,
               );
               if (
-                !nextUserIds.includes(activeGroup.currentUserId) &&
-                current.includes(activeGroup.currentUserId)
+                !nextUserIds.includes(currentUserId) &&
+                current.includes(currentUserId)
               ) {
-                nextUserIds.push(activeGroup.currentUserId);
+                nextUserIds.push(currentUserId);
               }
               return nextUserIds;
             });
@@ -441,7 +392,7 @@ export default function StudyGroupsPage() {
               { revalidate: false },
             );
 
-            if (event.groupId === activeGroup?.id) {
+            if (event.groupId === groupId) {
               void mutateActiveGroup(
                 (current) => {
                   if (!current) {
@@ -471,7 +422,7 @@ export default function StudyGroupsPage() {
         socket.on("group:update", (event: { groupId: string }) => {
           void refreshGroup(event.groupId)
             .then((updatedGroup) => {
-              if (event.groupId === activeGroup?.id) {
+              if (event.groupId === groupId) {
                 void mutateActiveGroup(updatedGroup, { revalidate: false });
               }
             })
@@ -923,6 +874,41 @@ export default function StudyGroupsPage() {
       (member) => member.userId === activeGroup.currentUserId,
     ) ?? null;
 
+  // A phone shows the list or the chat; wider screens show the chat beside the list.
+  const chatOnScreen =
+    Boolean(selectedGroupId) &&
+    pageVisible &&
+    (mobileChatOpen || (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches));
+  const openEntry = selectedGroupId ? inboxById.get(selectedGroupId) : undefined;
+  const openLatestAt = openEntry?.lastMessage?.createdAt;
+  const openUnread = openEntry?.unreadCount ?? 0;
+
+  // Reading a chat clears its count, including messages that arrive while it is open.
+  useEffect(() => {
+    if (chatOnScreen && selectedGroupId && openUnread > 0 && openLatestAt) {
+      void markRead(selectedGroupId, openLatestAt);
+    }
+  }, [chatOnScreen, selectedGroupId, openUnread, openLatestAt, markRead]);
+
+  // The inbox saw a message the open chat doesn't have yet: fetch the chat again.
+  // Asked once per message, so a mismatch can't loop.
+  const fetchedForRef = useRef<string | null>(null);
+  const newestId = openEntry?.lastMessage?.id ?? null;
+  const missingNewest = Boolean(activeGroupDetails && newestId && !activeGroupDetails.messages.some((message) => message.id === newestId));
+  const newestHasFiles = (openEntry?.lastMessage?.attachmentCount ?? 0) > 0;
+  useEffect(() => {
+    if (!missingNewest || !newestId || fetchedForRef.current === newestId) return;
+    fetchedForRef.current = newestId;
+    void mutateActiveGroup();
+    if (newestHasFiles && selectedGroupId) void mutateSWR(`/api/study-groups/${selectedGroupId}/files`);
+  }, [missingNewest, newestId, newestHasFiles, selectedGroupId, mutateActiveGroup]);
+
+  // A group the list doesn't have yet (a request was approved): load the list again.
+  const unknownGroup = Boolean(!loading && inbox?.some((entry) => !groups.some((group) => group.id === entry.groupId)));
+  useEffect(() => {
+    if (unknownGroup) void mutateGroups();
+  }, [unknownGroup, mutateGroups]);
+
   const scrollToLatest = useCallback(() => {
     const list = messagesRef.current;
     if (list) {
@@ -1161,40 +1147,30 @@ export default function StudyGroupsPage() {
 
             {filteredGroups.map((group) => {
               const isActive = activeGroup?.id === group.id;
+              const entry = inboxById.get(group.id);
               const lastMessage = group.messages[group.messages.length - 1];
-              const readMarkerTime = groupReadMarkers[group.id]
-                ? new Date(groupReadMarkers[group.id]).getTime()
-                : 0;
-              const unreadCount = group.messages.filter(
-                (message) =>
-                  message.authorId !== group.currentUserId &&
-                  new Date(message.createdAt).getTime() > readMarkerTime,
-              ).length;
-              const showUnreadBadge = unreadCount > 0;
+              const latest = entry?.lastMessage;
+              const preview = latest
+                ? inboxPreview(latest)
+                : lastMessage
+                  ? getMessagePreview(lastMessage)
+                  : group.description || "No messages yet";
+              const latestAt = latest?.createdAt ?? lastMessage?.createdAt;
+              // The chat being read never shows a count.
+              const unreadCount = isActive && chatOnScreen ? 0 : (entry?.unreadCount ?? 0);
 
               return (
                 <div
                   key={group.id}
                   onClick={() => {
                     setSelectedGroupId(group.id);
-                    setGroupReadMarkers((current) => {
-                      const nextReadAt = new Date(
-                        getLatestVisibleMessageAt(group),
-                      ).toISOString();
-                      if (current[group.id] === nextReadAt) {
-                        return current;
-                      }
-                      const next = { ...current, [group.id]: nextReadAt };
-                      saveGroupReadMarkers(next);
-                      return next;
-                    });
                     setMobileChatOpen(true);
                     setCreateOpen(false);
                     setJoinOpen(false);
                     setMobileGroupMenuOpen(false);
                     setMobileAboutOpen(false);
                   }}
-                  className={`group-item ${isActive ? "active" : ""}`}
+                  className={`group-item ${isActive ? "active" : ""} ${unreadCount > 0 ? "unread" : ""}`}
                 >
                   <PhotoBadge
                     src={group.photoUrl}
@@ -1205,18 +1181,16 @@ export default function StudyGroupsPage() {
                   </PhotoBadge>
                   <div className="group-copy">
                     <div className="group-name">{group.title}</div>
-                    <div className="group-meta">
-                      {lastMessage
-                        ? getMessagePreview(lastMessage)
-                        : group.description || "No messages yet"}
-                    </div>
+                    <div className="group-meta">{preview}</div>
                   </div>
                   <div className="group-right">
                     <span className="group-time">
-                      {lastMessage ? formatTime(lastMessage.createdAt) : "Now"}
+                      {latestAt ? formatListTime(latestAt) : ""}
                     </span>
-                    {showUnreadBadge ? (
-                      <span className="group-badge">{unreadCount}</span>
+                    {unreadCount > 0 ? (
+                      <span className="group-badge" aria-label={`${unreadCount} unread messages`}>
+                        {unreadLabel(unreadCount)}
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -1249,51 +1223,33 @@ export default function StudyGroupsPage() {
                 </button>
                 <button
                   type="button"
-                  className="chat-head-info"
+                  className="chat-head-who"
                   onClick={() => {
                     setMobileAboutOpen(true);
                     setMobileGroupMenuOpen(false);
                   }}
-                  aria-label={`${activeGroup.title}: members and files`}
+                  aria-label={`${activeGroup.title}: group info`}
                 >
                   <PhotoBadge
                     src={activeGroup.photoUrl}
                     name={activeGroup.title}
                     className="chat-avatar"
-                  >
-                    <span className="online-ring" />
-                  </PhotoBadge>
-                </button>
-                <div className="chat-head-left">
-                  <button
-                    type="button"
-                    className="chat-title chat-head-info"
-                    onClick={() => {
-                      setMobileAboutOpen(true);
-                      setMobileGroupMenuOpen(false);
-                    }}
-                  >
-                    {activeGroup.title}
-                  </button>
-                  <div className="chat-pills">
-                    <span className="pill">
-                      {activeGroup.privacy === "public" ? <Globe2 /> : <Lock />}
-                      {activeGroup.privacy === "public" ? "Public" : "Private"}
-                    </span>
-                    <span className="pill">
+                  />
+                  <span className="chat-head-text">
+                    <span className="chat-title">{activeGroup.title}</span>
+                    <span className="chat-status">
                       {activeGroup.memberCount}{" "}
-                      {activeGroup.memberLimit
-                        ? `/ ${activeGroup.memberLimit}`
-                        : ""}{" "}
-                      members
+                      {activeGroup.memberCount === 1 ? "member" : "members"}
+                      {activeMemberIds.size > 0 ? (
+                        <>
+                          {" · "}
+                          <span className="chat-online">{activeMemberIds.size} online</span>
+                        </>
+                      ) : null}
                     </span>
-                    <span className="pill">{activeMemberIds.size} active</span>
-                  </div>
-                </div>
-                <div className="chat-head-right">
-                  <span className="pill amber">
-                    Code {activeGroup.inviteCode}
                   </span>
+                </button>
+                <div className="chat-head-right">
                   <Link
                     href={`/dashboard/groups/${activeGroup.id}/room`}
                     prefetch
@@ -1349,27 +1305,6 @@ export default function StudyGroupsPage() {
                 </div>
               </div>
 
-              <div className="mobile-code-strip">
-                <span>Invite code</span>
-                <strong>{activeGroup.inviteCode}</strong>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard?.writeText(
-                        activeGroup.inviteCode,
-                      );
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    } catch (err) {
-                      console.error("Copy failed:", err);
-                    }
-                  }}
-                >
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
-
               <div
                 className="messages"
                 ref={messagesRef}
@@ -1384,9 +1319,12 @@ export default function StudyGroupsPage() {
                   </div>
                 ) : null}
 
-                {messages.map((message) => (
+                {messages.map((message, index) => (
+                  <Fragment key={message.id}>
+                  {index === 0 || !sameDay(messages[index - 1]!.createdAt, message.createdAt) ? (
+                    <div className="msg-day"><span>{dayLabel(message.createdAt)}</span></div>
+                  ) : null}
                   <div
-                    key={message.id}
                     className={`msg ${message.authorId === activeGroup.currentUserId ? "mine" : "theirs"}`}
                   >
                     <PhotoBadge
@@ -1403,7 +1341,7 @@ export default function StudyGroupsPage() {
                             "Study member"}
                         </span>
                         <span className="msg-time">
-                          {formatTime(message.createdAt)}
+                          {formatClock(message.createdAt)}
                         </span>
                       </div>
                       {message.content ? (
@@ -1415,6 +1353,7 @@ export default function StudyGroupsPage() {
                       ))}
                     </div>
                   </div>
+                  </Fragment>
                 ))}
 
                 {visiblePending.map((pending) => (
@@ -1556,15 +1495,30 @@ export default function StudyGroupsPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-              <MessageCircle className="w-10 h-10 text-[var(--ink-3)] mb-4" />
-              <div className="text-[24px] font-[600] text-[var(--ink)] mb-2">
-                No active study group
+            <div className="chat-welcome">
+              <div className="chat-welcome-icon">
+                <MessageCircle aria-hidden="true" />
               </div>
-              <div className="text-[13px] text-[var(--ink-2)]">
-                Create a group or join one with an invite code to start the
-                shared chat.
-              </div>
+              <h2>{groups.length > 0 ? "Pick a group to start chatting" : "Study with your friends"}</h2>
+              <p>
+                {groups.length > 0
+                  ? "Choose a group on the left to see its messages and files."
+                  : "Use New Group or Join With Code above to get started."}
+              </p>
+              <ul className="chat-welcome-features">
+                <li>
+                  <MessageCircle aria-hidden="true" />
+                  <span><strong>Chat</strong>Ask questions and answer each other.</span>
+                </li>
+                <li>
+                  <Paperclip aria-hidden="true" />
+                  <span><strong>Share files</strong>PDFs, pictures and notes open right here.</span>
+                </li>
+                <li>
+                  <Play aria-hidden="true" />
+                  <span><strong>Study Room</strong>Call, share a focus timer and work together.</span>
+                </li>
+              </ul>
             </div>
           )}
         </div>
@@ -1573,8 +1527,8 @@ export default function StudyGroupsPage() {
         <div className="members-panel">
           <div className="mobile-about-head">
             <span>Group info</span>
-            <button type="button" onClick={() => setMobileAboutOpen(false)}>
-              <X /> Close
+            <button type="button" onClick={() => setMobileAboutOpen(false)} aria-label="Close group info">
+              <X />
             </button>
           </div>
           <div className="members-panel-scroll">
@@ -1583,16 +1537,79 @@ export default function StudyGroupsPage() {
             ) : activeGroup ? (
               <>
                 <div className="info-section group-hero">
-                  <PhotoBadge
-                    src={activeGroup.photoUrl}
-                    name={activeGroup.title}
-                    className="group-hero-photo"
-                  />
+                  <div className="group-hero-frame">
+                    <PhotoBadge
+                      src={activeGroup.photoUrl}
+                      name={activeGroup.title}
+                      className="group-hero-photo"
+                    />
+                    {activeGroup.canManage ? (
+                      <button
+                        type="button"
+                        className="group-hero-camera"
+                        disabled={savingPhoto}
+                        onClick={() => photoInputRef.current?.click()}
+                        aria-label={activeGroup.photoUrl ? "Change group photo" : "Add group photo"}
+                        title={activeGroup.photoUrl ? "Change group photo" : "Add group photo"}
+                      >
+                        <Camera aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
+                  {activeGroup.canManage ? (
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleGroupPhotoChange}
+                    />
+                  ) : null}
                   <div className="group-hero-title">{activeGroup.title}</div>
                   <div className="group-hero-sub">
-                    {activeGroup.memberCount}{" "}
-                    {activeGroup.memberCount === 1 ? "member" : "members"}
+                    {savingPhoto ? (
+                      "Saving photo…"
+                    ) : (
+                      <>
+                        {activeGroup.privacy === "public" ? <Globe2 aria-hidden="true" /> : <Lock aria-hidden="true" />}
+                        {activeGroup.privacy === "public" ? "Public" : "Private"} group · {activeGroup.memberCount}
+                        {activeGroup.memberLimit ? ` of ${activeGroup.memberLimit}` : ""}{" "}
+                        {activeGroup.memberCount === 1 && !activeGroup.memberLimit ? "member" : "members"}
+                      </>
+                    )}
                   </div>
+                  <div className="group-quick-actions">
+                    <Link
+                      href={`/dashboard/groups/${activeGroup.id}/room`}
+                      prefetch
+                      onClick={(event) =>
+                        handleOpenStudyRoom(event, `/dashboard/groups/${activeGroup.id}/room`)
+                      }
+                      className="group-quick"
+                    >
+                      <Play aria-hidden="true" />
+                      Study Room
+                    </Link>
+                    <button
+                      type="button"
+                      className="group-quick"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(activeGroup.inviteCode);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1500);
+                        } catch {
+                          toast.error(`Copy it by hand: ${activeGroup.inviteCode}`);
+                        }
+                      }}
+                    >
+                      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                      {copied ? "Copied" : "Copy invite"}
+                    </button>
+                  </div>
+                  {activeGroup.description ? (
+                    <p className="group-hero-about">{activeGroup.description}</p>
+                  ) : null}
                 </div>
 
                 <div className="info-tabs" role="tablist" aria-label="Group info">
@@ -1626,30 +1643,14 @@ export default function StudyGroupsPage() {
                 {shownTab === "members" ? (
                   <>
                 <div className="info-section">
-                  <div className="info-label">Invite Code</div>
+                  <div className="info-label">Invite code</div>
                   <div className="code-box">
                     <span className="code-val">{activeGroup.inviteCode}</span>
-                    <button
-                      className="copy-btn"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard?.writeText(
-                            activeGroup.inviteCode,
-                          );
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1500);
-                        } catch (err) {
-                          console.error("Copy failed:", err);
-                        }
-                      }}
-                    >
-                      {copied ? "Copied!" : "Copy"}
-                    </button>
                   </div>
                   <p className="code-hint">
                     {activeGroup.privacy === "public"
-                      ? "Share so someone can join instantly."
-                      : "Share so someone can request to join."}
+                      ? "Anyone with this code can join straight away."
+                      : "People with this code can ask to join."}
                   </p>
                 </div>
 
@@ -1736,13 +1737,11 @@ export default function StudyGroupsPage() {
                               ? " (you)"
                               : ""}
                           </div>
-                          <div className="m-role m-role-status">
-                            {member.role === "owner" ? "Owner" : "Member"}
-                            <span
-                              className={`member-status-dot ${isActive ? "active" : "offline"}`}
-                            />
+                          <div className={`m-role m-role-status ${isActive ? "online" : ""}`}>
+                            {isActive ? "online" : "offline"}
                           </div>
                         </div>
+                        {member.role === "owner" ? <span className="m-owner-tag">Owner</span> : null}
                         {activeGroup.canManage && member.role !== "owner" ? (
                           <button
                             type="button"
@@ -1780,98 +1779,64 @@ export default function StudyGroupsPage() {
 
                 {shownTab === "settings" ? (
                   <>
-                    <div className="info-section group-hero-actions">
-                      <button
-                        type="button"
-                        className="btn"
-                        disabled={savingPhoto}
-                        onClick={() => photoInputRef.current?.click()}
-                      >
-                        <Camera />
-                        {savingPhoto
-                          ? "Saving…"
-                          : activeGroup.photoUrl
-                            ? "Change photo"
-                            : "Add group photo"}
-                      </button>
-                      {activeGroup.photoUrl ? (
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={savingPhoto}
-                          onClick={() => void handleRemoveGroupPhoto()}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={handleGroupPhotoChange}
-                      />
-                    </div>
-
+                {activeGroup.photoUrl ? (
+                  <button
+                    type="button"
+                    className="btn justify-center w-full"
+                    disabled={savingPhoto}
+                    onClick={() => void handleRemoveGroupPhoto()}
+                  >
+                    Remove group photo
+                  </button>
+                ) : null}
                 <div className="info-section">
                   <div className="info-label">Group details</div>
-                        <form
-                          onSubmit={handleUpdateGroup}
-                          className="settings-form"
-                        >
-                          <input
-                            value={editTitle}
-                            onChange={(event) =>
-                              setEditTitle(event.target.value)
-                            }
-                            placeholder="Group name"
-                          />
-                          <textarea
-                            value={editDescription}
-                            onChange={(event) =>
-                              setEditDescription(event.target.value)
-                            }
-                            rows={3}
-                            placeholder="Group description"
-                          />
-                          <div className="flex gap-2">
+                        <form onSubmit={handleUpdateGroup} className="settings-form">
+                          <label className="settings-field">
+                            <span>Group name</span>
+                            <input
+                              value={editTitle}
+                              onChange={(event) => setEditTitle(event.target.value)}
+                              placeholder="Group name"
+                            />
+                          </label>
+                          <label className="settings-field">
+                            <span>Description</span>
+                            <textarea
+                              value={editDescription}
+                              onChange={(event) => setEditDescription(event.target.value)}
+                              rows={3}
+                              placeholder="What is this group for?"
+                            />
+                          </label>
+                          <label className="settings-field">
+                            <span>Who can join</span>
                             <select
                               value={editPrivacy}
-                              onChange={(event) =>
-                                setEditPrivacy(
-                                  event.target.value as "public" | "private",
-                                )
-                              }
+                              onChange={(event) => setEditPrivacy(event.target.value as "public" | "private")}
                             >
-                              <option value="public">Public group</option>
-                              <option value="private">Private group</option>
+                              <option value="public">Public: anyone with the code</option>
+                              <option value="private">Private: you approve requests</option>
                             </select>
+                          </label>
+                          <label className="settings-field">
+                            <span>Member limit</span>
                             <input
                               value={editMemberLimit}
-                              onChange={(event) =>
-                                setEditMemberLimit(
-                                  event.target.value.replace(/[^\d]/g, ""),
-                                )
-                              }
-                              placeholder="Limit"
-                              className="w-[80px]"
+                              onChange={(event) => setEditMemberLimit(event.target.value.replace(/[^\d]/g, ""))}
+                              inputMode="numeric"
+                              placeholder="No limit"
                             />
-                          </div>
-                          <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)]">
+                          </label>
+                          <label className="settings-check">
                             <input
                               type="checkbox"
                               checked={refreshInviteCode}
-                              onChange={(event) =>
-                                setRefreshInviteCode(event.target.checked)
-                              }
+                              onChange={(event) => setRefreshInviteCode(event.target.checked)}
                             />
-                            Refresh invite code
+                            <span>Make a new invite code (the old one stops working)</span>
                           </label>
-                          <button
-                            type="submit"
-                            disabled={savingGroup}
-                            className="btn btn-primary justify-center w-full"
-                          >
+                          <button type="submit" disabled={savingGroup} className="btn btn-primary justify-center w-full">
                             {savingGroup ? "Saving..." : "Save changes"}
                           </button>
                         </form>
