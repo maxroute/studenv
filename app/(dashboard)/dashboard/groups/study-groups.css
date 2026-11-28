@@ -6347,3 +6347,197 @@
     display: flex;
   }
 }
+
+/* A shared file, shown over the chat. Portaled to <body>, so no page scope. */
+.group-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: #0b0b0b;
+  color: #f2efe8;
+}
+
+.group-viewer-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #242424;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+}
+
+.group-viewer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-viewer-btn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: inherit;
+}
+
+.group-viewer-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.group-viewer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.group-viewer-body > img,
+.group-viewer-body > video {
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+}
+
+.group-viewer-body > audio {
+  width: min(100%, 480px);
+  margin: auto;
+}
+
+.group-viewer-body > pre {
+  width: min(100%, 760px);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.group-viewer-pdf {
+  width: min(100%, 900px);
+}
+
+.group-viewer-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-viewer-pages canvas {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+}
+
+.group-viewer-note {
+  margin: auto;
+  padding: 16px;
+  color: #a8a49b;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Group info tabs: Members, Files, Settings (owner). One shows at a time. */
+.study-groups-page .info-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 4px;
+}
+
+.study-groups-page .info-tab {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 6px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.study-groups-page .info-tab.active {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.study-groups-page .info-tab-count {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.study-groups-page .info-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--amber);
+}
+
+.study-groups-page .info-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.study-groups-page .group-hero-actions {
+  flex-direction: row;
+}
+
+/* globals.css makes every input full width, which stretched this checkbox. */
+.study-groups-page .settings-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #f5a623;
+}
+
+.study-groups-page.mobile-about-open .info-tab-panel .info-section,
+.study-groups-page.mobile-about-open .group-hero {
+  background: transparent;
+}
+
+/* The desktop info column is narrow: let each tab take the width its label needs. */
+@media (min-width: 768px) {
+  .study-groups-page .info-tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .study-groups-page .info-tab {
+    flex: 1 0 auto;
+    gap: 3px;
+    padding: 0 4px;
+    font-size: 11.5px;
+  }
+
+  .study-groups-page .info-tab-count {
+    font-size: 10px;
+  }
+}

@@ -25,6 +25,18 @@ function isInlineType(mimeType: string) {
   );
 }
 
+export type PreviewKind = "image" | "video" | "audio" | "pdf" | "text";
+
+/** How the app can show a shared file itself, or null when it can only be downloaded. */
+export function previewKind(mimeType: string): PreviewKind | null {
+  const type = mimeType.trim().toLowerCase();
+  if (!isInlineType(type)) return null;
+  if (type === "application/pdf") return "pdf";
+  if (type === "text/plain") return "text";
+  const family = type.split("/")[0];
+  return family === "image" || family === "video" || family === "audio" ? family : null;
+}
+
 /** A file name safe for a header: no quotes, slashes or control characters. */
 function headerSafeName(name: string) {
   const cleaned = name

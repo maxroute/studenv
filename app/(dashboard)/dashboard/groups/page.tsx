@@ -30,7 +30,6 @@ import {
   Plus,
   Search,
   Send,
-  Settings,
   Ticket,
   X,
 } from "lucide-react";
@@ -228,7 +227,6 @@ export default function StudyGroupsPage() {
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [messageInput, setMessageInput] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [editingGroup, setEditingGroup] = useState(false);
   const [savingGroup, setSavingGroup] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -253,6 +251,8 @@ export default function StudyGroupsPage() {
   >(() => loadGroupReadMarkers());
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [savingPhoto, setSavingPhoto] = useState(false);
+  // Group info shows one tab at a time, so a long member list doesn't push files and settings away.
+  const [infoTab, setInfoTab] = useState<"members" | "files" | "settings">("members");
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   // Follow new messages while the reader is at the end of the chat.
@@ -265,6 +265,8 @@ export default function StudyGroupsPage() {
     [groups, selectedGroupId],
   );
   const activeGroup = activeGroupDetails || listGroup;
+  // Settings is the owner's tab; anyone else falls back to the member list.
+  const shownTab = infoTab === "settings" && !activeGroup?.canManage ? "members" : infoTab;
   const {
     data: sharedFiles,
     error: sharedFilesError,
@@ -500,11 +502,14 @@ export default function StudyGroupsPage() {
   }, [activeGroup?.id]);
 
   useEffect(() => {
+    setInfoTab("members");
+  }, [activeGroup?.id]);
+
+  useEffect(() => {
     if (!activeGroup) {
       setEditTitle("");
       setEditDescription("");
       setRefreshInviteCode(false);
-      setEditingGroup(false);
       return;
     }
 
@@ -515,7 +520,6 @@ export default function StudyGroupsPage() {
       activeGroup.memberLimit ? String(activeGroup.memberLimit) : "",
     );
     setRefreshInviteCode(false);
-    setEditingGroup(false);
     setMobileGroupMenuOpen(false);
     setMobileAboutOpen(false);
   }, [
@@ -837,7 +841,6 @@ export default function StudyGroupsPage() {
       void mutateActiveGroup(group, { revalidate: false });
       setSelectedGroupId(group.id);
       setRefreshInviteCode(false);
-      setEditingGroup(false);
       toast.success("Group updated.");
     } catch (error) {
       toast.error((error as Error).message);
@@ -1590,42 +1593,38 @@ export default function StudyGroupsPage() {
                     {activeGroup.memberCount}{" "}
                     {activeGroup.memberCount === 1 ? "member" : "members"}
                   </div>
-                  {activeGroup.canManage ? (
-                    <div className="group-hero-actions">
-                      <button
-                        type="button"
-                        className="btn"
-                        disabled={savingPhoto}
-                        onClick={() => photoInputRef.current?.click()}
-                      >
-                        <Camera />
-                        {savingPhoto
-                          ? "Saving…"
-                          : activeGroup.photoUrl
-                            ? "Change photo"
-                            : "Add group photo"}
-                      </button>
-                      {activeGroup.photoUrl ? (
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={savingPhoto}
-                          onClick={() => void handleRemoveGroupPhoto()}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={handleGroupPhotoChange}
-                      />
-                    </div>
-                  ) : null}
                 </div>
 
+                <div className="info-tabs" role="tablist" aria-label="Group info">
+                  {(
+                    [
+                      { id: "members", label: "Members", count: activeGroup.memberCount },
+                      { id: "files", label: "Files", count: sharedFiles?.length },
+                      ...(activeGroup.canManage ? [{ id: "settings", label: "Settings" }] : []),
+                    ] as Array<{ id: "members" | "files" | "settings"; label: string; count?: number }>
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      id={`group-tab-${tab.id}`}
+                      aria-selected={shownTab === tab.id}
+                      aria-controls="group-tab-panel"
+                      className={`info-tab ${shownTab === tab.id ? "active" : ""}`}
+                      onClick={() => setInfoTab(tab.id)}
+                    >
+                      {tab.label}
+                      {tab.count !== undefined ? <span className="info-tab-count">{tab.count}</span> : null}
+                      {tab.id === "members" && activeGroup.canManage && activeGroup.pendingJoinRequests.length > 0 ? (
+                        <span className="info-tab-dot" aria-label={`${activeGroup.pendingJoinRequestCount} pending requests`} />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="info-tab-panel" id="group-tab-panel" role="tabpanel" aria-labelledby={`group-tab-${shownTab}`}>
+                {shownTab === "members" ? (
+                  <>
                 <div className="info-section">
                   <div className="info-label">Invite Code</div>
                   <div className="code-box">
@@ -1760,33 +1759,65 @@ export default function StudyGroupsPage() {
                     );
                   })}
 
-                  {activeGroup.canManage ? (
-                    <>
-                      <button
-                        className="settings-row"
-                        onClick={() => {
-                          if (editingGroup) {
-                            setEditTitle(activeGroup.title);
-                            setEditDescription(activeGroup.description || "");
-                            setEditPrivacy(activeGroup.privacy);
-                            setEditMemberLimit(
-                              activeGroup.memberLimit
-                                ? String(activeGroup.memberLimit)
-                                : "",
-                            );
-                            setRefreshInviteCode(false);
-                          }
-                          setEditingGroup((current) => !current);
-                        }}
-                      >
-                        <Settings />{" "}
-                        {editingGroup ? "Close settings" : "Group settings"}
-                      </button>
+                </div>
+                  </>
+                ) : null}
 
-                      {editingGroup ? (
+                {shownTab === "files" ? (
+                <div className="info-section shared-files-section">
+                  <div className="info-label flex justify-between">
+                    <span>Shared files</span>
+                    {sharedFiles ? <span>{sharedFiles.length}</span> : null}
+                  </div>
+                  <SharedFilesList
+                    files={sharedFiles}
+                    loading={sharedFilesLoading}
+                    failed={Boolean(sharedFilesError)}
+                    onRetry={() => void mutateSharedFiles()}
+                  />
+                </div>
+                ) : null}
+
+                {shownTab === "settings" ? (
+                  <>
+                    <div className="info-section group-hero-actions">
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={savingPhoto}
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <Camera />
+                        {savingPhoto
+                          ? "Saving…"
+                          : activeGroup.photoUrl
+                            ? "Change photo"
+                            : "Add group photo"}
+                      </button>
+                      {activeGroup.photoUrl ? (
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={savingPhoto}
+                          onClick={() => void handleRemoveGroupPhoto()}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={handleGroupPhotoChange}
+                      />
+                    </div>
+
+                <div className="info-section">
+                  <div className="info-label">Group details</div>
                         <form
                           onSubmit={handleUpdateGroup}
-                          className="settings-form mt-2"
+                          className="settings-form"
                         >
                           <input
                             value={editTitle}
@@ -1844,22 +1875,9 @@ export default function StudyGroupsPage() {
                             {savingGroup ? "Saving..." : "Save changes"}
                           </button>
                         </form>
-                      ) : null}
-                    </>
-                  ) : null}
                 </div>
-
-                <div className="info-section shared-files-section">
-                  <div className="info-label flex justify-between">
-                    <span>Shared files</span>
-                    {sharedFiles ? <span>{sharedFiles.length}</span> : null}
-                  </div>
-                  <SharedFilesList
-                    files={sharedFiles}
-                    loading={sharedFilesLoading}
-                    failed={Boolean(sharedFilesError)}
-                    onRetry={() => void mutateSharedFiles()}
-                  />
+                  </>
+                ) : null}
                 </div>
               </>
             ) : (

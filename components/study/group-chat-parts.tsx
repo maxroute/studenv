@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Download, FileText, Film, ImageIcon, Music, Paperclip } from "lucide-react";
-import { groupFileDownloadUrl } from "@/lib/study-groups/file-delivery";
+import { GroupFileViewer } from "@/components/study/group-file-viewer";
+import { groupFileDownloadUrl, previewKind } from "@/lib/study-groups/file-delivery";
 import type { StudyGroupAttachmentRecord, StudyGroupFileRecord } from "@/types";
 
 export function initialsFor(name?: string | null, username?: string | null) {
@@ -83,8 +84,8 @@ function fileTypeLabel(mimeType: string, name: string) {
 }
 
 /**
- * A shared file. Tapping the card opens it (a PDF, picture or video opens in
- * the browser; other types download); the arrow always downloads.
+ * A shared file. Tapping the card shows it on top of the chat (PDF, picture,
+ * video, audio or text); other types download. The arrow always downloads.
  */
 export function GroupFileCard({
   file,
@@ -97,16 +98,23 @@ export function GroupFileCard({
   const meta = [fileTypeLabel(file.mimeType, name), formatFileSize(file.sizeBytes), detail]
     .filter(Boolean)
     .join(" · ");
+  const [viewing, setViewing] = useState(false);
+  const canPreview = previewKind(file.mimeType) !== null;
+  const link = canPreview
+    ? {
+        href: file.url,
+        onClick: (event: React.MouseEvent) => {
+          // A new tab is still there for whoever asks for it (Ctrl or middle click).
+          if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+          event.preventDefault();
+          setViewing(true);
+        },
+      }
+    : { href: groupFileDownloadUrl(file.url), download: name };
 
   return (
     <div className="file-card">
-      <a
-        href={file.url}
-        target="_blank"
-        rel="noopener"
-        className="file-open"
-        aria-label={`Open ${name}`}
-      >
+      <a {...link} className="file-open" aria-label={`${canPreview ? "Open" : "Download"} ${name}`}>
         <div className="file-icon">
           <FileKindIcon mimeType={file.mimeType} />
         </div>
@@ -116,14 +124,11 @@ export function GroupFileCard({
         </div>
       </a>
       <div className="file-btns">
-        <a
-          href={file.url}
-          target="_blank"
-          rel="noopener"
-          className="file-btn file-btn-open"
-        >
-          Open
-        </a>
+        {canPreview ? (
+          <a {...link} className="file-btn file-btn-open">
+            Open
+          </a>
+        ) : null}
         <a
           href={groupFileDownloadUrl(file.url)}
           download={name}
@@ -134,6 +139,9 @@ export function GroupFileCard({
           <Download aria-hidden="true" />
         </a>
       </div>
+      {viewing ? (
+        <GroupFileViewer file={{ url: file.url, name, mimeType: file.mimeType }} onClose={() => setViewing(false)} />
+      ) : null}
     </div>
   );
 }
