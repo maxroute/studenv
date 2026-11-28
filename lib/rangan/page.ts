@@ -13,6 +13,7 @@
 import { markdownToNote } from "@/lib/notes/markdown-to-note";
 import type { NoteNode } from "@/lib/notes/note-format";
 import { extractJsonObject } from "@/lib/study/plan";
+import { mainScript } from "@/lib/rangan/request";
 import type { OpenTarget } from "@/lib/rangan/citations";
 
 // ── writing a new page ───────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ const RECIPES: Record<PageKind, string[]> = {
     "- One ## section per idea, basics first: a plain explanation, then a concrete example, with the one sentence to remember in ==highlight==.",
     "- A ### Why it matters part with a real-world use.",
     "- A short table where comparing things helps.",
-    "- End with ## Check yourself: 3 to 5 Q:/A: lines, and ## Next steps as - [ ] to-dos.",
+    "- End with ## Check yourself: 3 to 5 self-test questions, and ## Next steps as - [ ] to-dos.",
   ],
   revision: [
     "Revision sheet (to revise fast):",
@@ -67,14 +68,14 @@ const RECIPES: Record<PageKind, string[]> = {
     "- Short ## sections with tight bullet points; ==highlight== the facts examiners ask for; bold key terms.",
     "- A summary table of terms, definitions and examples.",
     "- ### Common mistakes as > [!mistake] callouts.",
-    "- ## Test yourself: 5 Q:/A: lines. Keep it scannable: no long paragraphs.",
+    "- ## Test yourself: 5 self-test questions. Keep it scannable: no long paragraphs.",
   ],
   exam: [
     "Exam prep (to score well):",
     "- ## What examiners look for, as a short list.",
     "- ## Likely questions: each as a ### heading with a model answer outline in bullets, and > [!tip] callouts for marks-winning points.",
     "- ### Common mistakes as > [!mistake] callouts.",
-    "- ## Practice: 5 to 8 Q:/A: lines from easy to hard.",
+    "- ## Practice: 5 to 8 self-test questions from easy to hard, each answer fully worked so a student can check theirs.",
     "- ## Before the exam: a - [ ] checklist.",
   ],
   cheatsheet: [
@@ -87,7 +88,7 @@ const RECIPES: Record<PageKind, string[]> = {
     "Lecture notes (from the material, in its order):",
     "- Follow the order of the passages, one ## section per part, citing as you go.",
     "- Under each: the main points as bullets, definitions in **bold**, examples as > [!idea] callouts.",
-    "- ## Summary with the key takeaways, and ## Questions to ask yourself as Q:/A: lines.",
+    "- ## Summary with the key takeaways, and ## Questions to ask yourself as self-test questions.",
   ],
 };
 
@@ -98,7 +99,11 @@ const RECIPES: Record<PageKind, string[]> = {
  */
 export function pageInstruction(request: string, subject: string, options: { kind?: PageKind | null; video?: { title: string } | null } = {}): string {
   const kind = options.kind ?? null;
-  const recipes = kind ? RECIPES[kind] : PAGE_KINDS.flatMap((option) => [...RECIPES[option], ""]);
+  const language = SCRIPT_LANGUAGE[mainScript(request)];
+  // Named English headings get copied as they are; in another language each is described instead.
+  const named = (line: string) =>
+    language ? line.replace(/(#{2,3}) ([A-Z][A-Za-z' ]*?)(?=:|,| as | with | part|$)/g, (_whole, hashes: string, name: string) => `a ${hashes} heading meaning "${name}" written in ${language}`) : line;
+  const recipes = (kind ? RECIPES[kind] : PAGE_KINDS.flatMap((option) => [...RECIPES[option], ""])).map(named);
   return [
     `The student asked: """${request.slice(0, 1_500)}"""`,
     `Write a study page about "${subject}".`,
@@ -112,14 +117,28 @@ export function pageInstruction(request: string, subject: string, options: { kin
     "- Callouts: > [!tip] blue, > [!mistake] amber, > [!key] green for what to remember, > [!idea] purple for analogies and examples. Use them where they help, not on every line.",
     "- Use ==highlight== for the key sentence of a section and {{red:word}} (red, orange, green, blue or purple) sparingly for terms to tell apart.",
     "- Maths as $$ … $$ blocks or $x^2$ inline; programming as ``` code blocks with the language.",
+    "- A self-test question is two lines: one starting \"Q: \" with the question, the next starting \"A: \" with its answer (the answer stays hidden until opened).",
+    "- Work out every answer and example carefully before writing it: students learn from them, so they must be right.",
+    "- Section names above are a guide: write them in the language of the request.",
+    ...requestLanguageLine(request),
+    "- No sign-off lines like \"Happy revising!\" or \"Good luck!\".",
     "- Link to a page with [text](https://…) only when it helps the student go further and you are sure of its address (a passage's link, Wikipedia, or official documentation).",
     options.video
       ? `- A lesson video, "${options.video.title.slice(0, 120)}", is ready: put the line [[video]] once, on its own line, where watching it helps most.`
       : "- Do not mention videos.",
-    "Use only this Markdown: # ## ### headings, paragraphs, - and 1. lists, - [ ] to-dos, | tables |, > [!tip] [!mistake] [!key] [!idea] callouts, Q:/A: lines, **bold**, *italic*, ==highlight==, {{colour:words}}, `code`, ``` code blocks, $$ maths $$, [text](https://…) links" + (options.video ? ", and [[video]]." : "."),
-    "Use the passages wherever they cover something, and prefer the student's own material. About 500 to 1200 words, shorter for a cheat sheet or revision sheet.",
+    "Use only this Markdown: # ## ### headings, paragraphs, - and 1. lists, - [ ] to-dos, | tables |, > [!tip] [!mistake] [!key] [!idea] callouts, Q: and A: line pairs, **bold**, *italic*, ==highlight==, {{colour:words}}, `code`, ``` code blocks, $$ maths $$, [text](https://…) links" + (options.video ? ", and [[video]]." : "."),
+    "Use the passages wherever they cover something, and prefer the student's own material: where their notes cover a point, use what they say and cite them. About 500 to 1200 words, shorter for a cheat sheet or revision sheet.",
     "Write in the language of the request. No images and no diagrams drawn in text.",
   ].join("\n");
+}
+
+/** The languages a request's script tells apart; requests in Latin letters say nothing for sure (English or Hinglish). */
+const SCRIPT_LANGUAGE: Record<string, string> = { Bengali: "Bengali", Devanagari: "Hindi", Tamil: "Tamil", Telugu: "Telugu", Gujarati: "Gujarati", Gurmukhi: "Punjabi", Kannada: "Kannada", Malayalam: "Malayalam", Oriya: "Odia", Arabic: "Arabic", Cyrillic: "Russian" };
+
+/** A line saying which language the page is in, when the request's script makes it certain. */
+function requestLanguageLine(request: string): string[] {
+  const language = SCRIPT_LANGUAGE[mainScript(request)];
+  return language ? [`- This request is in ${language}: write every heading in ${language}, including the section names named above (like "Check yourself" and "Next steps"), and all the text.`] : [];
 }
 
 const KIND_LINE = /^\s*<!--\s*kind:\s*([a-z]+)\s*-->\s*\n?/i;
@@ -131,7 +150,8 @@ const KIND_LINE = /^\s*<!--\s*kind:\s*([a-z]+)\s*-->\s*\n?/i;
 export function finishDraft(markdown: string, options: { kind: PageKind | null; videoUrl: string | null }): { markdown: string; kind: PageKind } {
   const line = KIND_LINE.exec(markdown);
   const named = line ? PAGE_KINDS.find((kind) => kind === line[1].toLowerCase()) ?? null : null;
-  let text = markdown.replace(KIND_LINE, "");
+  // "Q:/A:" is the instructions' name for self-test lines, sometimes copied onto the page as a line of its own.
+  let text = markdown.replace(KIND_LINE, "").replace(/^[ \t]*\**Q\s*:\s*\/\s*A\s*:\**[ \t]*$/gim, "");
   let placed = false;
   text = text.replace(/^[ \t]*\[\[video\]\][ \t]*$/gim, () => {
     if (placed || !options.videoUrl) return "";

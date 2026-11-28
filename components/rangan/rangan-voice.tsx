@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AudioLines, Loader2, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 import { create } from "zustand";
 import { useRanganStore, type RanganTurn } from "@/hooks/use-rangan-store";
 import { voiceActionFor } from "@/hooks/use-voice-action";
@@ -19,7 +19,7 @@ import {
   voiceMessage,
   type Recording,
 } from "@/lib/client/voice";
-import { speakable, spokenDue, voiceReply, withoutTrailingStop } from "@/lib/rangan/voice";
+import { isTalkLanguage, listeningLanguage, speakable, spokenDue, TALK_LANGUAGE_LABEL, TALK_LANGUAGES, voiceReply, withoutTrailingStop, type TalkLanguage } from "@/lib/rangan/voice";
 
 // Talking with Rangan. The mic button types what you say into the box. Voice
 // mode is a conversation: Rangan listens, sends when you stop talking, reads
@@ -29,13 +29,15 @@ import { speakable, spokenDue, voiceReply, withoutTrailingStop } from "@/lib/ran
 type Phase = "idle" | "listening" | "transcribing" | "thinking" | "speaking";
 
 type VoiceState = {
-  mode: "off" | "dictating" | "conversation";
+  mode: "off" | "conversation";
+  /** What Talk listens for; "auto" follows the script the student types in. */
+  language: TalkLanguage;
   phase: Phase;
   level: number;
   problem: string | null;
 };
 
-export const useVoiceStore = create<VoiceState>(() => ({ mode: "off", phase: "idle", level: 0, problem: null }));
+export const useVoiceStore = create<VoiceState>(() => ({ mode: "off", phase: "idle", level: 0, problem: null, language: "auto" }));
 
 let stream: MediaStream | null = null;
 let recording: Recording | null = null;
@@ -129,7 +131,25 @@ async function listen(): Promise<string | null> {
   if (!active("conversation")) return null;
   if (!audio) return "";
   setPhase("transcribing");
-  return transcribeAudio(audio);
+  return transcribeAudio(audio, talkLanguageNow());
+}
+
+const TALK_LANGUAGE_KEY = "rangan-talk-language";
+
+/** The student's Talk language, remembered on this device; "auto" when unset or unavailable. */
+function savedTalkLanguage(): TalkLanguage {
+  try {
+    const saved = window.localStorage.getItem(TALK_LANGUAGE_KEY);
+    return isTalkLanguage(saved) ? saved : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+/** The language to listen in now: the choice, or the script of the student's recent questions. */
+function talkLanguageNow() {
+  const questions = useRanganStore.getState().turns.filter((turn) => turn.role === "user").slice(-4).map((turn) => turn.content);
+  return listeningLanguage(useVoiceStore.getState().language, questions);
 }
 
 /** Voice mode: listen, send, read the reply, and again, until stopped or nobody speaks. */
@@ -199,88 +219,30 @@ async function converse(send: (text: string) => void) {
 export function startConversation(send: (text: string) => void) {
   if (useVoiceStore.getState().mode !== "off") return;
   unlockAudio();
-  useVoiceStore.setState({ mode: "conversation", phase: "listening", problem: null });
+  useVoiceStore.setState({ mode: "conversation", phase: "listening", problem: null, language: savedTalkLanguage() });
   void converse(send);
 }
 
-/** Voice typing: what you say is written into the box for you to check and send. */
-async function dictate(onText: (text: string) => void) {
-  try {
-    stream = await openMicrophone();
-    if (!active("dictating")) return;
-    setPhase("listening");
-    recording = record(stream, { untilPause: true, onLevel });
-    const audio = await recording.done;
-    recording = null;
-    closeMicrophone(stream);
-    stream = null;
-    if (!active("dictating") || !audio) return;
-    setPhase("transcribing");
-    const text = await transcribeAudio(audio);
-    if (!active("dictating")) return;
-    if (text) onText(withoutTrailingStop(text).text);
-    else useVoiceStore.setState({ problem: "Rangan didn't catch that. Tap the mic and try again." });
-  } catch (error) {
-    showProblem(error);
-  } finally {
-    if (active("dictating")) stopVoice();
-  }
-}
-
-/** The mic button beside Send: tap to talk, tap again to finish early. */
-export function RanganDictateButton({ onText, disabled }: { onText: (text: string) => void; disabled: boolean }) {
+/**
+ * Talk, beside Send: one tap and Rangan listens, answers aloud and listens
+ * again until stopped. Typing stays in the box; there's one way to talk.
+ */
+export function RanganTalkButton({ send, disabled }: { send: (text: string) => void; disabled: boolean }) {
   const mode = useVoiceStore((state) => state.mode);
-  const phase = useVoiceStore((state) => state.phase);
-  const level = useVoiceStore((state) => state.level);
   const [supported, setSupported] = useState(false);
   useEffect(() => setSupported(canRecord()), []);
   if (!supported || mode === "conversation") return null;
-
-  const dictating = mode === "dictating";
-  const onClick = () => {
-    if (dictating) {
-      // Finishing early keeps what was said; while it is being written down, the tap cancels.
-      if (phase === "listening") recording?.stop();
-      else stopVoice();
-      return;
-    }
-    unlockAudio();
-    useVoiceStore.setState({ mode: "dictating", phase: "listening", problem: null });
-    void dictate(onText);
-  };
-
   return (
     <button
       type="button"
-      className={`rangan-mic${dictating ? " on" : ""}`}
-      onClick={onClick}
-      disabled={disabled && !dictating}
-      aria-label={dictating ? (phase === "listening" ? "Finish speaking" : "Cancel") : "Speak your question"}
-      title={dictating ? "Finish" : "Speak instead of typing"}
-      style={dictating && phase === "listening" ? { boxShadow: `0 0 0 ${2 + Math.round(level * 4)}px rgba(224, 80, 77, 0.3)` } : undefined}
+      className="rangan-mic"
+      onClick={() => startConversation(send)}
+      disabled={disabled}
+      aria-label="Talk with Rangan"
+      title="Talk: Rangan listens, answers aloud and listens again"
     >
-      {dictating && phase === "transcribing" ? (
-        <Loader2 size={16} className="rangan-spin" />
-      ) : dictating ? (
-        <span className="rangan-recording" aria-hidden>
-          <LevelBars level={level} />
-          <span className="rangan-stop-glyph" />
-        </span>
-      ) : (
-        <Mic size={17} />
-      )}
+      <Mic size={17} />
     </button>
-  );
-}
-
-/** Three bars that rise with the speaker's voice, so it's clear the mic hears them. */
-function LevelBars({ level }: { level: number }) {
-  return (
-    <span className="rangan-level-bars">
-      {[0.55, 1, 0.75].map((weight, index) => (
-        <span key={index} style={{ transform: `scaleY(${0.25 + Math.min(1, level * weight * 1.6) * 0.75})` }} />
-      ))}
-    </span>
   );
 }
 
@@ -292,27 +254,40 @@ const PHASE_LABEL: Record<Phase, string> = {
   speaking: "Speaking…",
 };
 
-/** "Talk" in the chips row, and the voice-mode bar that replaces the chips while it runs. */
-export function RanganVoiceMode({ send, disabled }: { send: (text: string) => void; disabled: boolean }) {
+/** The bar that shows what Talk is doing (listening, thinking, speaking), with Stop. */
+export function RanganVoiceBar() {
   const mode = useVoiceStore((state) => state.mode);
+  const language = useVoiceStore((state) => state.language);
   const phase = useVoiceStore((state) => state.phase);
   const level = useVoiceStore((state) => state.level);
-  const [supported, setSupported] = useState(false);
-  useEffect(() => setSupported(canRecord()), []);
-  if (!supported) return null;
-
-  if (mode !== "conversation") {
-    return (
-      <button type="button" className="rangan-chip" onClick={() => startConversation(send)} disabled={disabled || mode === "dictating"} title="Talk with Rangan: it listens, answers aloud and listens again">
-        <AudioLines size={14} aria-hidden /> Talk
-      </button>
-    );
-  }
+  if (mode !== "conversation") return null;
   return (
     <div className="rangan-voice-bar" role="status" aria-live="polite">
       <span className={`rangan-voice-dot ${phase}`} style={phase === "listening" ? { transform: `scale(${1 + level * 0.9})` } : undefined} aria-hidden />
       <span className="rangan-voice-label">{PHASE_LABEL[phase]}</span>
       <span className="rangan-voice-hint">{phase === "listening" ? "Pause when you're done" : ""}</span>
+      <select
+        className="rangan-voice-language"
+        value={language}
+        onChange={(event) => {
+          const chosen = event.target.value;
+          if (!isTalkLanguage(chosen)) return;
+          useVoiceStore.setState({ language: chosen });
+          try {
+            window.localStorage.setItem(TALK_LANGUAGE_KEY, chosen);
+          } catch {
+            // Remembering the choice is a convenience; Talk works without it.
+          }
+        }}
+        aria-label="Language you speak"
+        title="The language you speak: naming it helps Rangan understand Bengali and Hindi"
+      >
+        {TALK_LANGUAGES.map((option) => (
+          <option key={option} value={option}>
+            {TALK_LANGUAGE_LABEL[option]}
+          </option>
+        ))}
+      </select>
       <button type="button" className="rangan-chip rangan-voice-stop" onClick={stopVoice}>
         <span className="rangan-stop-glyph small" aria-hidden /> Stop
       </button>

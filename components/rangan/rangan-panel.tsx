@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, Compass, FileText, Globe, History, LayoutDashboard, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, SquarePen, X } from "lucide-react";
+import { BookOpen, FileText, Globe, History, Layers, LayoutDashboard, ListChecks, ListTree, Loader2, NotebookText, PlayCircle, RotateCcw, Send, SquarePen, X } from "lucide-react";
 import { useNotePanelStore } from "@/hooks/use-note-panel-store";
 import { useRanganStore, type RanganCitationView, type RanganTurn } from "@/hooks/use-rangan-store";
 import { CITATION_HREF_PREFIX, linkCitations, type OpenTarget } from "@/lib/rangan/citations";
@@ -19,7 +19,8 @@ import { RanganPageDraftCard, RanganPageEditCard } from "./rangan-page-card";
 import { RanganPlanCard } from "./rangan-plan-card";
 import { RanganTaskCard } from "./rangan-task-card";
 import { RanganHistory } from "./rangan-history";
-import { RanganDictateButton, RanganVoiceMode, RanganVoiceProblem, stopVoice, useVoiceStore } from "./rangan-voice";
+import { RanganTalkButton, RanganVoiceBar, RanganVoiceProblem, stopVoice, useVoiceStore } from "./rangan-voice";
+import { RanganSourcePicker, RanganStudyResult, STUDY_ACTION_LABEL, type StudyAction } from "./rangan-study";
 import { isExploreRequest } from "@/lib/rangan/discover";
 import { splitBeyond } from "@/lib/rangan/trust";
 import { resetLabel } from "@/lib/rangan/usage";
@@ -204,6 +205,12 @@ export function RanganPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
+  /** A study tool in use: choosing what from the library, or its quiz or flashcards. */
+  const [study, setStudy] = useState<
+    | { step: "pick"; action: StudyAction }
+    | { step: "result"; action: Exclude<StudyAction, "summarize">; source: { ref: string; title: string }; runId: string }
+    | null
+  >(null);
   const voiceMode = useVoiceStore((state) => state.mode);
 
   // Closing the panel ends voice typing or voice mode: the microphone is never left on.
@@ -216,8 +223,10 @@ export function RanganPanel() {
   const currentNoteId = pageMatch ? decodeURIComponent(pageMatch[1]) : onBoard ? boardNoteId : null;
 
   useEffect(() => {
-    // Focus without scrolling the page; on phones this also brings up the keyboard.
-    inputRef.current?.focus({ preventScroll: true });
+    // With a mouse or trackpad, the box is ready to type in. On a phone, focusing it
+    // brought up the keyboard over a panel still sliding in (Android): the student taps
+    // the box, Talk or a study tool when they want.
+    if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -234,6 +243,23 @@ export function RanganPanel() {
   }, [close, pdf]);
 
   const isNarrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
+
+  /** Runs a study tool on a source: a summary in the chat, or a quiz or flashcards in the panel. */
+  const runStudy = (action: StudyAction, source: { ref: string; title: string }) => {
+    if (action === "summarize") {
+      setStudy(null);
+      void summarize(source.ref, `Summarize ${source.title || "this"}`);
+      return;
+    }
+    setStudy({ step: "result", action, source, runId: `${Date.now()}-${Math.random().toString(36).slice(2)}` });
+  };
+
+  /** A study tool from the chips: on the open page, or picked from the library. */
+  const startStudy = (action: StudyAction) => {
+    setShowHistory(false);
+    if (currentNoteId) runStudy(action, { ref: `note:${currentNoteId}`, title: action === "summarize" ? "this page" : useOpenPage.getState().page?.title || "this page" });
+    else setStudy({ step: "pick", action });
+  };
 
   const openCitation = (citation: RanganCitationView) => {
     const target: OpenTarget | null = citation.open;
@@ -438,7 +464,13 @@ export function RanganPanel() {
         </header>
 
         <div className="rangan-messages" ref={listRef}>
-          {body}
+          {study?.step === "pick" ? (
+            <RanganSourcePicker action={study.action} onBack={() => setStudy(null)} onPick={(source) => runStudy(study.action, { ref: source.ref, title: source.title })} />
+          ) : study?.step === "result" ? (
+            <RanganStudyResult runId={study.runId} action={study.action} source={study.source} onDone={() => setStudy(null)} onOpenPdf={setPdf} />
+          ) : (
+            body
+          )}
         </div>
 
         <form
@@ -449,34 +481,21 @@ export function RanganPanel() {
           }}
         >
           <RanganVoiceProblem />
-          {!spent ? (
-            <div className="rangan-chips">
-              {voiceMode === "conversation" ? (
-                <RanganVoiceMode send={send} disabled={pending} />
-              ) : (
-                <>
-                  <RanganVoiceMode send={send} disabled={pending} />
-                  {currentNoteId ? (
-                    <button
-                      type="button"
-                      className="rangan-chip"
-                      disabled={pending}
-                      onClick={() => void summarize(`note:${currentNoteId}`, "Summarize this page")}
-                    >
-                      <ListTree size={14} aria-hidden /> Summarize this page
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="rangan-chip"
-                    disabled={pending}
-                    onClick={() => void explore(currentNoteId ? `note:${currentNoteId}` : undefined)}
-                    title={currentNoteId ? "From this page" : "From the page you edited last"}
-                  >
-                    <Compass size={14} aria-hidden /> What should I explore next?
-                  </button>
-                </>
-              )}
+          <RanganVoiceBar />
+          {!spent && voiceMode !== "conversation" && !study ? (
+            <div className="rangan-chips" role="group" aria-label="Study tools">
+              {(["summarize", "quiz", "flashcards"] as const).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  className="rangan-chip"
+                  disabled={pending}
+                  onClick={() => startStudy(action)}
+                  title={currentNoteId ? `${STUDY_ACTION_LABEL[action]} this page` : `${STUDY_ACTION_LABEL[action]}: pick from your library`}
+                >
+                  {action === "summarize" ? <ListTree size={14} aria-hidden /> : action === "quiz" ? <ListChecks size={14} aria-hidden /> : <Layers size={14} aria-hidden />} {STUDY_ACTION_LABEL[action]}
+                </button>
+              ))}
             </div>
           ) : null}
           <div className="rangan-input-row">
@@ -486,19 +505,13 @@ export function RanganPanel() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onInputKey}
-              placeholder={spent ? "You've used today's questions" : voiceMode === "dictating" ? "Listening…" : voiceMode === "conversation" ? "Voice mode is on" : "Ask Rangan…"}
+              placeholder={spent ? "You've used today's questions" : voiceMode === "conversation" ? "Talk is on: just speak" : "Ask Rangan…"}
               aria-label="Ask Rangan"
               rows={1}
               maxLength={2_000}
               disabled={spent}
             />
-            <RanganDictateButton
-              disabled={pending || spent}
-              onText={(text) => {
-                setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text));
-                inputRef.current?.focus({ preventScroll: true });
-              }}
-            />
+            <RanganTalkButton send={send} disabled={pending || spent} />
             <button type="submit" className="rangan-send" aria-label="Send" disabled={!draft.trim() || pending || spent}>
               {pending ? <Loader2 size={16} className="rangan-spin" /> : <Send size={16} />}
             </button>

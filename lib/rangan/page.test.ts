@@ -13,7 +13,8 @@ const WEB_CITATION: PageCitation = { n: 3, ref: "https://en.wikipedia.org/wiki/K
 
 test("the page instruction asks for the teaching structure and the Markdown the converter reads", () => {
   const text = pageInstruction("make a note on OS so i can revise", "operating systems", { kind: "revision" });
-  for (const part of ["# and a clear, inviting page title", "## Test yourself: 5 Q:/A: lines", "> [!key]", "> [!mistake]", "summary table", "==highlight==", "Q:/A: lines", "- [ ] to-dos"]) {
+  // Self-test questions are asked for as Q: and A: line pairs, the shape the converter turns into toggles.
+  for (const part of ["# and a clear, inviting page title", "## Test yourself: 5 self-test questions", "> [!key]", "> [!mistake]", "summary table", "==highlight==", 'one starting \"Q: \" with the question, the next starting \"A: \"', "Q: and A: line pairs", "- [ ] to-dos"]) {
     assert.ok(text.includes(part), part);
   }
 });
@@ -169,4 +170,35 @@ test("any wording that asks for notes on a topic is a request for a new page", (
   for (const message of ["what do my notes on graphs say?", "summarize my notes on sql", "what is a graph", "search notes on trees", "hello"]) {
     assert.equal(newPageTopic(message), null, message);
   }
+});
+
+test("a stray \"Q:/A:\" line is taken off a draft; real Q: and A: lines stay", () => {
+  const { markdown } = finishDraft("# Photosynthesis\n## Test yourself\n\nQ:/A:\n\nQ: What pigment captures light?\nA: Chlorophyll.\n**Q:/A:**", { kind: "revision", videoUrl: null });
+  assert.doesNotMatch(markdown, /Q:\/A:/);
+  assert.match(markdown, /Q: What pigment captures light\?\nA: Chlorophyll\./);
+});
+
+test("the instruction asks for worked, correct answers in the request's language, with no sign-offs", () => {
+  const text = pageInstruction("exam prep on identities", "trigonometry", { kind: "exam" });
+  for (const part of ["each answer fully worked", "Work out every answer and example carefully", "write them in the language of the request", "No sign-off lines", "where their notes cover a point, use what they say and cite them"]) {
+    assert.ok(text.includes(part), part);
+  }
+  assert.ok(!text.includes("Q:/A:"), "the instruction never shows the literal Q:/A:");
+});
+
+test("a request in Bengali or Hindi script asks for every heading in that language; English asks nothing extra", () => {
+  assert.match(pageInstruction("কোষ বিভাজন নিয়ে একটা নোট লেখো", "কোষ বিভাজন"), /This request is in Bengali: write every heading in Bengali, including .*Check yourself/);
+  assert.match(pageInstruction("प्रकाश संश्लेषण पर नोट्स लिखो", "प्रकाश संश्लेषण"), /This request is in Hindi/);
+  assert.doesNotMatch(pageInstruction("notes on photosynthesis", "photosynthesis"), /This request is in/);
+});
+
+test("in another language the recipe's English headings are described, not given", () => {
+  const bengali = pageInstruction("কোষ বিভাজন নিয়ে একটা নোট লেখো", "কোষ বিভাজন", { kind: "explainer" });
+  assert.match(bengali, /a ## heading meaning "Check yourself" written in Bengali/);
+  assert.match(bengali, /a ## heading meaning "Next steps" written in Bengali/);
+  assert.match(bengali, /a ### heading meaning "Why it matters" written in Bengali/);
+  assert.doesNotMatch(bengali, /## Check yourself|## Next steps/);
+  // "One ## section per idea" isn't a heading's name and stays as it is.
+  assert.match(bengali, /One ## section per idea/);
+  assert.match(pageInstruction("notes on cells", "cells", { kind: "explainer" }), /## Check yourself/);
 });

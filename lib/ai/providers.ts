@@ -1,5 +1,5 @@
 /**
- * Rangan's model chain: Groq big → Groq small → Cloudflare Workers AI.
+ * Rangan's model chain: Groq big → Groq small → Cloudflare Workers AI → Gemini.
  *
  * All three speak the OpenAI chat-completions format, so one request path
  * serves them. A provider is skipped when its keys are missing, and the next
@@ -10,7 +10,7 @@
 export type ChatRole = "system" | "user" | "assistant";
 export type ChatMessage = { role: ChatRole; content: string };
 
-export type ProviderId = "groq-large" | "groq-small" | "cloudflare";
+export type ProviderId = "groq-large" | "groq-small" | "cloudflare" | "gemini";
 
 export type ProviderSpec = {
   id: ProviderId;
@@ -19,12 +19,18 @@ export type ProviderSpec = {
   endpoint: (env: ProviderEnv) => { url: string; token: string } | null;
   /** Extra body fields this model accepts. */
   extraBody?: Record<string, unknown>;
+  /**
+   * Tokens added to max_tokens for a model whose thinking counts toward that
+   * limit (Gemini), so the reply itself isn't cut off.
+   */
+  thinkingRoom?: number;
 };
 
 export type ProviderEnv = {
   GROQ_API_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  GEMINI_API_KEY?: string;
 };
 
 export type CompletionOptions = {
@@ -32,6 +38,11 @@ export type CompletionOptions = {
   temperature?: number;
   /** Per-provider timeout. */
   timeoutMs?: number;
+  /**
+   * How hard a reasoning model thinks before answering (Groq's gpt-oss); other
+   * models ignore it. The chain's default is "low"; checking answers needs more.
+   */
+  reasoning?: "low" | "medium" | "high";
 };
 
 export type CompletionResult = {
@@ -49,6 +60,8 @@ export type FallbackDeps = {
 };
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+/** Gemini's OpenAI-compatible endpoint: the same request and reply as the others. */
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 export const PROVIDER_CHAIN: readonly ProviderSpec[] = [
   {
@@ -73,6 +86,15 @@ export const PROVIDER_CHAIN: readonly ProviderSpec[] = [
             token: env.CLOUDFLARE_API_TOKEN,
           }
         : null,
+  },
+  {
+    // Free tier: 3.5 Flash answers; newer Flash models turn free users away when busy, and Pro isn't free.
+    id: "gemini",
+    model: "gemini-3.5-flash",
+    endpoint: (env) => (env.GEMINI_API_KEY ? { url: GEMINI_URL, token: env.GEMINI_API_KEY } : null),
+    extraBody: { reasoning_effort: "low" },
+    // Seen live: a Bengali answer cut off mid-sentence once its thinking used the limit.
+    thinkingRoom: 4_000,
   },
 ];
 
@@ -129,9 +151,10 @@ async function callProvider(
       body: JSON.stringify({
         model: spec.model,
         messages,
-        max_tokens: options.maxTokens ?? 1024,
+        max_tokens: (options.maxTokens ?? 1024) + (spec.thinkingRoom ?? 0),
         temperature: options.temperature ?? 0.3,
         ...spec.extraBody,
+        ...(options.reasoning && spec.extraBody && "reasoning_effort" in spec.extraBody ? { reasoning_effort: options.reasoning } : {}),
       }),
       signal: controller.signal,
     });
@@ -195,6 +218,7 @@ function serverDeps(): FallbackDeps {
       GROQ_API_KEY: process.env.GROQ_API_KEY,
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
       CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     },
     now: Date.now,
     cooldowns: processCooldowns,
@@ -206,8 +230,11 @@ export function complete(messages: ChatMessage[], options: CompletionOptions = {
   return completeWithFallback(messages, options, serverDeps());
 }
 
-/** The chain without the big model, for short helper steps (reading a request) that don't need it. */
-export const QUICK_CHAIN: readonly ProviderSpec[] = PROVIDER_CHAIN.filter((spec) => spec.id !== "groq-large");
+/**
+ * The chain without the big model, for short helper steps (reading a request) that don't need it.
+ * Gemini is left out too: these run on every message and would spend its small free daily allowance.
+ */
+export const QUICK_CHAIN: readonly ProviderSpec[] = PROVIDER_CHAIN.filter((spec) => spec.id !== "groq-large" && spec.id !== "gemini");
 
 /** A quick helper call on the smaller models, so it doesn't spend the big model's rate limit. */
 export function completeQuick(messages: ChatMessage[], options: CompletionOptions = {}) {

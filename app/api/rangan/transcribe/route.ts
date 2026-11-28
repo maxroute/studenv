@@ -9,7 +9,8 @@ import { transcribeRecording } from "@/lib/services/voice.service";
 export const dynamic = "force-dynamic";
 
 // ─── POST /api/rangan/transcribe — a voice recording's words ───────────────
-// Multipart form with one field, `audio`. Answers { text }, "" when nothing was said.
+// Multipart form: `audio`, and optionally `language` (en, bn or hi) when the
+// student chose or typed in one. Answers { text }, "" when nothing was said.
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest) {
     const form = await request.formData().catch(() => null);
     const audio = form?.get("audio");
     if (!(audio instanceof Blob)) throw Object.assign(new Error("No recording was sent."), { status: 400 });
-    return apiSuccess(await transcribeRecording(audio));
+    const language = form?.get("language");
+    return apiSuccess(await transcribeRecording(audio, language === "en" || language === "bn" || language === "hi" ? language : null));
   } catch (error) {
     const err = getErrorResponse(error);
     return apiError(err.message, err.status, err.details);

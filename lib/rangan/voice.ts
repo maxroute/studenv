@@ -169,3 +169,56 @@ export function createSpeechEndDetector(options: { threshold?: number; endAfterM
     },
   };
 }
+
+// ── languages Talk understands ───────────────────────────────────────────────
+
+/** "auto" lets the speech model guess, which mishears Bengali as Hindi; naming the language fixes that. */
+export const TALK_LANGUAGES = ["auto", "en", "bn", "hi"] as const;
+export type TalkLanguage = (typeof TALK_LANGUAGES)[number];
+export const TALK_LANGUAGE_LABEL: Record<TalkLanguage, string> = { auto: "Auto", en: "English", bn: "বাংলা", hi: "हिन्दी" };
+
+export function isTalkLanguage(value: unknown): value is TalkLanguage {
+  return typeof value === "string" && (TALK_LANGUAGES as readonly string[]).includes(value);
+}
+
+/**
+ * Words the speech model should expect, in the language being spoken. An
+ * English list with a Bengali recording made it hear "LeetCode" in Bengali
+ * speech, so each language gets its own.
+ */
+export function voiceHint(language: TalkLanguage): string {
+  if (language === "bn") return "রঙ্গন, স্টুডেনভ। সালোকসংশ্লেষণ, মাইটোসিস, মিয়োসিস, ত্রিকোণমিতি, JWT।";
+  if (language === "hi") return "रंगन, स्टूडेनव। प्रकाश संश्लेषण, माइटोसिस, त्रिकोणमिति, JWT।";
+  return VOICE_VOCABULARY;
+}
+
+/** The language a text is written in, when its script says so for sure. */
+export function scriptLanguage(text: string): "bn" | "hi" | null {
+  const bengali = text.match(/[ঀ-৿]/gu)?.length ?? 0;
+  const devanagari = text.match(/[ऀ-ॿ]/gu)?.length ?? 0;
+  const letters = text.match(/\p{L}/gu)?.length ?? 0;
+  if (!letters) return null;
+  if (bengali / letters >= 0.4) return "bn";
+  if (devanagari / letters >= 0.4) return "hi";
+  return null;
+}
+
+/**
+ * The language to listen in: the student's choice, or with "auto", the
+ * language of what they last typed in Bengali or Hindi script. Null lets the
+ * speech model guess (English and Hinglish).
+ */
+export function listeningLanguage(choice: TalkLanguage, recentQuestions: readonly string[]): "en" | "bn" | "hi" | null {
+  if (choice !== "auto") return choice;
+  for (const question of [...recentQuestions].reverse()) {
+    const language = scriptLanguage(question);
+    if (language) return language;
+  }
+  return null;
+}
+
+/** The voice to read a reply in: Bengali or Hindi by its script, else the page's language. */
+export function speechLanguage(text: string, pageLanguage: string): string {
+  const language = scriptLanguage(text);
+  return language === "bn" ? "bn-IN" : language === "hi" ? "hi-IN" : pageLanguage;
+}

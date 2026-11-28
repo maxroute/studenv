@@ -5,7 +5,7 @@
 // The audio is sent only to be transcribed and is not kept. Each provider is
 // tried in turn; a missing key skips it.
 
-import { VOICE_VOCABULARY } from "@/lib/rangan/voice";
+import { voiceHint } from "@/lib/rangan/voice";
 
 export type TranscribeProvider = "groq-whisper" | "cloudflare-whisper";
 
@@ -41,7 +41,10 @@ const textOf = (value: unknown, path: string[]): string | null => {
   return typeof current === "string" ? current : null;
 };
 
-async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps): Promise<string | null> {
+/** The language spoken, when known: naming it stops Bengali being heard as Hindi. */
+export type SpokenLanguage = "en" | "bn" | "hi" | null;
+
+async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage): Promise<string | null> {
   const key = deps.env.GROQ_API_KEY;
   if (!key) return null;
   const form = new FormData();
@@ -49,20 +52,21 @@ async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps): Pro
   form.append("model", GROQ_MODEL);
   form.append("response_format", "json");
   form.append("temperature", "0");
-  form.append("prompt", VOICE_VOCABULARY);
+  form.append("prompt", voiceHint(language ?? "en"));
+  if (language) form.append("language", language);
   const response = await deps.fetch(GROQ_URL, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) return null;
   return textOf(await response.json().catch(() => null), ["text"]);
 }
 
-async function viaCloudflare(audio: Blob, deps: TranscribeDeps): Promise<string | null> {
+async function viaCloudflare(audio: Blob, deps: TranscribeDeps, language: SpokenLanguage): Promise<string | null> {
   const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token } = deps.env;
   if (!account || !token) return null;
   const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
   const response = await deps.fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/run/@cf/openai/whisper-large-v3-turbo`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ audio: base64, initial_prompt: VOICE_VOCABULARY }),
+    body: JSON.stringify({ audio: base64, initial_prompt: voiceHint(language ?? "en"), ...(language ? { language } : {}) }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) return null;
@@ -70,10 +74,10 @@ async function viaCloudflare(audio: Blob, deps: TranscribeDeps): Promise<string 
 }
 
 /** The words in a recording, from the first provider that answers; throws when none can. */
-export async function transcribeWithFallback(audio: Blob, filename: string, deps: TranscribeDeps): Promise<{ text: string; provider: TranscribeProvider }> {
+export async function transcribeWithFallback(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage = null): Promise<{ text: string; provider: TranscribeProvider }> {
   const attempts: Array<[TranscribeProvider, () => Promise<string | null>]> = [
-    ["groq-whisper", () => viaGroq(audio, filename, deps)],
-    ["cloudflare-whisper", () => viaCloudflare(audio, deps)],
+    ["groq-whisper", () => viaGroq(audio, filename, deps, language)],
+    ["cloudflare-whisper", () => viaCloudflare(audio, deps, language)],
   ];
   for (const [provider, attempt] of attempts) {
     const text = await attempt().catch(() => null);
@@ -83,7 +87,7 @@ export async function transcribeWithFallback(audio: Blob, filename: string, deps
 }
 
 /** The real providers, with keys from the server environment. */
-export function transcribe(audio: Blob, filename: string) {
+export function transcribe(audio: Blob, filename: string, language: SpokenLanguage = null) {
   return transcribeWithFallback(audio, filename, {
     fetch: (input, init) => fetch(input, init),
     env: {
@@ -91,5 +95,5 @@ export function transcribe(audio: Blob, filename: string) {
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
       CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
     },
-  });
+  }, language);
 }

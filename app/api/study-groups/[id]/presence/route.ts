@@ -12,7 +12,7 @@ export async function GET(
   try {
     const user = await requireAuth();
     const groupId = validateId(params.id);
-    await studyGroupService.getStudyGroup(user.id, groupId);
+    await studyGroupService.assertStudyGroupMember(user.id, groupId);
 
     return apiSuccess({
       participants: getStudyGroupPresenceSnapshot(groupId),

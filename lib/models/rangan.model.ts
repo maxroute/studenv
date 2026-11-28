@@ -3,7 +3,7 @@ import { APP_AREAS } from "@/lib/rangan/task";
 import { CONVERSATION_TITLE_MAX, MAX_SAVED_TURNS, MAX_TURNS_PER_SAVE, SAVED_TURN_ROLES, TURN_ID, type StoredTurn } from "@/lib/rangan/conversation";
 
 /** Questions each student may ask Rangan per UTC day. */
-export const RANGAN_DAILY_LIMIT = 25;
+export const RANGAN_DAILY_LIMIT = 15;
 
 export const RANGAN_QUESTION_MAX = 2_000;
 export const RANGAN_HISTORY_MAX_TURNS = 10;
