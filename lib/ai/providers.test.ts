@@ -94,6 +94,7 @@ test("when every provider fails the error is safe to show and lists each attempt
       { provider: "groq-large", reason: "http_500" },
       { provider: "groq-small", reason: "rate_limited" },
       { provider: "cloudflare", reason: "not_configured" },
+      { provider: "gemini", reason: "not_configured" },
     ]);
     return true;
   });
@@ -157,4 +158,36 @@ test("more careful reasoning is asked of the models that reason, and only of the
   sent.length = 0;
   await completeWithFallback(ASK, {}, deps);
   assert.equal(sent[0].reasoning_effort, "low", "the default stays low");
+});
+
+test("Gemini is asked last, in the same request format, and never for quick helper steps", async () => {
+  const { QUICK_CHAIN } = await import("./providers");
+  const sent: Array<{ url: string; model: string; auth: string | null }> = [];
+  const deps: FallbackDeps = {
+    env: { GEMINI_API_KEY: "test-gemini" },
+    now: () => 0,
+    cooldowns: new Map(),
+    fetch: async (input, init) => {
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      sent.push({ url: String(input), model: body.model, auth: new Headers(init?.headers).get("authorization") });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "391" } }] }), { status: 200 });
+    },
+  };
+  const result = await completeWithFallback(ASK, {}, deps);
+  assert.equal(result.provider, "gemini");
+  assert.deepEqual(sent, [{ url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-3.5-flash", auth: "Bearer test-gemini" }]);
+  assert.ok(!QUICK_CHAIN.some((spec) => spec.id === "gemini"));
+});
+
+test("Gemini gets room for its thinking on top of the reply's limit; the others don't", async () => {
+  const limits: Array<[string, unknown]> = [];
+  const { deps } = fakeDeps({});
+  deps.env = { ...ALL_KEYS, GEMINI_API_KEY: "test-gemini" };
+  deps.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as { model: string; max_tokens: number };
+    limits.push([body.model, body.max_tokens]);
+    return body.model === "gemini-3.5-flash" ? new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }) : new Response("{}", { status: 500 });
+  };
+  await completeWithFallback(ASK, { maxTokens: 1_000 }, deps);
+  assert.deepEqual(limits, [[BIG, 1_000], [SMALL, 1_000], [CF, 1_000], ["gemini-3.5-flash", 5_000]]);
 });
