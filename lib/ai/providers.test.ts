@@ -142,3 +142,19 @@ test("the request body carries the model, the messages and the limits", async ()
   assert.equal(sent.max_tokens, 300);
   assert.equal(sent.temperature, 0.1);
 });
+
+test("more careful reasoning is asked of the models that reason, and only of them", async () => {
+  const sent: Array<Record<string, unknown>> = [];
+  const { deps } = fakeDeps({});
+  deps.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    sent.push(body);
+    // The big model is busy, so the small one and then Cloudflare are asked too.
+    return body.model === CF ? new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }) : new Response("{}", { status: 500 });
+  };
+  await completeWithFallback(ASK, { reasoning: "medium" }, deps);
+  assert.deepEqual(sent.map((body) => [body.model, body.reasoning_effort]), [[BIG, "medium"], [SMALL, "medium"], [CF, undefined]]);
+  sent.length = 0;
+  await completeWithFallback(ASK, {}, deps);
+  assert.equal(sent[0].reasoning_effort, "low", "the default stays low");
+});

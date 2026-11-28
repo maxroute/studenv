@@ -32,6 +32,11 @@ export type CompletionOptions = {
   temperature?: number;
   /** Per-provider timeout. */
   timeoutMs?: number;
+  /**
+   * How hard a reasoning model thinks before answering (Groq's gpt-oss); other
+   * models ignore it. The chain's default is "low"; checking answers needs more.
+   */
+  reasoning?: "low" | "medium" | "high";
 };
 
 export type CompletionResult = {
@@ -132,6 +137,7 @@ async function callProvider(
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.3,
         ...spec.extraBody,
+        ...(options.reasoning && spec.extraBody && "reasoning_effort" in spec.extraBody ? { reasoning_effort: options.reasoning } : {}),
       }),
       signal: controller.signal,
     });
