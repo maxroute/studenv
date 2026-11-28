@@ -73,7 +73,7 @@ test("a map board is created with cards for the user's own sources and the page 
   const solid = scene.items.filter((item) => item.type !== "connector");
   assert.equal(Math.min(...solid.map((item) => item.x)), 0, "the map starts at the board's top-left");
   assert.equal(Math.min(...solid.map((item) => item.y)), 0);
-  assert.deepEqual(scene.viewport, { x: 40, y: 40, zoom: 0.5 });
+  assert.deepEqual(scene.viewport, { x: 0, y: 0, zoom: 1 }, "the default view, so the board fits itself to the screen it opens on");
 });
 
 test("the draft is checked again when it comes back from the browser", () => {

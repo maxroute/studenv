@@ -2137,13 +2137,6 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
                 }}
                 onDragOver={(e: React.DragEvent) => e.preventDefault()}
                 onDrop={handleDrop}
-                onDoubleClick={(e) => {
-                  if (e.target === e.currentTarget && !isDrawing) {
-                    const { x, y } = screenToWorld(e.clientX, e.clientY);
-                    addItem("text", { text: "" }, { x, y });
-                  }
-                }}
-                
               >
                 {isDrawing && (
                   <div
