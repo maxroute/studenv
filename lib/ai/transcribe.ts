@@ -44,22 +44,36 @@ const textOf = (value: unknown, path: string[]): string | null => {
 /** The language spoken, when known: naming it stops Bengali being heard as Hindi. */
 export type SpokenLanguage = "en" | "bn" | "hi" | null;
 
-async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage): Promise<string | null> {
+/** The language a provider says it heard ("Hindi", "hi", "bengali"…), when it is one Talk knows. */
+export function heardLanguage(value: unknown): SpokenLanguage {
+  const name = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (name === "hi" || name === "hindi") return "hi";
+  if (name === "bn" || name === "bengali" || name === "bangla") return "bn";
+  if (name === "en" || name === "english") return "en";
+  return null;
+}
+
+type Heard = { text: string; heard: SpokenLanguage };
+
+async function viaGroq(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage): Promise<Heard | null> {
   const key = deps.env.GROQ_API_KEY;
   if (!key) return null;
   const form = new FormData();
   form.append("file", audio, filename);
   form.append("model", GROQ_MODEL);
-  form.append("response_format", "json");
+  // verbose_json also says which language was heard, which Auto needs.
+  form.append("response_format", "verbose_json");
   form.append("temperature", "0");
   form.append("prompt", voiceHint(language ?? "en"));
   if (language) form.append("language", language);
   const response = await deps.fetch(GROQ_URL, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) return null;
-  return textOf(await response.json().catch(() => null), ["text"]);
+  const json: unknown = await response.json().catch(() => null);
+  const text = textOf(json, ["text"]);
+  return text === null ? null : { text, heard: language ?? heardLanguage(textOf(json, ["language"])) };
 }
 
-async function viaCloudflare(audio: Blob, deps: TranscribeDeps, language: SpokenLanguage): Promise<string | null> {
+async function viaCloudflare(audio: Blob, deps: TranscribeDeps, language: SpokenLanguage): Promise<Heard | null> {
   const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token } = deps.env;
   if (!account || !token) return null;
   const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
@@ -70,18 +84,20 @@ async function viaCloudflare(audio: Blob, deps: TranscribeDeps, language: Spoken
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) return null;
-  return textOf(await response.json().catch(() => null), ["result", "text"]);
+  const json: unknown = await response.json().catch(() => null);
+  const text = textOf(json, ["result", "text"]);
+  return text === null ? null : { text, heard: language ?? heardLanguage(textOf(json, ["result", "transcription_info", "language"])) };
 }
 
 /** The words in a recording, from the first provider that answers; throws when none can. */
-export async function transcribeWithFallback(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage = null): Promise<{ text: string; provider: TranscribeProvider }> {
-  const attempts: Array<[TranscribeProvider, () => Promise<string | null>]> = [
+export async function transcribeWithFallback(audio: Blob, filename: string, deps: TranscribeDeps, language: SpokenLanguage = null): Promise<{ text: string; provider: TranscribeProvider; heard: SpokenLanguage }> {
+  const attempts: Array<[TranscribeProvider, () => Promise<Heard | null>]> = [
     ["groq-whisper", () => viaGroq(audio, filename, deps, language)],
     ["cloudflare-whisper", () => viaCloudflare(audio, deps, language)],
   ];
   for (const [provider, attempt] of attempts) {
-    const text = await attempt().catch(() => null);
-    if (text !== null) return { text, provider };
+    const result = await attempt().catch(() => null);
+    if (result !== null) return { ...result, provider };
   }
   throw new TranscribeUnavailableError();
 }
