@@ -190,7 +190,7 @@ function SourceButton({ link, onOpen }: { link: StudySourceLink; onOpen: (link: 
   );
 }
 
-function QuizView({ quiz, onOpen, onClose }: { quiz: QuizResult; onOpen: (link: StudySourceLink) => void; onClose: () => void }) {
+export function QuizView({ quiz, onOpen, onClose }: { quiz: QuizResult; onOpen: (link: StudySourceLink) => void; onClose: () => void }) {
   const [index, setIndex] = useState(0);
   const [picks, setPicks] = useState<Array<number | null>>(() => quiz.questions.map(() => null));
   const done = index >= quiz.questions.length;
