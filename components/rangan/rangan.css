@@ -725,6 +725,7 @@ body:has(.note-keyboard-bar) .rangan-fab {
 }
 
 .rangan-voice-stop {
+  flex-shrink: 0;
   color: #e0504d;
 }
 
@@ -783,9 +784,12 @@ body:has(.note-keyboard-bar) .rangan-fab {
 }
 
 .rangan-voice-label {
+  overflow: hidden;
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rangan-voice-hint {
@@ -1558,8 +1562,12 @@ body:has(.note-keyboard-bar) .rangan-fab {
   gap: 8px;
 }
 
-/* The language Talk listens in, inside the voice bar. */
+/* The language Talk listens in, inside the voice bar: a small pill, not the
+   full-width field every select gets from globals.css. */
 .rangan-voice-language {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 108px;
   min-height: 32px;
   border: 1px solid var(--border2);
   border-radius: 999px;
@@ -1567,4 +1575,20 @@ body:has(.note-keyboard-bar) .rangan-fab {
   padding: 2px 8px;
   color: var(--text);
   font-size: 12.5px;
+}
+
+@media (max-width: 480px) {
+  /* The phase says enough on a phone; the hint and the passing "Used 1" crowd the row. */
+  .rangan-voice-hint,
+  .rangan-usage-change {
+    display: none;
+  }
+
+  .rangan-voice-bar {
+    gap: 8px;
+  }
+
+  .rangan-voice-bar .rangan-voice-label {
+    flex: 1;
+  }
 }
