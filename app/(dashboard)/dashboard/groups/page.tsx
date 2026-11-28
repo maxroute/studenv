@@ -4,7 +4,9 @@ import "./study-groups.css";
 import {
   ChangeEvent,
   FormEvent,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -12,9 +14,11 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
+import useSWR, { mutate as mutateSWR } from "swr";
 import { io, type Socket } from "socket.io-client";
 import {
   ArrowLeft,
+  Camera,
   Check,
   Globe2,
   Lock,
@@ -22,6 +26,7 @@ import {
   MoreVertical,
   Paperclip,
   Play,
+  RotateCw,
   Plus,
   Search,
   Send,
@@ -33,7 +38,22 @@ import { toast } from "react-hot-toast";
 import { useDashboardNavigation } from "../../dashboard-navigation";
 import { useStudyGroups, useStudyGroup } from "@/hooks/useStudyGroups";
 import { BUILT_IN_STUDY_ROOM_TEMPLATES } from "@/lib/utils/study-room-templates";
+import { apiFetcher } from "@/lib/client/fetcher";
+import {
+  appendMessageOnce,
+  isNearBottom,
+  unsentMessages,
+  type PendingMessageState,
+} from "@/lib/study-groups/chat";
+import {
+  GroupFileCard,
+  PhotoBadge,
+  SharedFilesList,
+  formatFileSize,
+  initialsFor as getInitials,
+} from "@/components/study/group-chat-parts";
 import type {
+  StudyGroupFileRecord,
   StudyGroupJoinResult,
   StudyGroupMessageRecord,
   StudyGroupRecord,
@@ -49,6 +69,27 @@ type GroupPresencePayload = {
   participants: Array<{ userId: string }>;
 };
 
+/** A message shown at once while it is being sent (or after sending failed). */
+type PendingMessage = {
+  clientMessageId: string;
+  groupId: string;
+  content: string;
+  files: File[];
+  createdAt: string;
+  state: PendingMessageState;
+};
+
+/** The live socket pushes who is online; this snapshot is only a fallback. */
+const PRESENCE_REFRESH_MS = 15_000;
+
+function newClientMessageId() {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `local-${random}`;
+}
+
 const MAX_TOTAL_ATTACHMENT_SIZE = 150 * 1024 * 1024;
 const DEFAULT_STUDY_ROOM_TEMPLATE =
   BUILT_IN_STUDY_ROOM_TEMPLATES.find((template) => template.id === "focus") ??
@@ -62,27 +103,6 @@ function formatTime(value: string | Date) {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
-}
-
-function getInitials(name?: string | null, username?: string | null) {
-  const source = (name || username || "Group Member").trim();
-  return source
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-function formatFileSize(value?: number | null) {
-  if (!value) {
-    return "";
-  }
-
-  if (value < 1024 * 1024) {
-    return `${Math.round(value / 1024)} KB`;
-  }
-
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getMessagePreview(message: StudyGroupMessageRecord) {
@@ -203,7 +223,6 @@ export default function StudyGroupsPage() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [sending, setSending] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [inviteCodeInput, setInviteCodeInput] = useState("");
@@ -232,6 +251,13 @@ export default function StudyGroupsPage() {
   const [groupReadMarkers, setGroupReadMarkers] = useState<
     Record<string, string>
   >(() => loadGroupReadMarkers());
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  // Follow new messages while the reader is at the end of the chat.
+  const stickToBottomRef = useRef(true);
+  const scrolledGroupIdRef = useRef<string | null>(null);
 
   const listGroup = useMemo(
     () =>
@@ -239,6 +265,16 @@ export default function StudyGroupsPage() {
     [groups, selectedGroupId],
   );
   const activeGroup = activeGroupDetails || listGroup;
+  const {
+    data: sharedFiles,
+    error: sharedFilesError,
+    isLoading: sharedFilesLoading,
+    mutate: mutateSharedFiles,
+  } = useSWR<StudyGroupFileRecord[]>(
+    activeGroup ? `/api/study-groups/${activeGroup.id}/files` : null,
+    apiFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 10_000 },
+  );
   const filteredGroups = useMemo(() => {
     const query = groupSearch.trim().toLowerCase();
     if (!query) {
@@ -376,6 +412,9 @@ export default function StudyGroupsPage() {
         socket.on(
           "group:message",
           (event: { groupId: string; message: StudyGroupMessageRecord }) => {
+            if (event.message.attachments.length > 0) {
+              void mutateSWR(`/api/study-groups/${event.groupId}/files`);
+            }
             void mutateGroups(
               (current) =>
                 current?.map((group) => {
@@ -447,7 +486,7 @@ export default function StudyGroupsPage() {
     void connectSocket();
     const presenceInterval = window.setInterval(() => {
       void refreshPresenceSnapshot();
-    }, 3000);
+    }, PRESENCE_REFRESH_MS);
 
     return () => {
       cancelled = true;
@@ -623,72 +662,150 @@ export default function StudyGroupsPage() {
     );
   }
 
-  async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!activeGroup || (!messageInput.trim() && attachments.length === 0)) {
-      return;
-    }
+  async function deliverPendingMessage(pending: PendingMessage) {
+    setPendingMessages((current) =>
+      current.map((entry) =>
+        entry.clientMessageId === pending.clientMessageId
+          ? { ...entry, state: "sending" }
+          : entry,
+      ),
+    );
 
     try {
-      setSending(true);
       const payload = new FormData();
-      payload.set("content", messageInput);
-      attachments.forEach((attachment) => payload.append("files", attachment));
+      payload.set("content", pending.content);
+      payload.set("clientMessageId", pending.clientMessageId);
+      pending.files.forEach((file) => payload.append("files", file));
 
       const message = await readJson<StudyGroupMessageRecord>(
-        await fetch(`/api/study-groups/${activeGroup.id}/messages`, {
+        await fetch(`/api/study-groups/${pending.groupId}/messages`, {
           method: "POST",
           body: payload,
         }),
       );
+      const addMessage = (group: StudyGroupRecord) => ({
+        ...group,
+        messages: appendMessageOnce(group.messages, message),
+        updatedAt: message.createdAt,
+      });
+
+      // By group id, not the open chat: the reader may have switched groups meanwhile.
       await mutateGroups(
         (current) =>
-          current?.map((group) => {
-            if (group.id !== activeGroup.id) {
-              return group;
-            }
-
-            if (group.messages.some((entry) => entry.id === message.id)) {
-              return group;
-            }
-
-            return {
-              ...group,
-              messages: [...group.messages, message],
-              updatedAt: message.createdAt,
-            };
-          }),
+          current?.map((group) =>
+            group.id === pending.groupId ? addMessage(group) : group,
+          ),
         { revalidate: false },
       );
-      void mutateActiveGroup(
-        (current) => {
-          if (!current) {
-            return current;
-          }
-
-          if (current.messages.some((entry) => entry.id === message.id)) {
-            return current;
-          }
-
-          return {
-            ...current,
-            messages: [...current.messages, message],
-            updatedAt: message.createdAt,
-          };
-        },
+      void mutateSWR<StudyGroupRecord>(
+        `/api/study-groups/${pending.groupId}`,
+        (current) => (current ? addMessage(current) : current),
         { revalidate: false },
+      );
+      if (message.attachments.length > 0) {
+        void mutateSWR(`/api/study-groups/${pending.groupId}/files`);
+      }
+      setPendingMessages((current) =>
+        current.filter(
+          (entry) => entry.clientMessageId !== pending.clientMessageId,
+        ),
       );
       setActiveUserIds((current) =>
         current.includes(message.authorId)
           ? current
           : [...current, message.authorId],
       );
-      setMessageInput("");
-      setAttachments([]);
+    } catch (error) {
+      setPendingMessages((current) =>
+        current.map((entry) =>
+          entry.clientMessageId === pending.clientMessageId
+            ? { ...entry, state: "failed" }
+            : entry,
+        ),
+      );
+      toast.error((error as Error).message);
+    }
+  }
+
+  function discardPendingMessage(clientMessageId: string) {
+    setPendingMessages((current) =>
+      current.filter((entry) => entry.clientMessageId !== clientMessageId),
+    );
+  }
+
+  function handleSendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeGroup || (!messageInput.trim() && attachments.length === 0)) {
+      return;
+    }
+
+    // Shown straight away; the server's copy replaces it when it arrives.
+    const pending: PendingMessage = {
+      clientMessageId: newClientMessageId(),
+      groupId: activeGroup.id,
+      content: messageInput,
+      files: attachments,
+      createdAt: new Date().toISOString(),
+      state: "sending",
+    };
+    stickToBottomRef.current = true;
+    setPendingMessages((current) => [...current, pending]);
+    setMessageInput("");
+    setAttachments([]);
+    void deliverPendingMessage(pending);
+  }
+
+  async function handleGroupPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeGroup?.canManage) {
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Group photos must be 5 MB or smaller.");
+      return;
+    }
+
+    try {
+      setSavingPhoto(true);
+      const payload = new FormData();
+      payload.set("file", file);
+      const group = await readJson<StudyGroupRecord>(
+        await fetch(`/api/study-groups/${activeGroup.id}/photo`, {
+          method: "POST",
+          body: payload,
+        }),
+      );
+      await upsertGroup(group);
+      void mutateActiveGroup(group, { revalidate: false });
+      toast.success("Group photo updated.");
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
-      setSending(false);
+      setSavingPhoto(false);
+    }
+  }
+
+  async function handleRemoveGroupPhoto() {
+    if (!activeGroup?.canManage) {
+      return;
+    }
+
+    try {
+      setSavingPhoto(true);
+      const group = await readJson<StudyGroupRecord>(
+        await fetch(`/api/study-groups/${activeGroup.id}/photo`, {
+          method: "DELETE",
+        }),
+      );
+      await upsertGroup(group);
+      void mutateActiveGroup(group, { revalidate: false });
+      toast.success("Group photo removed.");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSavingPhoto(false);
     }
   }
 
@@ -791,6 +908,64 @@ export default function StudyGroupsPage() {
   }
 
   const messages: StudyGroupMessageRecord[] = activeGroup?.messages ?? [];
+  const activeGroupId = activeGroup?.id ?? null;
+  const visiblePending = activeGroupId
+    ? unsentMessages(
+        pendingMessages.filter((entry) => entry.groupId === activeGroupId),
+        messages,
+      )
+    : [];
+  const currentMember =
+    activeGroup?.members.find(
+      (member) => member.userId === activeGroup.currentUserId,
+    ) ?? null;
+
+  const scrollToLatest = useCallback(() => {
+    const list = messagesRef.current;
+    if (list) {
+      list.scrollTop = list.scrollHeight;
+    }
+  }, []);
+
+  // Open a chat at its latest message, and keep following new ones while the
+  // reader is at the end. On phones the chat is hidden (no height) until it is
+  // opened, so opening it counts too.
+  useLayoutEffect(() => {
+    if (!activeGroupId) {
+      return;
+    }
+
+    if (scrolledGroupIdRef.current !== activeGroupId) {
+      scrolledGroupIdRef.current = activeGroupId;
+      stickToBottomRef.current = true;
+    }
+
+    if (stickToBottomRef.current) {
+      scrollToLatest();
+    }
+  }, [
+    activeGroupId,
+    messages.length,
+    visiblePending.length,
+    mobileChatOpen,
+    scrollToLatest,
+  ]);
+
+  // The box shrinks when a phone keyboard opens or a file list appears: stay at the end.
+  useEffect(() => {
+    const list = messagesRef.current;
+    if (!list || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) {
+        scrollToLatest();
+      }
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [activeGroupId, scrollToLatest]);
   const totalAttachmentSize = attachments.reduce(
     (sum, file) => sum + file.size,
     0,
@@ -1018,10 +1193,13 @@ export default function StudyGroupsPage() {
                   }}
                   className={`group-item ${isActive ? "active" : ""}`}
                 >
-                  <div className="group-avatar">
-                    {getInitials(group.title)}
+                  <PhotoBadge
+                    src={group.photoUrl}
+                    name={group.title}
+                    className="group-avatar"
+                  >
                     {isActive ? <span className="online-ring" /> : null}
-                  </div>
+                  </PhotoBadge>
                   <div className="group-copy">
                     <div className="group-name">{group.title}</div>
                     <div className="group-meta">
@@ -1066,12 +1244,34 @@ export default function StudyGroupsPage() {
                 >
                   <ArrowLeft />
                 </button>
-                <div className="chat-avatar">
-                  {getInitials(activeGroup.title)}
-                  <span className="online-ring" />
-                </div>
+                <button
+                  type="button"
+                  className="chat-head-info"
+                  onClick={() => {
+                    setMobileAboutOpen(true);
+                    setMobileGroupMenuOpen(false);
+                  }}
+                  aria-label={`${activeGroup.title}: members and files`}
+                >
+                  <PhotoBadge
+                    src={activeGroup.photoUrl}
+                    name={activeGroup.title}
+                    className="chat-avatar"
+                  >
+                    <span className="online-ring" />
+                  </PhotoBadge>
+                </button>
                 <div className="chat-head-left">
-                  <div className="chat-title">{activeGroup.title}</div>
+                  <button
+                    type="button"
+                    className="chat-title chat-head-info"
+                    onClick={() => {
+                      setMobileAboutOpen(true);
+                      setMobileGroupMenuOpen(false);
+                    }}
+                  >
+                    {activeGroup.title}
+                  </button>
                   <div className="chat-pills">
                     <span className="pill">
                       {activeGroup.privacy === "public" ? <Globe2 /> : <Lock />}
@@ -1127,7 +1327,7 @@ export default function StudyGroupsPage() {
                           setMobileGroupMenuOpen(false);
                         }}
                       >
-                        About
+                        Members &amp; files
                       </button>
                       <Link
                         href={`/dashboard/groups/${activeGroup.id}/room`}
@@ -1167,8 +1367,14 @@ export default function StudyGroupsPage() {
                 </button>
               </div>
 
-              <div className="messages">
-                {messages.length === 0 ? (
+              <div
+                className="messages"
+                ref={messagesRef}
+                onScroll={(event) => {
+                  stickToBottomRef.current = isNearBottom(event.currentTarget);
+                }}
+              >
+                {messages.length === 0 && visiblePending.length === 0 ? (
                   <div className="text-xs text-center text-[var(--ink-3)] mt-10">
                     No messages yet. Break the ice with the first study question
                     or resource.
@@ -1180,9 +1386,12 @@ export default function StudyGroupsPage() {
                     key={message.id}
                     className={`msg ${message.authorId === activeGroup.currentUserId ? "mine" : "theirs"}`}
                   >
-                    <div className="avatar me">
-                      {getInitials(message.authorName, message.authorUsername)}
-                    </div>
+                    <PhotoBadge
+                      src={message.authorAvatarUrl}
+                      name={message.authorName}
+                      username={message.authorUsername}
+                      className={`avatar ${message.authorId === activeGroup.currentUserId ? "me" : ""}`}
+                    />
                     <div className="msg-body">
                       <div className="msg-meta">
                         <span className="msg-name">
@@ -1199,50 +1408,73 @@ export default function StudyGroupsPage() {
                       ) : null}
 
                       {message.attachments.map((attachment) => (
-                        <div key={attachment.id} className="file-card">
-                          <div className="file-icon">
-                            <Paperclip />
-                          </div>
-                          <div className="file-info">
-                            <div className="file-name">
-                              {attachment.name || "Shared file"}
+                        <GroupFileCard key={attachment.id} file={attachment} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {visiblePending.map((pending) => (
+                  <div
+                    key={pending.clientMessageId}
+                    className={`msg mine msg-pending ${pending.state === "failed" ? "msg-failed" : ""}`}
+                  >
+                    <PhotoBadge
+                      src={currentMember?.avatarUrl}
+                      name={currentMember?.name}
+                      username={currentMember?.username}
+                      className="avatar me"
+                    />
+                    <div className="msg-body">
+                      <div className="msg-meta">
+                        <span className="msg-name">
+                          {currentMember?.name ||
+                            currentMember?.username ||
+                            "You"}
+                        </span>
+                        <span className="msg-time" role="status">
+                          {pending.state === "failed" ? "Not sent" : "Sending…"}
+                        </span>
+                      </div>
+                      {pending.content.trim() ? (
+                        <div className="msg-text">{pending.content}</div>
+                      ) : null}
+                      {pending.files.map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.size}-${index}`}
+                          className="file-card"
+                        >
+                          <div className="file-open">
+                            <div className="file-icon">
+                              <Paperclip />
                             </div>
-                            <div className="file-size">
-                              {[
-                                attachment.mimeType,
-                                formatFileSize(attachment.sizeBytes),
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
+                            <div className="file-info">
+                              <div className="file-name">{file.name}</div>
+                              <div className="file-size">
+                                {formatFileSize(file.size)}
+                              </div>
                             </div>
-                          </div>
-                          <div className="file-btns">
-                            <a
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="file-btn"
-                              style={{
-                                textDecoration: "none",
-                                color: "inherit",
-                              }}
-                            >
-                              Open
-                            </a>
-                            <a
-                              href={attachment.url}
-                              download={attachment.name}
-                              className="file-btn"
-                              style={{
-                                textDecoration: "none",
-                                color: "inherit",
-                              }}
-                            >
-                              ↓
-                            </a>
                           </div>
                         </div>
                       ))}
+                      {pending.state === "failed" ? (
+                        <div className="msg-retry">
+                          <button
+                            type="button"
+                            onClick={() => void deliverPendingMessage(pending)}
+                          >
+                            <RotateCw aria-hidden="true" /> Retry
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              discardPendingMessage(pending.clientMessageId)
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1307,7 +1539,7 @@ export default function StudyGroupsPage() {
                       }
                     }}
                   />
-                  <button type="submit" disabled={sending} className="send-btn">
+                  <button type="submit" className="send-btn">
                     <Send /> Send
                   </button>
                   <input
@@ -1337,7 +1569,7 @@ export default function StudyGroupsPage() {
         {/* Members */}
         <div className="members-panel">
           <div className="mobile-about-head">
-            <span>About</span>
+            <span>Group info</span>
             <button type="button" onClick={() => setMobileAboutOpen(false)}>
               <X /> Close
             </button>
@@ -1347,6 +1579,53 @@ export default function StudyGroupsPage() {
               <StudyGroupsMembersSkeleton />
             ) : activeGroup ? (
               <>
+                <div className="info-section group-hero">
+                  <PhotoBadge
+                    src={activeGroup.photoUrl}
+                    name={activeGroup.title}
+                    className="group-hero-photo"
+                  />
+                  <div className="group-hero-title">{activeGroup.title}</div>
+                  <div className="group-hero-sub">
+                    {activeGroup.memberCount}{" "}
+                    {activeGroup.memberCount === 1 ? "member" : "members"}
+                  </div>
+                  {activeGroup.canManage ? (
+                    <div className="group-hero-actions">
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={savingPhoto}
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <Camera />
+                        {savingPhoto
+                          ? "Saving…"
+                          : activeGroup.photoUrl
+                            ? "Change photo"
+                            : "Add group photo"}
+                      </button>
+                      {activeGroup.photoUrl ? (
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={savingPhoto}
+                          onClick={() => void handleRemoveGroupPhoto()}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={handleGroupPhotoChange}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="info-section">
                   <div className="info-label">Invite Code</div>
                   <div className="code-box">
@@ -1388,9 +1667,12 @@ export default function StudyGroupsPage() {
                         className="mb-2 p-3 bg-[var(--raised)] border border-[var(--border)] rounded-[var(--r-sm)]"
                       >
                         <div className="flex items-center gap-3 mb-3">
-                          <div className="m-av owner">
-                            {getInitials(request.name, request.username)}
-                          </div>
+                          <PhotoBadge
+                            src={request.avatarUrl}
+                            name={request.name}
+                            username={request.username}
+                            className="m-av owner"
+                          />
                           <div className="m-info">
                             <div className="m-name">
                               {request.name ||
@@ -1433,20 +1715,27 @@ export default function StudyGroupsPage() {
                 ) : null}
 
                 <div className="info-section">
-                  <div className="info-label">Members</div>
+                  <div className="info-label flex justify-between">
+                    <span>Members</span>
+                    <span>{activeGroup.memberCount}</span>
+                  </div>
                   {activeGroup.members.map((member) => {
                     const isActive = activeMemberIds.has(member.userId);
 
                     return (
                       <div key={member.userId} className="member-row">
-                        <div
+                        <PhotoBadge
+                          src={member.avatarUrl}
+                          name={member.name}
+                          username={member.username}
                           className={`m-av ${member.role === "owner" ? "owner" : ""}`}
-                        >
-                          {getInitials(member.name, member.username)}
-                        </div>
+                        />
                         <div className="m-info">
                           <div className="m-name">
                             {member.name || member.username || "Study member"}
+                            {member.userId === activeGroup.currentUserId
+                              ? " (you)"
+                              : ""}
                           </div>
                           <div className="m-role m-role-status">
                             {member.role === "owner" ? "Owner" : "Member"}
@@ -1558,6 +1847,19 @@ export default function StudyGroupsPage() {
                       ) : null}
                     </>
                   ) : null}
+                </div>
+
+                <div className="info-section shared-files-section">
+                  <div className="info-label flex justify-between">
+                    <span>Shared files</span>
+                    {sharedFiles ? <span>{sharedFiles.length}</span> : null}
+                  </div>
+                  <SharedFilesList
+                    files={sharedFiles}
+                    loading={sharedFilesLoading}
+                    failed={Boolean(sharedFilesError)}
+                    onRetry={() => void mutateSharedFiles()}
+                  />
                 </div>
               </>
             ) : (

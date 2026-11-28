@@ -203,6 +203,23 @@ export interface StudyGroupMessageRecord {
   attachmentMimeType: string | null;
   attachmentSizeBytes: number | null;
   createdAt: string | Date;
+  /** Only on the copy sent back to its sender's page (reply and socket), to match its "sending" bubble. */
+  clientMessageId?: string | null;
+}
+
+/** A file shared in a group's chat, for the group's shared files list. */
+export interface StudyGroupFileRecord {
+  id: string;
+  url: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string | Date;
+  messageId: string;
+  authorId: string;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorAvatarUrl: string | null;
 }
 
 export interface StudyRoomStateRecord {
@@ -271,6 +288,8 @@ export interface StudyGroupRecord {
   inviteCode: string;
   privacy: StudyGroupPrivacy;
   memberLimit: number | null;
+  /** The group picture, served to members only; null when none is set. */
+  photoUrl: string | null;
   currentUserRole: StudyGroupMemberRole | null;
   canManage: boolean;
   pendingJoinRequestCount: number;

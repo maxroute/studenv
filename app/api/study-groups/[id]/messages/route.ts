@@ -5,6 +5,7 @@ import { apiError, apiSuccess } from "@/lib/security/headers";
 import { getErrorResponse } from "@/lib/security/request";
 import { validateBody, validateId } from "@/lib/security/validate";
 import * as studyGroupService from "@/lib/services/study-group.service";
+import { readClientMessageId } from "@/lib/study-groups/chat";
 
 const MAX_TOTAL_ATTACHMENT_SIZE = 150 * 1024 * 1024;
 export const runtime = "nodejs";
@@ -32,7 +33,7 @@ export async function POST(
     const user = await requireAuth();
     const groupId = validateId(params.id);
     const contentType = request.headers.get("content-type") || "";
-    let body: { content?: string };
+    let body: { content?: string; clientMessageId?: string };
     let attachments:
       | Array<{
           name: string;
@@ -46,6 +47,7 @@ export async function POST(
       const formData = await request.formData();
       body = {
         content: String(formData.get("content") ?? ""),
+        clientMessageId: String(formData.get("clientMessageId") ?? ""),
       };
 
       const files = formData
@@ -84,6 +86,7 @@ export async function POST(
       groupId,
       parsed,
       attachments,
+      readClientMessageId(body.clientMessageId),
     );
     return apiSuccess(message);
   } catch (error) {

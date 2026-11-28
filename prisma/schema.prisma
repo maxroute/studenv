@@ -565,6 +565,8 @@ model StudyGroup {
   inviteCode    String             @unique @db.VarChar(12)
   privacy       StudyGroupPrivacy  @default(public)
   memberLimit   Int?
+  /// The group picture's file name under group-photos/ (see lib/study-groups/group-photo.ts).
+  photoName     String?            @db.VarChar(200)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
