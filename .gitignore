@@ -75,3 +75,6 @@ storage-search.txt
 * 2.*
 .claude/
 Claude outputs/
+
+# Production database credentials kept locally for migrations: never committed.
+env.vercel.production
