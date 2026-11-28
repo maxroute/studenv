@@ -6,6 +6,10 @@ import { instrumentSans, instrumentSerif } from "@/lib/fonts/app-fonts";
 import { DashboardSidebar } from "./DashboardSidebar";
 
 import { DashboardLayoutClient } from "./DashboardLayoutClient";
+// Groups' styles, loaded here so they are in the first HTML. Imported by the
+// Groups page alone, they arrived after the loading screen, and on a slow phone
+// connection the page showed as unstyled text until they loaded.
+import "./dashboard/groups/study-groups.css";
 
 export default async function DashboardLayout({
   children,
