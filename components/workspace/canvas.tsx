@@ -960,6 +960,26 @@ export function TldrawCanvas({ workspaceId: _workspaceId }: StudioCanvasProps) {
     };
   }, []);
 
+  // iOS scrolls the page to keep a focused text box (in a shape, sticky or text)
+  // above the keyboard, and leaves it scrolled once the keyboard closes, cutting
+  // off the top bar. The board page never scrolls, so it's put back when typing ends.
+  useEffect(() => {
+    let frame = 0;
+    const restore = () => {
+      window.cancelAnimationFrame(frame);
+      // After the blur settles, unless typing moved straight on to another box.
+      frame = window.requestAnimationFrame(() => {
+        const typing = document.activeElement instanceof HTMLElement && document.activeElement.matches("input, textarea, [contenteditable='true']");
+        if (!typing && (window.scrollX !== 0 || window.scrollY !== 0)) window.scrollTo(0, 0);
+      });
+    };
+    document.addEventListener("focusout", restore);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("focusout", restore);
+    };
+  }, []);
+
   // Wheel, trackpad, Space / middle / right-button drags and two-finger
   // pan and pinch are handled by useCanvasNavigation (every tool).
 
