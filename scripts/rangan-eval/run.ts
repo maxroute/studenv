@@ -12,7 +12,7 @@
 //   --pause=ms       wait between cases, to stay within free rate limits (default 4000)
 //   --dump=dir       save every model call of each case (what was sent, what came back) to dir/<case>.json
 //   --chain=id,id    answer with only these models, in order (groq-large, groq-small,
-//                    cloudflare); the default is the app's own chain with fallbacks
+//                    cloudflare, gemini); the default is the app's own chain with fallbacks
 //
 // Testing keys: EVAL_GROQ_API_KEY, EVAL_CLOUDFLARE_ACCOUNT_ID and
 // EVAL_CLOUDFLARE_API_TOKEN in .env.local, when set, are used instead of the
@@ -24,7 +24,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { complete, completeQuick, completeWithFallback, PROVIDER_CHAIN, type ChatMessage, type CompletionOptions } from "@/lib/ai/providers";
+import { AiUnavailableError, complete, completeQuick, completeWithFallback, PROVIDER_CHAIN, type ChatMessage, type CompletionOptions } from "@/lib/ai/providers";
 import { createRanganService, type RanganReply } from "@/lib/services/rangan.service";
 import { linkExists } from "@/lib/web/link-check";
 import { findCommonsImage } from "@/lib/web/wikimedia-images";
@@ -35,11 +35,11 @@ import { replyText, type CheckResult } from "./checks";
 import { loadSource, searchLibrary } from "./library";
 
 // Before anything calls a model: the providers read these at call time.
-for (const name of ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"] as const) {
+for (const name of ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "GEMINI_API_KEY"] as const) {
   const testing = process.env[`EVAL_${name}`];
   if (testing) process.env[name] = testing;
 }
-const usingTestKeys = ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"].filter((name) => process.env[`EVAL_${name}`]);
+const usingTestKeys = ["GROQ_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "GEMINI_API_KEY"].filter((name) => process.env[`EVAL_${name}`]);
 
 const args = new Map(
   process.argv.slice(2).map((arg) => {
@@ -57,9 +57,21 @@ const pause = Number(args.get("pause") ?? 4_000);
 const chain = args.get("chain")?.split(",");
 const chosen = chain ? PROVIDER_CHAIN.filter((spec) => chain.includes(spec.id)) : null;
 if (chain && chosen?.length !== chain.length) throw new Error(`Unknown model in --chain; use ${PROVIDER_CHAIN.map((spec) => spec.id).join(", ")}`);
-const env = { GROQ_API_KEY: process.env.GROQ_API_KEY, CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN };
-const onChain = (messages: ChatMessage[], options?: CompletionOptions) =>
-  completeWithFallback(messages, options ?? {}, { fetch, env, now: Date.now, cooldowns: new Map() }, chosen ?? PROVIDER_CHAIN);
+const env = { GROQ_API_KEY: process.env.GROQ_API_KEY, CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN, GEMINI_API_KEY: process.env.GEMINI_API_KEY };
+/** Waits on the free tier's per-minute limits, so a one-model run measures quality, not capacity. */
+let rateWaits = 0;
+const onChain = async (messages: ChatMessage[], options?: CompletionOptions) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await completeWithFallback(messages, options ?? {}, { fetch, env, now: Date.now, cooldowns: new Map() }, chosen ?? PROVIDER_CHAIN);
+    } catch (problem) {
+      const limited = problem instanceof AiUnavailableError && problem.attempts.some((tried) => tried.reason === "rate_limited");
+      if (!limited || attempt >= 4) throw problem;
+      rateWaits += 1;
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    }
+  }
+};
 
 /** The models each case's calls landed on, in order: the free tier's limits push some down the chain. */
 const calls: string[] = [];
@@ -199,6 +211,7 @@ async function main() {
     return `${language} ${group.filter((outcome) => outcome.passed).length}/${group.length}`;
   });
   console.log(`\n${passed}/${outcomes.length} passed all rules · ${byLanguage.join(" · ")}${graded.length ? ` · average grade ${(graded.reduce((a, b) => a + b, 0) / graded.length).toFixed(2)}` : ""}`);
+  if (rateWaits) console.log(`waited out the free tier's per-minute limit ${rateWaits} time${rateWaits === 1 ? "" : "s"}`);
   console.log(`models used: ${[...new Set(outcomes.map((outcome) => outcome.provider ?? "none"))].join(", ")}`);
   const out = args.get("out");
   if (out) {
