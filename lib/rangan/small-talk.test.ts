@@ -40,3 +40,10 @@ test("each kind gets a fitting reply", () => {
   assert.match(smallTalkReply("identity", "what is your name"), /librarian and learning companion/);
   assert.match(smallTalkReply("greeting", "good night"), /Bye for now/);
 });
+
+test("a request to make something with no topic is answered with a question about the topic, in the student's script", async () => {
+  const { whatAboutReply } = await import("./small-talk");
+  assert.match(whatAboutReply("page", "can you make a note?"), /What should the page be about/);
+  assert.match(whatAboutReply("page", "তুমি কি একটা নোট বানাতে পারবে?"), /কোন বিষয়ে নোট/);
+  assert.match(whatAboutReply("board", "क्या तुम माइंड मैप बना सकते हो?"), /किस विषय पर/);
+});

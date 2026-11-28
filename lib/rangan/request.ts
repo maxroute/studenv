@@ -48,7 +48,7 @@ export function readingInstruction(message: string, previousQuestion?: string, o
         ? `The student has the page """${openPage.slice(0, 200)}""" open.`
         : "The student has no page or board open.",
     areaLine(area),
-    "subject: the topic the student wants to learn about, in a few words; null if there is none (a greeting, or a request about their notes in general). For a follow-up, it is the topic of the conversation before.",
+    "subject: the topic the student wants to learn about, in a few words; null if there is none (a greeting, or a request about their notes in general). For a follow-up, it is the topic of the conversation before. A request to make a note, page or map that names no topic (\"can you make a note?\", \"make me a mind map\") has subject null: the note or map itself is not the subject.",
     "search: a short search for the subject, 2 to 8 words of key terms only. Leave out task words such as create, make, explain, teach, easy, understand, revision, board, map, note.",
     "names: 1 to 5 names for the subject itself: its full name, abbreviations and synonyms.",
     "terms: 3 to 8 core terms a text about the subject would use.",
@@ -90,7 +90,8 @@ export function parseReading(text: string): RequestReading | null {
   const actions = (["page", "board", "edit", "task", "plan"] as const).filter((action) => (parsed.data.actions ?? []).includes(action));
   const chat = parsed.data.chat === true && actions.length === 0;
   const search = parsed.data.search || subject || "";
-  if (!search && !chat) return null;
+  // "Make a note" with no topic has nothing to search, but is still a request Rangan must answer (by asking the topic).
+  if (!search && !chat && !actions.includes("page") && !actions.includes("board")) return null;
   const names = subject ? [...new Set([subject, ...words(parsed.data.names, 6)])] : [];
   return { subject: chat ? null : subject, search, names: chat ? [] : names, terms: subject && !chat ? words(parsed.data.terms, 10) : [], actions, chat };
 }

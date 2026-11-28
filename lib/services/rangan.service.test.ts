@@ -1132,3 +1132,15 @@ test("a cited sentence says only what its passage says, with an example of split
   assert.ok(RANGAN_SYSTEM_PROMPT.includes("split the sentence"));
   assert.match(RANGAN_SYSTEM_PROMPT, /never "The mitochondria make ATP through aerobic respiration \[1\]\."/);
 });
+
+test("asked to make a note with no topic, Rangan asks what it should be about and gives the question back", async () => {
+  const fake = fakeDeps({ limit: 3, passages: PASSAGES });
+  fake.deps.completeQuick = async () => ({ text: '{"subject": null, "search": "", "names": [], "terms": [], "actions": ["page"], "chat": false}', provider: "groq-small", model: "m" });
+  const rangan = createRanganService(fake.deps);
+  const reply = await rangan.ask("u1", { question: "তুমি কি একটা নোট বানাতে পারবে?" });
+  assert.ok(!("kind" in reply) || reply.kind !== "page", "no page is written");
+  assert.match("answer" in reply ? (reply.answer ?? "") : "", /কোন বিষয়ে নোট/);
+  assert.equal(reply.usage.used, 0, "nothing was made, so no question is used");
+  assert.equal(fake.searches.length, 0, "nothing is searched");
+  assert.equal(fake.sent.length, 0, "no model writes anything");
+});
