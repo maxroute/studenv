@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { QUICK_CHAIN } from "@/lib/ai/providers";
-import { aboutSubject, countMentioned, mentionsAny, parseReading, readingInstruction } from "./request";
+import { aboutSubject, countMentioned, mainScript, mentionsAny, parseReading, readingInstruction } from "./request";
 
 test("the reading instruction carries the message and, for follow-ups, the previous question", () => {
   const text = readingInstruction("which one makes gametes?", "What is meiosis?");
@@ -77,4 +77,17 @@ test("small talk is read as chat, with no subject to search", () => {
   });
   assert.equal(parseReading('{"subject": null, "search": "", "actions": [], "chat": true}')?.chat, true, "chat needs no search");
   assert.equal(parseReading('{"subject": "graphs", "search": "graphs", "actions": ["page"], "chat": true}')?.chat, false, "asking for something is not chat");
+});
+
+test("notes in another language are kept when meaning search found them", () => {
+  const subject = { names: ["mitosis"], terms: ["prophase", "chromosome"] };
+  const bengali = { title: "কোষ বিভাজন", heading: "মাইটোসিস", content: "মাইটোসিসে একটি কোষ থেকে দুটি একই রকম কোষ তৈরি হয়।" };
+  // Found by meaning: kept, though it can't say "mitosis" in English.
+  assert.equal(aboutSubject([{ ...bengali, matchedBy: ["meaning"] }], subject).length, 1);
+  // Found by keyword only, or in the same script without naming the subject: still left out.
+  assert.equal(aboutSubject([{ ...bengali, matchedBy: ["keyword"] }], subject).length, 0);
+  assert.equal(aboutSubject([{ title: "Vocabulary", heading: "", content: "A process is a series of actions.", matchedBy: ["meaning"] }], subject).length, 0);
+  assert.equal(mainScript("Photosynthesis needs CO2"), "Latin");
+  assert.equal(mainScript("সালোকসংশ্লেষণ CO2"), "Bengali");
+  assert.equal(mainScript("प्रकाश संश्लेषण"), "Devanagari");
 });

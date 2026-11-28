@@ -116,13 +116,34 @@ export function countMentioned(text: string, words: readonly string[]): number {
  * least two of its core terms. One everyday word ("process" in a vocabulary
  * book) isn't enough. With no subject, every passage is kept.
  */
-export function aboutSubject<P extends { title: string; heading: string; content: string }>(
+export function aboutSubject<P extends { title: string; heading: string; content: string; matchedBy?: string[] }>(
   passages: readonly P[],
   subject: Pick<RequestReading, "names" | "terms"> | null,
 ): P[] {
   if (!subject || subject.names.length === 0) return [...passages];
+  const namesScript = mainScript(subject.names.join(" "));
   return passages.filter((passage) => {
     const text = `${passage.title}\n${passage.heading}\n${passage.content}`;
-    return mentionsAny(text, subject.names) || countMentioned(text, subject.terms) >= 2;
+    if (mentionsAny(text, subject.names) || countMentioned(text, subject.terms) >= 2) return true;
+    // Notes in another language never name the subject the way the request does
+    // ("mitosis", "মাইটোসিস"): a close match in meaning is all there is to go on.
+    return Boolean(passage.matchedBy?.includes("meaning")) && mainScript(text) !== namesScript;
   });
+}
+
+const SCRIPTS = ["Latin", "Bengali", "Devanagari", "Arabic", "Cyrillic", "Han", "Tamil", "Telugu", "Gujarati", "Gurmukhi", "Kannada", "Malayalam", "Oriya", "Greek", "Hangul", "Hiragana", "Katakana", "Thai"] as const;
+const SCRIPT_PATTERNS = SCRIPTS.map((script) => [script, new RegExp(`\\p{Script=${script}}`, "gu")] as const);
+
+/** The writing system most of a text's letters are in ("Latin" for English, "Bengali" for Bangla). */
+export function mainScript(text: string): string {
+  let best = "Latin";
+  let most = 0;
+  for (const [script, pattern] of SCRIPT_PATTERNS) {
+    const count = text.match(pattern)?.length ?? 0;
+    if (count > most) {
+      best = script;
+      most = count;
+    }
+  }
+  return best;
 }
