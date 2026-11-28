@@ -901,6 +901,7 @@ export default function FocusPage() {
                     </div>
                     <div className="relative">
                       <select
+                        aria-label="Link planner task"
                         value={taskId || ""}
                         onChange={(e) => {
                           const val = e.target.value || null;
@@ -933,6 +934,7 @@ export default function FocusPage() {
                     Focus Goal
                   </div>
                   <textarea
+                    aria-label="Focus goal"
                     value={goal}
                     onChange={(event) => setGoal(event.target.value)}
                     rows={2}

@@ -1,6 +1,8 @@
 import React from "react";
 import { AppIntro } from "@/components/intro/app-intro";
 import { auth } from "@/lib/auth/auth.config";
+import { REQUEST_PATH_HEADER, signInPageFor } from "@/lib/auth/signed-in-redirect";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { instrumentSans, instrumentSerif } from "@/lib/fonts/app-fonts";
 import { DashboardSidebar } from "./DashboardSidebar";
@@ -19,7 +21,7 @@ export default async function DashboardLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/auth/signin?callbackUrl=/dashboard");
+    redirect(signInPageFor(headers().get(REQUEST_PATH_HEADER)));
   }
 
   return (

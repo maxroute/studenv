@@ -75,6 +75,7 @@ export function OnboardingContent({ initialProfile }: OnboardingContentProps) {
   }
 
   async function handleContinue() {
+    if (loading) return;
     if (!canSubmit) {
       toast.error("Add your name and a username to continue.");
       return;
@@ -203,7 +204,7 @@ export function OnboardingContent({ initialProfile }: OnboardingContentProps) {
 
           <div className="onboard-footer">
             <Link href="/dashboard">Skip for now</Link>
-            <button className="btn-primary" type="button" onClick={handleContinue}>
+            <button className="btn-primary" type="button" onClick={handleContinue} disabled={loading}>
               {loading ? "Saving..." : "Continue to dashboard"}
             </button>
           </div>

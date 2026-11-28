@@ -17,7 +17,7 @@ function ResetPasswordContent() {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
-    if (submitting) return;
+    if (submitting || !token) return;
     setSubmitting(true);
     try {
       await apiFetcher("/api/auth/reset-password", {
@@ -38,16 +38,33 @@ function ResetPasswordContent() {
 
   return (
     <div className="simple-auth-page">
-      <div className="simple-auth-card">
+      <form
+        className="simple-auth-card"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
+      >
         <div className="auth-title">
           Create a new <em>password</em>
         </div>
-        {!done ? (
+        {!token && !done ? (
+          <>
+            <p className="auth-sub" role="alert">
+              This reset link is missing or incomplete. Open the link from your email again, or request a new one.
+            </p>
+            <Link className="btn-primary" href="/auth/forgot-password" target="_self" style={{ display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+              Request a new link
+            </Link>
+          </>
+        ) : !done ? (
           <>
             <label className="field">
               <span>New password</span>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
@@ -56,11 +73,12 @@ function ResetPasswordContent() {
               <span>Confirm password</span>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
             </label>
-            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={submitting || !token}>
+            <button className="btn-primary" type="submit" disabled={submitting}>
               {submitting ? "Resetting..." : "Reset Password"}
             </button>
           </>
@@ -74,7 +92,7 @@ function ResetPasswordContent() {
             </Link>
           </>
         )}
-      </div>
+      </form>
     </div>
   );
 }

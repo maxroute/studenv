@@ -1,7 +1,7 @@
 "use client";
 
 import { dayToDueDate } from "@/lib/client/reschedule";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import {
   X,
   Calendar,
@@ -85,6 +85,17 @@ const REPEAT_OPTIONS = [
   { value: "custom", label: "Custom" },
 ];
 
+const COLOR_NAMES: Record<string, string> = {
+  "#9c9788": "Gray",
+  "#1a9e75": "Green",
+  "#c97d0c": "Orange",
+  "#e05555": "Red",
+  "#8878d4": "Purple",
+  "#3b82f6": "Blue",
+  "#ec4899": "Pink",
+  "#eab308": "Yellow",
+};
+
 const PRESET_COLORS = [
   "#9c9788", // Gray
   "#1a9e75", // Green
@@ -97,6 +108,7 @@ const PRESET_COLORS = [
 ];
 
 export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
+  const fieldId = useId();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -263,15 +275,20 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
 
       {/* Main Dialog / Bottom Sheet for Mobile */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${fieldId}-heading`}
         className="relative flex max-h-[92vh] w-full max-w-[550px] flex-col rounded-[18px] border border-white/[0.065] bg-[#141410] text-[#e4dfcf] shadow-2xl animate-in fade-in zoom-in-95 duration-200 
                    max-md:absolute max-md:bottom-0 max-md:max-h-[85vh] max-md:rounded-b-none max-md:translate-y-0"
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-5 py-4">
-          <h3 className="font-[family:var(--font-fraunces)] text-[18px] font-normal">
+          <h3 id={`${fieldId}-heading`} className="font-[family:var(--font-fraunces)] text-[18px] font-normal">
             {task ? "Edit Task" : "Create New Task"}
           </h3>
           <button
+            type="button"
+            aria-label="Close"
             onClick={onClose}
             className="rounded-full bg-white/[0.03] p-1.5 text-[#9c9788] transition hover:bg-white/[0.06] hover:text-[#e4dfcf]"
           >
@@ -286,10 +303,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
         >
           {/* Title */}
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-title`}>
               Task Title *
             </label>
             <input
+              id={`${fieldId}-title`}
               type="text"
               required
               placeholder="e.g. Physics Assignment 3"
@@ -301,10 +319,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-description`}>
               Description
             </label>
             <textarea
+              id={`${fieldId}-description`}
               placeholder="Short summary of what needs to be done..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -316,11 +335,12 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
           {/* Priority & Category */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-priority`}>
                 Priority
               </label>
               <div className="relative">
                 <select
+                  id={`${fieldId}-priority`}
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
                   className="w-full appearance-none rounded-[8px] border border-white/[0.08] bg-[#1a1a14] px-3.5 py-2.5 text-[13px] text-[#e4dfcf] focus:border-[#c97d0c] focus:outline-none"
@@ -342,11 +362,12 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-category`}>
                 Category
               </label>
               <div className="relative">
                 <select
+                  id={`${fieldId}-category`}
                   value={category}
                   onChange={(e) => {
                     setCategory(e.target.value);
@@ -370,10 +391,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
           {/* Custom Category Input if selected */}
           {showCustomCategory && (
             <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-custom-category`}>
                 Custom Category Name
               </label>
               <input
+                id={`${fieldId}-custom-category`}
                 type="text"
                 placeholder="e.g. Coding"
                 value={customCategory}
@@ -386,10 +408,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5" htmlFor={`${fieldId}-due-date`}>
                 <Calendar className="h-3.5 w-3.5 text-[#9c9788]" /> Due Date
               </label>
               <input
+                id={`${fieldId}-due-date`}
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
@@ -398,10 +421,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5" htmlFor={`${fieldId}-due-time`}>
                 <Clock className="h-3.5 w-3.5 text-[#9c9788]" /> Due Time
               </label>
               <input
+                id={`${fieldId}-due-time`}
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
@@ -413,10 +437,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
           {/* Workload & Repeat Options */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-duration`}>
                 Est. Workload (Min)
               </label>
               <input
+                id={`${fieldId}-duration`}
                 type="number"
                 min="0"
                 placeholder="e.g. 60"
@@ -427,11 +452,12 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium flex items-center gap-1.5" htmlFor={`${fieldId}-repeat`}>
                 <RotateCcw className="h-3.5 w-3.5 text-[#9c9788]" /> Repeat
               </label>
               <div className="relative">
                 <select
+                  id={`${fieldId}-repeat`}
                   value={repeat}
                   onChange={(e) => setRepeat(e.target.value)}
                   className="w-full appearance-none rounded-[8px] border border-white/[0.08] bg-[#1a1a14] px-3.5 py-2.5 text-[13px] text-[#e4dfcf] focus:border-[#c97d0c] focus:outline-none"
@@ -451,14 +477,16 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
 
           {/* Quick Color Selector */}
           <div className="space-y-2">
-            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" id={`${fieldId}-color`}>
               Accent Color
             </label>
-            <div className="flex flex-wrap gap-2.5 pt-1">
+            <div className="flex flex-wrap gap-2.5 pt-1" role="group" aria-labelledby={`${fieldId}-color`}>
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
+                  aria-label={COLOR_NAMES[c] ?? c}
+                  aria-pressed={color === c}
                   onClick={() => setColor(c)}
                   className="relative h-6 w-6 rounded-full border border-white/10 transition hover:scale-110 active:scale-95"
                   style={{ backgroundColor: c }}
@@ -473,10 +501,11 @@ export function TaskDialog({ open, onClose, onSave, task }: TaskDialogProps) {
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium">
+            <label className="text-[11px] uppercase tracking-wider text-[#9c9788] font-medium" htmlFor={`${fieldId}-notes`}>
               Notes / Checklist Items
             </label>
             <textarea
+              id={`${fieldId}-notes`}
               placeholder="Detailed sub-items, checklist, links, or instructions..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

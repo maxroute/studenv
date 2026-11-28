@@ -70,6 +70,8 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
   }, [editing, form.name, user?.name]);
 
   const activeAvatarUrl = editing ? form.avatarUrl || user?.avatarUrl : user?.avatarUrl;
+  // A photo that no longer loads falls back to initials, not a broken image.
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   const topTags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -94,7 +96,10 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
 
 
 
+  // Follow the saved profile, but not mid-edit: a photo upload refreshes the
+  // user and would otherwise wipe the name or bio being typed.
   useEffect(() => {
+    if (editing) return;
     setForm({
       name: user?.name ?? "",
       username: user?.username ?? "",
@@ -103,7 +108,7 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
       avatarUrl: user?.avatarUrl ?? "",
     });
     setAvatarMethod("upload");
-  }, [user]);
+  }, [user, editing]);
 
   function closeEditor() {
     setEditing(false);
@@ -197,11 +202,16 @@ export function ProfilePage({ backHref = "/dashboard", backLabel = "Back to Home
       <section className="profile-hero">
         <div className="profile-grid-pattern" />
         <div className="profile-avatar-lg">
-          {activeAvatarUrl ? (
+          {activeAvatarUrl && activeAvatarUrl !== failedAvatarUrl ? (
             <img
               alt={(editing ? form.name : user?.name) ?? "Profile avatar"}
               className="profile-avatar-image"
               src={activeAvatarUrl}
+              onError={() => setFailedAvatarUrl(activeAvatarUrl)}
+              // A server-rendered image can fail before hydration, when onError isn't attached yet.
+              ref={(image) => {
+                if (image?.complete && image.naturalWidth === 0) setFailedAvatarUrl(activeAvatarUrl);
+              }}
             />
           ) : (
             initials

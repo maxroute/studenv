@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { LogOut, Settings, Trophy, User } from "lucide-react";
 import { confirmSignOut } from "@/components/layout/confirm-sign-out";
@@ -23,12 +24,26 @@ export function AccountMenu({ user: initialUser, placement }: { user?: ShellUser
   const parts = name.split(/\s+/);
   const initials = `${parts[0]?.[0] ?? "S"}${parts[1]?.[0] ?? ""}`.toUpperCase();
   const avatar = user.avatarUrl || user.image || null;
+  // A photo that no longer loads falls back to initials, not a broken image.
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
 
   return (
     <div className={`shell-popup-wrap shell-account ${placement}`} ref={ref}>
       <button type="button" className="shell-account-trigger" aria-label="Account menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="shell-avatar">
-          {avatar ? <img src={avatar} alt="" /> : initials}
+          {avatar && avatar !== failedAvatar ? (
+            <img
+              src={avatar}
+              alt=""
+              onError={() => setFailedAvatar(avatar)}
+              // A server-rendered image can fail before hydration, when onError isn't attached yet.
+              ref={(image) => {
+                if (image?.complete && image.naturalWidth === 0) setFailedAvatar(avatar);
+              }}
+            />
+          ) : (
+            initials
+          )}
         </span>
         <span className="shell-account-name">{parts[0]}</span>
       </button>

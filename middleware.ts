@@ -14,7 +14,7 @@ import {
 } from "@/lib/security/rateLimit";
 import { authIpBucket, retryMessage, type AuthIpBucket } from "@/lib/security/auth-limits";
 import { getRateLimitIdentifier } from "@/lib/security/request";
-import { signedInRedirect } from "@/lib/auth/signed-in-redirect";
+import { REQUEST_PATH_HEADER, requestPathOf, signedInRedirect } from "@/lib/auth/signed-in-redirect";
 
 /** Pages a signed-in visitor skips: the home page and the sign-in forms. */
 const SIGNED_IN_SKIPS = new Set(["/", "/auth/signin", "/auth/signup"]);
@@ -158,7 +158,15 @@ export default async function middleware(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.next();
+  // Pages learn which URL was opened, so a signed-out visitor returns to it after sign-in.
+  let response: NextResponse;
+  if (!isApiRoute) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(REQUEST_PATH_HEADER, requestPathOf(pathname, nextUrl.searchParams));
+    response = NextResponse.next({ request: { headers: requestHeaders } });
+  } else {
+    response = NextResponse.next();
+  }
   addSecurityHeaders(response);
 
   if (isApiRoute) {
