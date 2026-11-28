@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseWorkspaceSceneJson, serializeWorkspaceScene, type ConnectorNode, type StudioItem } from "@/types/workspace";
 import { computeConnectorRoute } from "./connector-routing";
-import { asBlock, composeBoard, flowRanks, layoutSection, parseSectionsReply, sectionDraftSchema, stackBlocks, wrappedLines, type BoardSection, type MediaSection } from "./board-sections";
+import { asBlock, leaveDetailToDiagrams, sectionsInstruction, composeBoard, flowRanks, layoutSection, parseSectionsReply, sectionDraftSchema, stackBlocks, wrappedLines, type BoardSection, type MediaSection } from "./board-sections";
 
 const ids = () => {
   let n = 0;
@@ -276,4 +276,68 @@ test("table cells are read however the model writes them, and an empty table is 
   assert.deepEqual(keyed.rows.map((row) => row.cells), [["On the server", "In the token"], ["Delete it", "Wait for expiry"], ["Shared store", "Any server"]]);
   assert.equal(read([{ label: "Storage", cells: [] }, { label: "Scaling", cells: {} }, { label: "Load" }]), undefined);
   assert.equal(read([{ label: "Storage", cells: ["a", "b"] }, { label: "Scaling" }]), undefined, "one filled row isn't a comparison");
+});
+
+test("the map keeps the big picture and leaves to each diagram the detail it shows", () => {
+  const branch = (title: string, children: string[], steps = false) => ({ title, note: `${title} in one line`, relation: "", source: null, steps, image: null, children: children.map((child) => ({ title: child, note: "" })) });
+  // The map Rangan really planned for "Make a board on JWT authentication…".
+  const draft = {
+    title: "JWT Authentication",
+    centre: "JWT Authentication",
+    image: null,
+    video: null,
+    branches: [
+      branch("Token Structure", ["Header", "Payload", "Signature"]),
+      branch("Token Creation", ["Validate User", "Build Header", "Add Claims", "Sign Token"], true),
+      branch("Token Verification", ["Extract Token", "Validate Signature", "Check Expiration", "Authorize Claims"]),
+      branch("Sessions vs Tokens", ["Stateful Sessions", "Stateless Tokens", "Scalability", "Revocation"]),
+      branch("Security Considerations", ["HTTPS Only", "Short Expiry", "Refresh Tokens", "Secret Management"]),
+    ],
+    links: [{ from: "Signature", to: "Validate Signature", label: "checks" }, { from: "Refresh Tokens", to: "Short Expiry", label: "pairs" }],
+    tips: [],
+  };
+  const sections = parseSectionsReply({
+    sections: [
+      { type: "flowchart", heading: "Token Creation Process", nodes: [{ id: "a", kind: "start", text: "User logs in" }, { id: "b", kind: "step", text: "Validate credentials" }, { id: "c", kind: "step", text: "Build JWT header & payload" }, { id: "d", kind: "step", text: "Sign token with secret" }, { id: "e", kind: "end", text: "Issue JWT to client" }], edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "c", to: "d" }, { from: "d", to: "e" }] },
+      { type: "diagram", heading: "JWT Structure", joiner: ".", parts: [{ name: "Header", detail: "Algorithm" }, { name: "Payload", detail: "Claims" }, { name: "Signature", detail: "Proof" }] },
+      { type: "comparison", heading: "Sessions vs Tokens", columns: ["Sessions", "Tokens"], rows: [{ label: "Storage", cells: ["server", "client"] }, { label: "Scalability", cells: ["harder", "easier"] }, { label: "Revocation", cells: ["instant", "hard"] }] },
+    ],
+  }).sections;
+  const trimmed = leaveDetailToDiagrams(draft, sections);
+  const children = Object.fromEntries(trimmed.branches.map((b) => [b.title, b.children.map((c) => c.title)]));
+  assert.deepEqual(children["Token Structure"], []);
+  // "Validate User" isn't "Validate credentials" word for word, so it stays: removing too little beats removing too much.
+  assert.deepEqual(children["Token Creation"], ["Validate User", "Add Claims"]);
+  // The table's rows are Scalability and Revocation; "Stateful Sessions" is only near its "Sessions" column, so it stays.
+  assert.deepEqual(children["Sessions vs Tokens"], ["Stateful Sessions", "Stateless Tokens"]);
+  // Branches no diagram covers are left exactly as they were.
+  assert.deepEqual(children["Token Verification"], ["Extract Token", "Validate Signature", "Check Expiration", "Authorize Claims"]);
+  assert.deepEqual(children["Security Considerations"], ["HTTPS Only", "Short Expiry", "Refresh Tokens", "Secret Management"]);
+  assert.equal(trimmed.branches[1].steps, false);
+  assert.ok(trimmed.branches.every((b) => b.note), "every branch keeps its one-line note");
+  assert.deepEqual(trimmed.links.map((link) => link.from), ["Refresh Tokens"], "a link to a removed sub-point goes too");
+  assert.equal(leaveDetailToDiagrams(draft, []).branches[0].children.length, 3, "no diagrams, nothing taken out");
+
+  // Rangan's second plan: one flowchart for creating and checking a token covers two branches.
+  const both = parseSectionsReply({
+    sections: [
+      {
+        type: "flowchart",
+        heading: "JWT Creation & Verification",
+        nodes: ["Validate user credentials", "Build JWT header", "Add claims to payload", "Sign token", "Server extracts token", "Signature valid?", "Check expiration", "Claims authorized?", "Access granted"].map((text, i) => ({ id: `n${i}`, kind: i === 5 || i === 7 ? "decision" : "step", text })),
+        edges: Array.from({ length: 8 }, (_, i) => ({ from: `n${i}`, to: `n${i + 1}` })),
+      },
+    ],
+  }).sections;
+  const after = Object.fromEntries(leaveDetailToDiagrams(draft, both).branches.map((b) => [b.title, b.children.map((c) => c.title)]));
+  assert.deepEqual(after["Token Creation"], []);
+  assert.deepEqual(after["Token Verification"], []);
+  // "Refresh Tokens" and "Short Expiry" share a word with the chart but aren't in it.
+  assert.deepEqual(after["Security Considerations"], ["HTTPS Only", "Short Expiry", "Refresh Tokens", "Secret Management"]);
+});
+
+test("the plan asks for separate outcomes, so a failed check never leads to success", () => {
+  const text = sectionsInstruction("make a board on JWT", "JWT");
+  assert.ok(text.includes("own end node"));
+  assert.ok(text.includes("a failed check never leads to a success"));
 });

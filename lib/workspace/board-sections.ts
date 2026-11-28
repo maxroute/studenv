@@ -15,7 +15,7 @@ import { z } from "zod";
 import type { ConnectorNode, ShapeNode, StudioItem } from "@/types/workspace";
 import { buildShapeProps } from "./shape-engine";
 import type { ShapeKind } from "./shape-types";
-import { mapImageSize, type MapImage } from "./mind-map";
+import { mapImageSize, type MapDraft, type MapImage } from "./mind-map";
 import { computeConnectorRoute } from "./connector-routing";
 
 export const SECTION_LIMITS = {
@@ -316,33 +316,61 @@ function layoutFlowchart(draft: FlowDraft, newId: () => string): SectionLayout {
   const branched = ranked.filter(Boolean);
   // Branches side by side when every line can then be drawn cleanly; otherwise
   // one node per row, where a line that isn't to the next row goes round a side.
-  return placeFlowchart(draft, branched, newId) ?? (placeFlowchart(draft, branched.flat().map((node) => [node]), newId, true) as SectionLayout);
+  return (
+    placeFlowchart(draft, branched, newId) ??
+    placeFlowchart(draft, branched, newId, "edge") ??
+    (placeFlowchart(draft, branched.flat().map((node) => [node]), newId, "column") as SectionLayout)
+  );
 }
 
-/** The flowchart in these rows, or null when a line would cross a shape (unless `always`). */
-function placeFlowchart(draft: FlowDraft, rows: FlowDraft["nodes"][], newId: () => string, always = false): SectionLayout | null {
+/**
+ * The flowchart in these rows, or null when a line would cross a shape. Rows
+ * are centred; with "edge", the shapes a loop or skipped row joins are put in
+ * the outermost column instead, so its line runs outside the whole chart.
+ * "column" always succeeds: one shape per row.
+ */
+function placeFlowchart(draft: FlowDraft, rows: FlowDraft["nodes"][], newId: () => string, mode: "centred" | "edge" | "column" = "centred"): SectionLayout | null {
+  const always = mode === "column";
   const out = builder(newId);
   const edges = flowEdges(draft);
   const { loops } = flowRanks(draft);
   const rowOf = new Map<string, number>();
   rows.forEach((row, index) => row.forEach((node) => rowOf.set(node.id, index)));
 
+  // Lines that loop back or skip a row go round the outside, so the shapes they
+  // join sit at the right end of their rows, where nothing is in their way.
+  const outside = new Set(
+    edges
+      .filter((edge) => loops.has(`${edge.from} ${edge.to}`) || (rowOf.get(edge.to) as number) - (rowOf.get(edge.from) as number) !== 1)
+      .flatMap((edge) => [edge.from, edge.to]),
+  );
+
   // Each row is ordered by where its parents sit, then centred. A row's shapes
   // share one height, so the gaps between rows stay free for lines.
   const centre = new Map<string, number>();
   const boxes = new Map<string, Box>();
   const ids = new Map<string, string>();
+  const columns = Math.max(...rows.map((row) => row.length));
+  const columnX = (column: number) => (column - (columns - 1) / 2) * (FLOW_W + FLOW_GAP_X) - FLOW_W / 2;
   let top = 0;
   rows.forEach((row) => {
     const wanted = (id: string) => {
       const parents = edges.filter((edge) => edge.to === id && centre.has(edge.from)).map((edge) => centre.get(edge.from) as number);
       return parents.length ? parents.reduce((a, b) => a + b, 0) / parents.length : 0;
     };
-    const sorted = row.map((node, index) => ({ node, index })).sort((a, b) => wanted(a.node.id) - wanted(b.node.id) || a.index - b.index).map((entry) => entry.node);
+    const sorted = row
+      .map((node, index) => ({ node, index }))
+      .sort((a, b) => Number(outside.has(a.node.id)) - Number(outside.has(b.node.id)) || wanted(a.node.id) - wanted(b.node.id) || a.index - b.index)
+      .map((entry) => entry.node);
     const height = Math.max(...sorted.map(flowHeight));
-    const total = sorted.length * FLOW_W + (sorted.length - 1) * FLOW_GAP_X;
+    const last = sorted[sorted.length - 1];
+    const toEdge = mode === "edge" && outside.has(last.id);
+    // Centred in the columns, or in all but the outermost when that one is taken.
+    const free = toEdge ? columns - 1 : columns;
+    const centred = toEdge ? sorted.slice(0, -1) : sorted;
+    const slot = (node: FlowDraft["nodes"][number], index: number) => (toEdge && node === last ? columns - 1 : index + (free - centred.length) / 2);
     sorted.forEach((node, index) => {
-      const x = -total / 2 + index * (FLOW_W + FLOW_GAP_X);
+      const x = columnX(slot(node, index));
       boxes.set(node.id, { x, y: top, w: FLOW_W, h: height });
       centre.set(node.id, x + FLOW_W / 2);
     });
@@ -537,7 +565,7 @@ export function sectionsInstruction(request: string, subject: string): string {
     `The student asked: """${request.slice(0, 1_500)}"""`,
     `Plan the diagrams for a study board on "${subject}". A mind map of the main ideas is made separately; these diagrams explain what a mind map can't.`,
     `sections: 1 to ${SECTION_PLAN_MAX} of these, only where the subject really has one. Never two of the same type.`,
-    `- flowchart: a process, algorithm or decision. nodes (3 to 10): id ("a", "b"…), kind ("start", "step", "decision" or "end") and text (under 10 words). edges: from, to and a label ("yes"/"no" after a decision, else ""). Keep it a main path down the page with short side exits; one loop back at most.`,
+    `- flowchart: a process, algorithm or decision. nodes (3 to 10): id ("a", "b"…), kind ("start", "step", "decision" or "end") and text (under 10 words). edges: from, to and a label ("yes"/"no" after a decision, else ""). Keep it a main path down the page with short side exits; one loop back at most. Every decision has a "yes" and a "no" edge going to different nodes. Each different outcome ends in its own end node, like "Access granted" and "Reject with 401": a failed check never leads to a success. Check every edge says what really happens.`,
     `- diagram: one thing made of named parts in order (a JWT's header, payload and signature; a URL's parts; the layers of a stack). parts (2 to ${SECTION_LIMITS.parts}): name (1 to 3 words) and detail (one sentence). joiner: what goes between parts if something does, like "." or "→", else "".`,
     `- comparison: two to ${SECTION_LIMITS.columns} things the student must tell apart. columns: their names. rows (2 to 6): label (the point compared) and cells (one short phrase per column).`,
     `- timeline: a history, a lifecycle or a learning roadmap. milestones (3 to ${SECTION_LIMITS.milestones}): when (a date, "Step 1" or "Week 1"; "" if none), title (1 to 5 words) and detail (under 15 words).`,
@@ -669,4 +697,73 @@ export function asBlock(items: readonly StudioItem[]): SectionLayout {
   const moved = items.map((item) => (item.type === "connector" ? item : ({ ...item, x: item.x - minX, y: item.y - minY } as StudioItem)));
   const placed = moved.filter((item): item is Exclude<StudioItem, ConnectorNode> => item.type !== "connector");
   return { items: moved, width: Math.max(...placed.map((item) => item.x + item.w)), height: Math.max(...placed.map((item) => item.y + item.h)) };
+}
+
+// ── a map that leaves the detail to its diagrams ─────────────────────────────
+
+const LITTLE_WORDS = new Set(["a", "an", "and", "the", "of", "to", "in", "on", "for", "with", "vs", "versus", "how", "what", "is", "are", "its", "it", "by", "or", "from"]);
+
+/**
+ * A text's meaningful words for comparing two short labels: lower-case, cut
+ * to their first five letters so forms of a word match ("validate", "valid";
+ * "authorize", "authorized"; "token", "tokens").
+ */
+function keywords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word && !LITTLE_WORDS.has(word))
+      .map((word) => [...word].slice(0, 5).join("")),
+  );
+}
+
+/** The share of `a`'s words that are also in `b` (0 when `a` has none). */
+function shared(a: Set<string>, b: Set<string>): number {
+  if (!a.size) return 0;
+  let count = 0;
+  for (const word of a) if (b.has(word)) count += 1;
+  return count / a.size;
+}
+
+/** Everything a diagram shows, as labels to compare with a map's sub-points. */
+function sectionLabels(section: SectionDraft): string[] {
+  switch (section.type) {
+    case "flowchart":
+      return section.nodes.map((node) => node.text);
+    case "diagram":
+      return section.parts.map((part) => part.name);
+    case "comparison":
+      return [...section.columns, ...section.rows.map((row) => row.label)];
+    case "timeline":
+      return section.milestones.map((stop) => stop.title);
+  }
+}
+
+/**
+ * The map with the detail its diagrams show taken out: a branch keeps its
+ * title and note (the big picture) but not the sub-points a diagram already
+ * shows. A sub-point counts as shown when every meaningful word of it is in
+ * one of the diagram's labels, or a label of two or more words is wholly in
+ * it. A branch is trimmed only when a diagram shows at least half of its
+ * sub-points, so a word in common here and there removes nothing.
+ */
+export function leaveDetailToDiagrams(draft: MapDraft, sections: readonly SectionDraft[]): MapDraft {
+  const diagrams = sections.map((section) => sectionLabels(section).map(keywords).filter((label) => label.size > 0));
+  const branches = draft.branches.map((branch) => {
+    let children = branch.children;
+    for (const diagram of diagrams) {
+      const shows = (text: string) => {
+        const words = keywords(text);
+        return words.size > 0 && diagram.some((label) => shared(words, label) === 1 || (label.size > 1 && shared(label, words) === 1));
+      };
+      if (children.length && children.filter((child) => shows(child.title)).length * 2 >= children.length) children = children.filter((child) => !shows(child.title));
+    }
+    // Steps with some taken out are no longer a sequence.
+    return { ...branch, children, steps: branch.steps && children.length === branch.children.length };
+  });
+  // Links to sub-points that were taken out have nothing to point at.
+  const titles = new Set(branches.flatMap((branch) => [branch.title, ...branch.children.map((child) => child.title)]).map((title) => title.toLowerCase()));
+  const links = draft.links.filter((link) => titles.has(link.from.toLowerCase()) && titles.has(link.to.toLowerCase()));
+  return { ...draft, branches, links };
 }

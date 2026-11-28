@@ -25,7 +25,7 @@ import { extractJsonObject } from "@/lib/study/plan";
 import { boardEditInstruction, parseBoardPlan, type BoardChange } from "@/lib/workspace/board-edit";
 import { asksForBoard, asksForNewBoard, BOARD_TOOLS_SYSTEM_PROMPT, boardToolsInstruction, looksLikeBoardEdit, parseBoardOps, type BoardCard, type BoardOp } from "@/lib/workspace/board-ops";
 import { MAP_MAX_READING, mapInstruction, mapOutline, parseMapReply, type MapDraft, type MapImage } from "@/lib/workspace/mind-map";
-import { parseSectionsReply, sectionsInstruction, type SectionDraft } from "@/lib/workspace/board-sections";
+import { leaveDetailToDiagrams, parseSectionsReply, sectionsInstruction, type SectionDraft } from "@/lib/workspace/board-sections";
 import { citedClaims, MAX_CHECKED_CLAIMS, parseSupportReply, removeCitations, supportInstruction, withoutBeyondCitations } from "@/lib/rangan/trust";
 
 /** A library passage as Rangan's search returns it. */
@@ -571,8 +571,10 @@ export function createRanganService(deps: RanganDeps) {
         .then((reply) => parseSectionsReply(extractJsonObject(reply.text)))
         .catch(() => parseSectionsReply(null)),
     ]);
-    const draft = parseMapReply(extractJsonObject(result.text), passages.length);
-    if (!draft) return null;
+    const planned = parseMapReply(extractJsonObject(result.text), passages.length);
+    if (!planned) return null;
+    // The map gives the big picture; what a diagram shows isn't repeated on it.
+    const draft = leaveDetailToDiagrams(planned, plan.sections);
     const sources = [...new Set(draft.branches.flatMap((branch) => (branch.source === null ? [] : [branch.source])))].flatMap((n) => {
       const passage = passages[n - 1];
       // Wikipedia isn't something a board card can show.
